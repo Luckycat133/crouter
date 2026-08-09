@@ -8,6 +8,7 @@ All notable changes to this local setup are documented in this file.
 
 ### Added
 
+- The repository is now distributed under the MIT License.
 - `crouter claude` preserves Claude Code's native `/login`, stored account, and
   OAuth environment resolution; `crouter anthropic` remains the separate
   Anthropic Console API-key route.
