@@ -4,14 +4,14 @@
 # Coding Plan: subscription for AI coding (GLM-5.2/5-Turbo), via api.z.ai
 # Token Plan: pay-as-you-go via api.z.ai
 #
-# Endpoint: https://api.z.ai/v1/messages (Anthropic-compatible Messages API)
+# Endpoint: https://api.z.ai/api/anthropic (Anthropic-compatible Messages API)
 # Auth: API key as Bearer token.
 # Coding Plan uses dedicated keys; Token Plan uses standard keys.
 # Both use keypool for automatic rotation on quota/auth errors.
 PROVIDER_NAME="z-ai"
 PROVIDER_DESC="Z.ai GLM (Coding Plan / Token Plan) via native Anthropic-compatible API"
 
-BASE_URL="https://api.z.ai/v1/messages"
+BASE_URL="https://api.z.ai/api/anthropic"
 MODEL="glm-5.2"
 CONTEXT_TOKENS="200000"
 
@@ -25,13 +25,20 @@ EFFORT="max"
 
 # Key pool: Coding Plan keys first (priority), then Token Plan keys.
 # Add service names to Keychain: z-ai-coding-1, z-ai-token-1, etc.
+# Enable keypool mode when multiple keys are configured:
+# AUTH_MODE="keypool"
+# AUTH_KEYS="z-ai-coding-1 z-ai-token-1"
+# PLUS_URL="https://api.z.ai/api/anthropic"
+# PLUS_KEYS="z-ai-coding-2"
 AUTH_MODE="env"
 AUTH_REFERENCE="Z_AI_API_KEY"
 AUTH_KEYCHAIN_FALLBACK="z-ai-api-key"
 _AUTH_SCHEME="bearer"
 
-EXTRA_ENV="CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1"
+# OpenRouter-compatible: empty ANTHROPIC_API_KEY to avoid auth conflict with Bearer token
+EXTRA_ENV="ANTHROPIC_API_KEY=
+CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1"
 
 PRE_START=""
 POST_STOP=""
-HEALTH_CHECK_URL="https://api.z.ai/v1/models"
+HEALTH_CHECK_URL="https://api.z.ai/api/anthropic/v1/models"

@@ -29,8 +29,8 @@ AUTH_MODE="keypool"
 AUTH_KEYS="moonshot-coding-1 moonshot-token-1"
 
 # Optional: separate Coding Plan surface.
-# PLUS_URL="https://api.moonshot.cn/v1/messages"
-# PLUS_KEYS="moonshot-coding-2"
+PLUS_URL="https://api.moonshot.cn/v1/messages"
+PLUS_KEYS="moonshot-coding-2"
 
 EXTRA_ENV="CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1"
 

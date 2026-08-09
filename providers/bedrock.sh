@@ -21,7 +21,7 @@ AUTH_MODE="none"
 EXTRA_ENV="ANTHROPIC_AUTH_TOKEN=bedrock-proxy
 ANTHROPIC_API_KEY=bedrock-proxy"
 
-BEDROCK_PROXY_DIR=${BEDROCK_PROXY_DIR:-$ROOT_DIR/bedrock-proxy}
+BEDROCK_PROXY_DIR=${BEDROCK_PROXY_DIR:-~/.local/share/bedrock-proxy}
 BEDROCK_PROXY_PORT=${BEDROCK_PROXY_PORT:-18082}
 
 bedrock_proxy_running() {

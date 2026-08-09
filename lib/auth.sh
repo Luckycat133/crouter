@@ -227,28 +227,34 @@ start_keypool() {
 }
 
 # Which dual-source surfaces are currently usable. Prints e.g. "default+api",
-# "default", "api", or nothing. Never prints the secrets themselves.
+# "default", "api", or nothing. Returns 0 if any surface is usable, 1 if none.
+# Never prints the secrets themselves.
 dual_source_state() {
   _s=""
-  if [ -n "${DEFAULT_TOKEN_ENV:-}" ]; then
-    if [ -n "$(printenv "$DEFAULT_TOKEN_ENV" 2>/dev/null)" ] ||
-       { [ -n "${DEFAULT_TOKEN_ENV_FALLBACK:-}" ] && [ -n "$(printenv "$DEFAULT_TOKEN_ENV_FALLBACK" 2>/dev/null)" ]; }; then
-      _s="default"
-    fi
+  # Check default account (DEFAULT_TOKEN_ENV or DEFAULT_TOKEN_ENV_FALLBACK)
+  _has_default=0
+  if [ -n "${DEFAULT_TOKEN_ENV:-}" ] && [ -n "$(printenv "$DEFAULT_TOKEN_ENV" 2>/dev/null)" ]; then
+    _has_default=1
+  elif [ -n "${DEFAULT_TOKEN_ENV_FALLBACK:-}" ] && [ -n "$(printenv "$DEFAULT_TOKEN_ENV_FALLBACK" 2>/dev/null)" ]; then
+    _has_default=1
   fi
+  [ "$_has_default" -eq 1 ] && _s="default"
+
+  # Check API key (env or keychain)
   if [ -n "${API_KEY_ENV:-}" ] && [ -n "$(printenv "$API_KEY_ENV" 2>/dev/null)" ]; then
     _s="${_s:+$_s+}api"
   elif [ -n "${API_KEY_REF:-}" ] && security find-generic-password -a "$USER" -s "$API_KEY_REF" >/dev/null 2>&1; then
     _s="${_s:+$_s+}api"
   fi
   printf '%s' "$_s"
+  [ -n "$_s" ]
 }
 
 # Non-destructive availability check used by status/doctor (never prints secrets).
 check_auth() {
   # Dual-source providers don't use AUTH_MODE; at least one surface must exist.
   if is_dual_source; then
-    [ -n "$(dual_source_state)" ]
+    dual_source_state >/dev/null
     return $?
   fi
   case $AUTH_MODE in

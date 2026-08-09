@@ -8,10 +8,10 @@ BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1/messages"
 MODEL="qwen-plus-latest"
 CONTEXT_TOKENS="32768"
 
-MODEL_OPUS="qwen-max-latest"
-MODEL_SONNET="qwen-plus-latest"
-MODEL_HAIKU="qwen-turbo-latest"
-MODEL_SUBAGENT="qwen-turbo-latest"
+MODEL_OPUS="qwen-max"
+MODEL_SONNET="qwen-plus"
+MODEL_HAIKU="qwen-turbo"
+MODEL_SUBAGENT="qwen-turbo"
 
 EFFORT="medium"
 

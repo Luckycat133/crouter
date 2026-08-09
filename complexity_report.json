@@ -1,0 +1,50 @@
+[
+  {
+    "file": "lib/key-mgmt.sh",
+    "line": 714,
+    "summary": "Massive interactive Chinese menu system (~500 lines) added alongside existing CLI commands (cmd_add_key, cmd_remove_key, cmd_list_keys kept for compat) — two parallel implementations",
+    "failure_scenario": "Complexity cost: Dual maintenance burden; menu logic duplicated across _provider_key_menu (lines 796-898) and second _provider_key_menu (lines 1121-1171); any bug fix must be applied twice; CLI tests don't cover interactive paths; Chinese-only UI limits accessibility"
+  },
+  {
+    "file": "lib/key-mgmt.sh",
+    "line": 1027,
+    "summary": "Duplicate definitions of _prompt_secret, _keychain_put, _keychain_delete, _keychain_exists, _next_key_name (lines 1027-1060 mirror lines 656-693)",
+    "failure_scenario": "Complexity cost: Five functions defined twice; diverging implementations (e.g., _prompt_secret uses different trap/stty logic); future changes risk updating only one copy; violates DRY in ~500-line file"
+  },
+  {
+    "file": "bin/crouter",
+    "line": 294,
+    "summary": "Temp file argument parsing replaces eval — introduces mktemp, trap, file I/O, and while-read-loop for simple positional parsing",
+    "failure_scenario": "Complexity cost: 60 lines vs ~20 for eval approach; temp file cleanup on EXIT/INT/TERM; race condition window (mktemp name collision); unnecessary for shell positional parsing which can be done with array-style shift loop; eval risk was only for --model=value with quotes, fixable with case on $1"
+  },
+  {
+    "file": "lib/key-mgmt.sh",
+    "line": 628,
+    "summary": "_write_kv rewritten from sed to awk — awk version is 11 lines vs sed's 12, but awk adds BEGIN/END blocks and temp file dance for a simple line replacement",
+    "failure_scenario": "Complexity cost: awk script harder to audit for shell injection (var/val passed via -v); sed version used unlikely delimiter (\\036) and was portable; awk version may misbehave with newlines in values; no measurable simplification"
+  },
+  {
+    "file": "lib/route-build.js",
+    "line": 1540,
+    "summary": "buildCandidates now handles plus-first ordering with dual loops — plusKeys @ plusUrl first, then keypool @ apiUrl, adding branching for CR_PLUS_KEYS/CR_PLUS_URL",
+    "failure_scenario": "Complexity cost: Two separate loops with duplicated candidate object construction; plusUrl fallback to apiUrl adds silent behavior; callers (bin/crouter build_all_routes) must now compute and pass _plus_pool; single array concat would be simpler: candidates = plusKeys.map(...) + keypool.map(...);"
+  },
+  {
+    "file": "bin/keypool-proxy",
+    "line": 502,
+    "summary": "Per-request retry counter passed as parameter to attempt() instead of using closure over remaining — remaining threaded through 4 call sites",
+    "failure_scenario": "Complexity cost: remaining passed through attempt(i, req, res, body, remaining) → 4 recursive calls; closure (let remaining = MAX_RETRY inside handler) would capture per-request state automatically; parameter threading adds visual noise and error surface (wrong value passed)"
+  },
+  {
+    "file": "providers/z-ai.sh",
+    "line": 1787,
+    "summary": "Provider file adds commented-out keypool config (AUTH_MODE, AUTH_KEYS, PLUS_URL, PLUS_KEYS) alongside active env-mode config — dead code in source",
+    "failure_scenario": "Complexity cost: Commented config creates drift risk (user uncomments wrong lines); AUTH_MODE=\"env\" active but keypool example shows AUTH_MODE=\"keypool\" — mutually exclusive; should be in README only"
+  },
+  {
+    "file": "providers/moonshot.sh",
+    "line": 1707,
+    "summary": "PLUS_URL/PLUS_KEYS uncommented (were commented placeholders) but no keys configured — adds config surface without data",
+    "failure_scenario": "Complexity cost: PLUS_KEYS=\"moonshot-coding-2\" references non-existent Keychain entry; gateway will try plus surface first (via route-build.js plus-first logic) and fail; creates false impression of dual-surface support"
+  }
+]

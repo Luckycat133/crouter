@@ -108,46 +108,49 @@ cmd_run() {
   _seen_flag=0
   _n=$#
   _i=0
-  while [ $_i -lt $_n ]; do
+
+  # Parse args without eval (avoids breaking on single quotes in arguments).
+  # Save original args in a temporary file, then parse by reading it back.
+  # This avoids eval and preserves all quoting exactly.
+  _tmp_args=$(mktemp -t crouter_args.XXXXXX)
+  trap 'rm -f "$_tmp_args"' EXIT INT TERM
+  printf '%s\n' "$@" > "$_tmp_args"
+
+  # Parse saved args to find model and positional model index
+  _i=0
+  while IFS= read -r _a; do
     _i=$((_i + 1))
-    eval "_a=\${$_i}"
     case "$_a" in
       --model=*)
         _main_model=${_a#--model=}; _model_set=1; _seen_flag=1 ;;
       --model)
+        # Next line is the model value; if missing, treat as flag and let next iteration handle
+        IFS= read -r _main_model || _main_model=
         _i=$((_i + 1))
-        eval "_main_model=\${$_i}"; _model_set=1; _seen_flag=1 ;;
+        [ -n "$_main_model" ] && { _model_set=1; _seen_flag=1; } ;;
       -*)
         _seen_flag=1 ;;
       *)
         if [ "$_seen_flag" -eq 0 ] && [ -z "$_pos_model" ]; then
           _pos_model=$_a; _pos_idx=$_i
-        fi
-        ;;
+        fi ;;
     esac
-  done
+  done < "$_tmp_args"
 
-  # Rebuild $@ with the positional model removed so it isn't forwarded to Claude.
+  # Rebuild $@ from saved args, skipping the positional model if found
   if [ "$_pos_idx" -gt 0 ]; then
+    set --
     _i=0
-    while [ $_i -lt $_n ]; do
+    while IFS= read -r _a; do
       _i=$((_i + 1))
-      if [ $_i -eq $_pos_idx ]; then
-        shift
-      else
-        _first=$1; shift
-        set -- "$@" "$_first"
+      if [ $_i -ne $_pos_idx ]; then
+        set -- "$@" "$_a"
       fi
-    done
+    done < "$_tmp_args"
   fi
 
-  if [ "$_model_set" -eq 1 ] && [ -n "$_main_model" ]; then
-    : # explicit --model wins
-  elif [ -n "$_pos_model" ]; then
-    _main_model=$_pos_model
-  else
-    _main_model=$MODEL
-  fi
+  rm -f "$_tmp_args"
+  trap - EXIT INT TERM
 
   AUTH_TOKEN=""
   _bypass_auth=0
@@ -186,6 +189,10 @@ cmd_run() {
 }
 
 cmd_list() {
+  if [ -n "${1:-}" ]; then
+    cmd_list_keys_one "$1"
+    return
+  fi
   printf '%-22s %-26s %-11s %s\n' 'PROVIDER' 'DEFAULT MODEL' 'AUTH' 'ENDPOINT'
   for _n in $(provider_names); do
     (
@@ -466,11 +473,18 @@ build_all_routes() {
       load_provider "$_n"
       # keypool: every key (main + plus) becomes its own candidate, rotated on 401/429.
       _kpool=""
+      _plus_pool=""
       if [ "${AUTH_MODE:-}" = "keypool" ]; then
-        for _ref in ${AUTH_KEYS:-} ${PLUS_KEYS:-}; do
+        for _ref in ${AUTH_KEYS:-}; do
           _t=$(kc_get "$_ref")
           [ -n "$_t" ] && _kpool="$_kpool $_t"
         done
+        if [ -n "${PLUS_URL:-}" ] && [ -n "${PLUS_KEYS:-}" ]; then
+          for _ref in ${PLUS_KEYS:-}; do
+            _t=$(kc_get "$_ref")
+            [ -n "$_t" ] && _plus_pool="$_plus_pool $_t"
+          done
+        fi
       fi
       # API-surface credential (env var, then keychain service, then legacy AUTH_*).
       _api_key=""
@@ -513,6 +527,7 @@ build_all_routes() {
       fi
 
       CR_PREFIX="$PROVIDER_NAME" CR_MODELS="$_models" CR_KEYPOOL_KEYS="$_kpool" \
+      CR_PLUS_KEYS="$_plus_pool" CR_PLUS_URL="${PLUS_URL:-}" \
       CR_DEFAULT_URL="${DEFAULT_URL:-$BASE_URL}" CR_DEFAULT_TYPE="${DEFAULT_AUTH_TYPE:-}" CR_DEFAULT_TOKEN="$_def_token" \
       CR_API_URL="${API_URL:-$BASE_URL}" CR_API_TYPE="${API_AUTH_TYPE:-}" CR_API_KEY="$_api_key" \
       CR_AUTH_MODE="${AUTH_MODE:-}" CR_AUTH_SCHEME="${_AUTH_SCHEME:-}" \
@@ -575,18 +590,16 @@ case $cmd in
   list)
     case "${1:-}" in
       keys)  # back-compat: crouter list keys <provider>
-        [ $# -ge 2 ] || die "usage: crouter list [keys] <provider>"
-        cmd_list_keys "$2" ;;
+        [ $# -ge 2 ] || die "usage: crouter list keys <provider>"
+        shift; cmd_list_keys_one "$1" ;;
       "")     cmd_list ;;
-      *)      cmd_list_keys "$1" ;;
-    esac
-    ;;
-  doctor)         cmd_doctor "${1:-}" ;;
-  add)            [ $# -ge 1 ] || die "usage: crouter add <provider> [--surface main|plus] [--name <service>]"; cmd_add_key "$@" ;;
-  remove)         [ $# -ge 1 ] || die "usage: crouter remove <provider> --name <service> [--surface main|plus]"; cmd_remove_key "$@" ;;
+      *)      cmd_list_keys_one "$1" ;;
+    esac ;;
+  key)          cmd_key ;;                    # 交互式密钥管理（中文菜单）
+  doctor)       cmd_doctor "${1:-}" ;;
+  add)          [ $# -ge 1 ] || die "usage: crouter add <provider> [--surface main|plus] [--name <service>]"; cmd_add_key "$@" ;;
+  remove)       [ $# -ge 1 ] || die "usage: crouter remove <provider> --name <service> [--surface main|plus]"; cmd_remove_key "$@" ;;
   provider)
-    # Accept both `crouter provider <name>` and the documented
-    # `crouter provider show <name>`.
     [ "${1:-}" = show ] && shift
     [ $# -ge 1 ] || die "usage: crouter provider show <provider>"
     cmd_provider_show "$1" ;;
@@ -603,7 +616,7 @@ case $cmd in
     else
       cmd_logs_list
     fi ;;
-  uninstall)       cmd_uninstall "$@" ;;
-  all)            cmd_all "$@" ;;
-  *)              cmd_run "$cmd" "$@" ;;
+  uninstall)    cmd_uninstall "$@" ;;
+  all)          cmd_all "$@" ;;
+  *)            cmd_run "$cmd" "$@" ;;
 esac

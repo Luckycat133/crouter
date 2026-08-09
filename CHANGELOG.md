@@ -4,6 +4,53 @@ All notable changes to this local setup are documented in this file.
 
 ## [Unreleased]
 
+## [0.4.18] - 2026-08-09
+
+### Fixed
+- **`lib/auth.sh`**: `check_auth` for dual-source providers now correctly detects missing credentials. `dual_source_state` returns proper exit code (0 when any surface usable, 1 when none), fixing `crouter doctor` falsely reporting `auth:ok` for unconfigured dual-source providers.
+- **`bin/keypool-proxy`**: Retry counter `remaining` is now per-request (passed as parameter to `attempt()`), not a global shared variable. Each incoming request gets a fresh `MAX_RETRY` budget.
+- **`bin/crouter`**: Positional argument parsing no longer uses `eval` (which broke on single quotes like `-p "it's broken"`). Uses a temp file to preserve exact quoting.
+- **`lib/launch.sh`**: `--permission-mode=acceptEdits` and `--effort=high` (value-form flags) are now detected alongside bare `--permission-mode` / `--effort`, preventing duplicate flag injection.
+- **`lib/route-build.js`**: Unified gateway now respects plus-endpoint ordering for keypool providers. New `CR_PLUS_KEYS` / `CR_PLUS_URL` env vars route plus-surface keys to `PLUS_URL` first, then main keys to `BASE_URL` — matching `auth.sh:start_keypool` semantics.
+- **`lib/key-mgmt.sh`**: `_single_key_service()` for `AUTH_MODE=env` now returns only `AUTH_KEYCHAIN_FALLBACK` (not the env var name), aligning with `resolve_auth()` which only checks Keychain when fallback is explicitly set. Added keys now work correctly.
+- **`lib/auth.sh`**: `start_dual_failover` no longer uses potentially mutated `BASE_URL` from `resolve_dual_source`; uses explicit `DEFAULT_URL` / `API_URL` for candidate URLs.
+- **`lib/route-build.js`**: `cmdDefaultModel` outputs empty string (not `/`) when routes array is empty, preventing invalid `MODEL='/'`.
+- **`bin/keypool-proxy`**: HTTP 5xx errors (500-599) now trigger retry/rotation alongside 401/429.
+- **`lib/key-mgmt.sh`**: `cmd_list_keys_one` for env mode now checks Keychain consistently with `add` — uses same service name logic.
+- **`bin/keypool-proxy`**: Empty `type` string in candidates now fails validation (required field) instead of silently defaulting to `both`.
+- **`bin/keypool-proxy`**: Missing token for `bearer`/`x-api-key` types now fails validation instead of sending empty credentials.
+- **`lib/key-mgmt.sh`**: Dual-source `add` error message now specifically mentions `API_KEY_REF` instead of irrelevant `AUTH_KEYCHAIN_FALLBACK`/`AUTH_REFERENCE`.
+
+### Code Review Fixes (0.4.18.1)
+- **`lib/key-mgmt.sh`**: Removed massive function duplication (~250 lines) — `_menu`, `_confirm`, `_input`, `_list_providers_with_keys`, `_provider_key_menu`, `_keypool_add`, `_keypool_remove`, `_single_key_set`, `_single_key_remove`, `_dual_api_key_set`, `_dual_api_key_remove`, `_keychain_put`, `_keychain_delete`, `_keychain_exists`, `_next_key_name`, `_prompt_secret`, `_menu`, `_confirm`, `_input`, `_list_providers_with_keys`, `_provider_key_menu`, `_keypool_add`, `_single_key_set`, `_single_key_remove`, `_dual_api_key_set`, `_dual_api_key_remove`, `_keychain_put`, `_keychain_delete`, `_keychain_exists`, `_next_key_name`, `cmd_key` defined twice. Kept simplified interactive menu only.
+- **`lib/key-mgmt.sh`**: Fixed `_keypool_remove` hardcoding `AUTH_KEYS` — now correctly writes to the originating surface (`AUTH_KEYS` or `PLUS_KEYS`).
+- **`lib/key-mgmt.sh`**: `_single_key_service` for `AUTH_MODE=env` now falls back to `AUTH_REFERENCE` when `AUTH_KEYCHAIN_FALLBACK` unset, matching `resolve_auth()` behavior.
+- **`bin/crouter`**: `cmd_list` restores subshell around `load_provider` to prevent variable leakage across 17 providers.
+- **`bin/crouter`**: `--model` without value no longer sets `_model_set=1`, avoiding empty model passed to Claude Code.
+- **`lib/auth.sh`**: `dual_source_state` now checks `DEFAULT_TOKEN_ENV_FALLBACK` even when `DEFAULT_TOKEN_ENV` unset; `start_dual_failover` uses `BASE_URL` as fallback for `DEFAULT_URL`/`API_URL` (fixes openai/openrouter dual-source).
+- **`lib/route-build.js`**: Added `CR_KEYPOOL_AUTH_TYPE` env var for keypool auth type (Bearer/x-api-key), defaulting to `CR_AUTH_SCHEME` or `x-api-key`; Plus keys now require `CR_PLUS_URL` (error if missing).
+- **`bin/gateway`**: Failover now triggers on 5xx (500-599) in addition to 401/429, matching keypool-proxy behavior.
+- **`bin/keypool-proxy`**: `KEYPOOL_MAX_RETRY=0` now valid (disables retries), no longer treated as invalid.
+- **`lib/launch.sh`**: `KEYPOOL_URL` usage now verifies `KEYPOOL_PID` process alive; dead proxy auto-cleans and falls back to direct auth.
+- **`bin/crouter`**: Temp file arg parsing uses `mktemp -t` (BSD/macOS); added `--model` without value handling.
+
+### Provider Fixes (0.4.18)
+- **`z-ai.sh`**: Fixed `BASE_URL` (was `https://api.z.ai/v1/messages` → `https://api.z.ai/api/anthropic`) and `HEALTH_CHECK_URL` (was `/v1/models` → `/api/anthropic/v1/models`); corrected keypool comment vs code mismatch; added `ANTHROPIC_API_KEY=` to `EXTRA_ENV` for Bearer auth consistency.
+- **`minimax.sh`**: Fixed `API_TIMEOUT_MS=3000000` (50 min) typo → `300000` (5 min); added `PLUS_URL`/`PLUS_KEYS` placeholders per README.
+- **`anthropic.sh`**: Model version sync with README: `claude-sonnet-5` → `claude-sonnet-4`, `claude-opus-5` → `claude-opus-4-5`, `claude-haiku-4-5` → `claude-haiku-4`.
+- **`openai.sh`**: Model version sync: `gpt-6-*` → `gpt-5.6-*`; `CONTEXT_TOKENS` 1M → 1.05M per README.
+- **`vertex.sh`**: Model version sync: `claude-3.5-*@20241022` → `claude-5/4.5-*@2026...`; `VERTEX_PROXY_DIR` default `~/.local/share/vertex2anthropic` matching README.
+- **`bedrock.sh`**: Model version sync: `claude-3.5-*` → `claude-5/4.5-*`; `BEDROCK_PROXY_DIR` default `~/.local/share/bedrock-proxy` matching README.
+- **`codex.sh`**: Port fix `19000` → `8080` matching README; removed explicit `MODEL_OPUS/SONNET/HAIKU/SUBAGENT` to allow dynamic catalog fallback per README design.
+- **`dashscope.sh`**: Removed `-latest` suffix from model names (`qwen-max-latest` → `qwen-max`) matching README.
+- **`ollama.sh`**: Added explicit `MODEL_OPUS/SONNET/HAIKU/SUBAGENT` and `EFFORT=""` per documented provider schema.
+- **`moonshot.sh`**: Uncommented `PLUS_URL`/`PLUS_KEYS` placeholders per README.
+- **`baichuan.sh`**: Added README documentation section (was missing).
+- **`moonshot.sh`/`stepfun.sh`/`volcengine.sh`/`z-ai.sh`**: Added complete README documentation sections with setup, model mapping, and key examples.
+- **`antigravity-claude.sh`**: README fixed — default model mapping corrected (`default → sonnet-4-6`, `opus → opus-4-6-thinking`).
+- **`openrouter.sh`**: README fixed — `crouter list` shows `env` not `command`.
+- **README**: Added full documentation sections for Baichuan, Moonshot, StepFun, Volcengine, Z.ai with setup, model mappings, and key examples. Fixed Vertex/Bedrock model tables to match provider versions. Fixed OpenRouter auth mode display. Fixed Antigravity default model mapping.
+
 ## [0.4.17] - 2026-08-08
 
 Antigravity lineup refresh + key-mgmt rework + several smaller cleanups

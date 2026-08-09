@@ -21,7 +21,7 @@ AUTH_MODE="none"
 EXTRA_ENV="ANTHROPIC_AUTH_TOKEN=vertex-proxy
 ANTHROPIC_API_KEY=vertex-proxy"
 
-VERTEX_PROXY_DIR=${VERTEX_PROXY_DIR:-$ROOT_DIR/vertex2anthropic}
+VERTEX_PROXY_DIR=${VERTEX_PROXY_DIR:-~/.local/share/vertex2anthropic}
 VERTEX_PROXY_PORT=${VERTEX_PROXY_PORT:-18081}
 
 vertex_proxy_running() {

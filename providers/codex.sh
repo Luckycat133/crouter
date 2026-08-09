@@ -5,14 +5,13 @@
 PROVIDER_NAME="codex"
 PROVIDER_DESC="ChatGPT/Codex subscription via icebear0828/codex-proxy"
 
-BASE_URL="http://localhost:19000"
+BASE_URL="http://localhost:8080"
 MODEL="gpt-5.6-terra"
 CONTEXT_TOKENS="1050000"
 
-MODEL_OPUS="gpt-5.6-terra"
-MODEL_SONNET="gpt-5.6-terra"
-MODEL_HAIKU="gpt-5.6-terra"
-MODEL_SUBAGENT="gpt-5.6-terra"
+# Model aliases intentionally left unset — let the dynamic catalog from icebear
+# drive tier selection via ANTHROPIC_DEFAULT_*_MODEL or /model in-session.
+# The default gpt-5.6-terra is balanced so no flagship-quota waste.
 
 EFFORT=""
 
@@ -22,6 +21,6 @@ AUTH_MODE="none"
 EXTRA_ENV="ANTHROPIC_AUTH_TOKEN=pwd
 ANTHROPIC_API_KEY=pwd"
 
-PRE_START='curl -fsS --max-time 3 http://localhost:19000/health >/dev/null 2>&1 || die "icebear0828/codex-proxy not running at http://localhost:19000/health — start with docker compose up -d (--port 19000) or run .dmg and complete ChatGPT login"'
+PRE_START='curl -fsS --max-time 3 http://localhost:8080/health >/dev/null 2>&1 || die "icebear0828/codex-proxy not running at http://localhost:8080/health — start with docker compose up -d (--port 8080) or run .dmg and complete ChatGPT login"'
 POST_STOP=""
-HEALTH_CHECK_URL="http://localhost:19000/health"
+HEALTH_CHECK_URL="http://localhost:8080/health"

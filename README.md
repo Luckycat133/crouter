@@ -20,6 +20,14 @@ crouter/
 │   ├── antigravity.sh             # Gemini via local Antigravity proxy
 │   ├── antigravity-claude.sh      # Claude via local Antigravity proxy
 │   ├── ollama.sh                  # Ollama local/cloud models (native Anthropic API)
+│   ├── dashscope.sh               # DashScope (Alibaba Cloud Model Studio / Qwen)
+│   ├── vertex.sh                  # Vertex AI via vertex2anthropic proxy
+│   ├── bedrock.sh                 # AWS Bedrock via bedrock-proxy-endpoint
+│   ├── baichuan.sh                # Baichuan via native Anthropic-compatible API
+│   ├── moonshot.sh                # Moonshot (Kimi) via native Anthropic-compatible API
+│   ├── stepfun.sh                 # StepFun via native Anthropic-compatible API
+│   ├── volcengine.sh              # VolcEngine (Doubao) via native Anthropic-compatible API
+│   ├── z-ai.sh                    # Z.ai GLM via native Anthropic-compatible API
 │   └── lib/antigravity-common.sh  # Shared gateway lifecycle helpers
 ├── config.example.sh              # Copy to config.sh (gitignored)
 ├── install.sh                     # Symlink crouter into ~/.local/bin
@@ -44,6 +52,16 @@ claude-antigravity-claude     # crouter antigravity-claude
 claude-deepseek              # crouter deepseek
 claude-codex                 # crouter codex
 claude-ollama                # crouter ollama
+claude-openrouter            # crouter openrouter
+claude-openai                # crouter openai
+claude-dashscope             # crouter dashscope
+claude-vertex                # crouter vertex
+claude-bedrock               # crouter bedrock
+claude-baichuan              # crouter baichuan
+claude-moonshot              # crouter moonshot
+claude-stepfun               # crouter stepfun
+claude-volcengine            # crouter volcengine
+claude-z-ai                  # crouter z-ai
 ```
 
 To use the Antigravity providers, also set up the third-party proxy (see below). MiniMax needs no extra setup beyond the Keychain key. Ollama needs no proxy or key — it serves the Anthropic API locally on port 11434 (see the Ollama section below).
@@ -53,13 +71,24 @@ To use the Antigravity providers, also set up the third-party proxy (see below).
 The first bare word after a provider name selects the model (e.g. `crouter ollama qwen3.5:2b`).
 
 ```sh
-crouter list                     # available providers
-crouter minimax                  # Claude Code via MiniMax M3
-crouter antigravity             # Claude Code via Antigravity Gemini
-crouter antigravity-claude       # Claude Code via Antigravity Claude
-crouter deepseek                  # Claude Code via DeepSeek V4 (Flash/Pro)
-crouter ollama                    # Claude Code via Ollama (local/cloud models)
-crouter doctor [provider]        # environment diagnostics
+crouter list                              # available providers (17 total)
+crouter minimax                           # Claude Code via MiniMax M3
+crouter antigravity                       # Claude Code via Antigravity Gemini
+crouter antigravity-claude                # Claude Code via Antigravity Claude
+crouter deepseek                          # Claude Code via DeepSeek V4 (Flash/Pro)
+crouter ollama                            # Claude Code via Ollama (local/cloud models)
+crouter openrouter                        # Claude Code via OpenRouter
+crouter openai                            # Claude Code via OpenAI GPT
+crouter codex                             # Claude Code via ChatGPT/Codex 订阅
+crouter dashscope                         # Claude Code via DashScope (Qwen)
+crouter vertex                            # Claude Code via Vertex AI
+crouter bedrock                           # Claude Code via AWS Bedrock
+crouter baichuan                          # Claude Code via Baichuan
+crouter moonshot                          # Claude Code via Moonshot (Kimi)
+crouter stepfun                           # Claude Code via StepFun
+crouter volcengine                        # Claude Code via VolcEngine (Doubao)
+crouter z-ai                              # Claude Code via Z.ai GLM
+crouter doctor [provider]                 # environment diagnostics
 ```
 
 Extra arguments after the provider name are passed straight to Claude Code. Per-session model override — the model may be a bare positional (the first word before any flag) or an explicit flag:
@@ -330,7 +359,7 @@ becomes `.../api/v1/v1/messages` and 404s). Default model
 `nvidia/nemotron-3-ultra-550b-a55b:free`, whose real context window is 1M tokens.
 Single auth surface (Bearer): the key is read from `$OPENROUTER_API_KEY` if set,
 otherwise from the Keychain item `openrouter-api-key`, so `crouter list` shows
-`command`, never `dual`.
+`env`, never `dual`.
 
 **On `:free` billing.** A `:free` model is only free *within OpenRouter's daily
 free allowance*. Once that allowance is used up, requests keep the `:free`
@@ -459,7 +488,7 @@ Gemini mapping (1M context):
 
 Additional Antigravity Gemini models (not tier-mapped; select explicitly via `crouter antigravity --model <name>`): `gemini-3.5-flash-medium`, `gemini-3.1-pro-low`. See `crouter provider show antigravity` for the live list.
 
-Claude mapping (200K context): default and `/model opus` → `claude-opus-4-6-thinking`; `/model sonnet`, `/model haiku`, and subagents → `claude-sonnet-4-6`.
+Claude mapping (200K context): default → `claude-sonnet-4-6`; `/model opus` → `claude-opus-4-6-thinking`; `/model sonnet`, `/model haiku`, and subagents → `claude-sonnet-4-6`.
 
 Additional Antigravity models registered under `MODEL_ALIASES` (select explicitly via `--model`): `gpt-oss-120b-medium` on `antigravity-claude`. See `crouter provider show <provider>` for the live list.
 
@@ -551,9 +580,9 @@ crouter vertex
 
 | Claude Code selection | Vertex AI model |
 | --- | --- |
-| Default, `/model sonnet`, subagents | `claude-3-5-sonnet-v2@20241022` |
-| `/model opus` | `claude-3-opus@20241022` |
-| `/model haiku` | `claude-3-5-haiku@20241022` |
+| Default, `/model sonnet`, subagents | `claude-sonnet-5@20260630` |
+| `/model opus` | `claude-opus-5@20260725` |
+| `/model haiku` | `claude-haiku-4-5@20260701` |
 
 Reasoning effort defaults to `max`. The proxy auto-starts on `PRE_START` and shuts down on `POST_STOP`.
 
@@ -575,11 +604,122 @@ crouter bedrock
 
 | Claude Code selection | Bedrock model |
 | --- | --- |
-| Default, `/model sonnet`, subagents | `anthropic.claude-3-5-sonnet-20241022-v2:0` |
-| `/model opus` | `anthropic.claude-3-opus-20240229-v1:0` |
-| `/model haiku` | `anthropic.claude-3-5-haiku-20241022-v1:0` |
+| Default, `/model sonnet`, subagents | `anthropic.claude-5-sonnet-20260630-v1:0` |
+| `/model opus` | `anthropic.claude-5-opus-20260725-v1:0` |
+| `/model haiku` | `anthropic.claude-4-5-haiku-20260701-v1:0` |
 
 Reasoning effort defaults to `max`. The proxy auto-starts on `PRE_START` and shuts down on `POST_STOP`.
+
+### Baichuan (Token Plan)
+
+Baichuan exposes an Anthropic-compatible Messages API at `https://api.baichuan-ai.com/v1/messages`. Auth uses Bearer token. Runs in `AUTH_MODE="keypool"` for automatic key rotation.
+
+```sh
+# Store API key in Keychain (service name: baichuan-token-1)
+read -s "BAICHUAN_KEY?Paste Baichuan Token Plan Key: "; echo
+security add-generic-password -U -a "$USER" -s "baichuan-token-1" -w "$BAICHUAN_KEY"
+unset BAICHUAN_KEY
+
+crouter baichuan
+```
+
+| Claude Code selection | Baichuan model |
+| --- | --- |
+| Default, `/model sonnet`, `/model opus` | `baichuan-m3-plus` |
+| `/model haiku`, subagents | `baichuan-m3` |
+
+Reasoning effort defaults to `max`.
+
+### Moonshot AI (Kimi) — Coding Plan / Token Plan
+
+Moonshot exposes native Anthropic-compatible Messages API at `https://api.moonshot.cn/v1/messages`. Auth: API key as Bearer token. Supports both Coding Plan (subscription) and Token Plan (pay-as-you-go) via keypool with automatic rotation.
+
+```sh
+# Coding Plan key
+read -s "MOONSHOT_CODING_KEY?Paste Moonshot Coding Plan Key: "; echo
+security add-generic-password -U -a "$USER" -s "moonshot-coding-1" -w "$MOONSHOT_CODING_KEY"
+unset MOONSHOT_CODING_KEY
+
+# Token Plan key
+read -s "MOONSHOT_TOKEN_KEY?Paste Moonshot Token Plan Key: "; echo
+security add-generic-password -U -a "$USER" -s "moonshot-token-1" -w "$MOONSHOT_TOKEN_KEY"
+unset MOONSHOT_TOKEN_KEY
+
+crouter moonshot
+```
+
+| Claude Code selection | Kimi model |
+| --- | --- |
+| Default, `/model opus` | `kimi-k2.7` |
+| `/model sonnet`, `/model haiku`, subagents | `kimi-k2.5` |
+
+Optional separate Coding Plan surface via `PLUS_URL`/`PLUS_KEYS` (see provider file). Reasoning effort defaults to `max`.
+
+### StepFun (Token Plan)
+
+StepFun exposes native Anthropic-compatible Messages API at `https://api.stepfun.com/v1/messages`. Auth: API key as Bearer token. Runs in `AUTH_MODE="keypool"`.
+
+```sh
+# Store API key in Keychain (service name: stepfun-token-1)
+read -s "STEPFUN_KEY?Paste StepFun Token Plan Key: "; echo
+security add-generic-password -U -a "$USER" -s "stepfun-token-1" -w "$STEPFUN_KEY"
+unset STEPFUN_KEY
+
+crouter stepfun
+```
+
+| Claude Code selection | StepFun model |
+| --- | --- |
+| All tiers (default, opus, sonnet, haiku, subagents) | `step-3.5-flash` |
+
+Reasoning effort defaults to `max`.
+
+### Volcengine (ByteDance Doubao/Seed) — Coding Plan / Token Plan
+
+Volcengine exposes Anthropic-compatible endpoint at `https://ark.cn-beijing.bytepluses.com/api/v3/messages` (region configurable via `VOLCENGINE_REGION` in config.sh). Auth: Volcengine AccessKey/Secret via Bearer token (`ARK_API_KEY`). Supports Coding Plan and Token Plan keys via keypool.
+
+```sh
+# Coding Plan key
+read -s "VOLCENGINE_CODING_KEY?Paste Volcengine Coding Plan Key: "; echo
+security add-generic-password -U -a "$USER" -s "volcengine-coding-1" -w "$VOLCENGINE_CODING_KEY"
+unset VOLCENGINE_CODING_KEY
+
+# Token Plan key
+read -s "VOLCENGINE_TOKEN_KEY?Paste Volcengine Token Plan Key: "; echo
+security add-generic-password -U -a "$USER" -s "volcengine-token-1" -w "$VOLCENGINE_TOKEN_KEY"
+unset VOLCENGINE_TOKEN_KEY
+
+crouter volcengine
+```
+
+| Claude Code selection | Doubao/Seed model |
+| --- | --- |
+| Default, `/model opus`, `/model sonnet`, subagents | `doubao-seed-2-0-code` |
+| `/model haiku` | `doubao-1-5-lite` |
+
+Optional region override in config.sh: `VOLCENGINE_REGION="ap-southeast"` (default `cn-beijing`). Reasoning effort defaults to `max`.
+
+### Z.ai GLM (Coding Plan / Token Plan)
+
+Z.ai exposes native Anthropic-compatible Messages API at `https://api.z.ai/api/anthropic`. Auth: API key as Bearer token. Runs in `AUTH_MODE="env"` with Keychain fallback (`z-ai-api-key`); can enable `AUTH_MODE="keypool"` for multiple keys.
+
+```sh
+# Either export the key ...
+export Z_AI_API_KEY="sk-..."
+# ... or store it in the Keychain (checked when env var is unset):
+read -s "Z_AI_KEY?Paste Z.ai API key: "; echo
+security add-generic-password -U -a "$USER" -s "z-ai-api-key" -w "$Z_AI_KEY"
+unset Z_AI_KEY
+
+crouter z-ai
+```
+
+| Claude Code selection | GLM model |
+| --- | --- |
+| Default, `/model opus`, `/model sonnet` | `glm-5.2` |
+| `/model haiku`, subagents | `glm-5-turbo` |
+
+Reasoning effort defaults to `max`. Health check: `https://api.z.ai/api/anthropic/v1/models`.
 
 ## What to commit
 

@@ -25,7 +25,7 @@ launch_claude() {
     _has_bypass=0
     for _arg in "$@"; do
       case "$_arg" in
-        --dangerously-skip-permissions|--permission-mode) _has_bypass=1; break ;;
+        --dangerously-skip-permissions|--permission-mode|--permission-mode=*) _has_bypass=1; break ;;
       esac
     done
     if [ "$_has_bypass" -eq 0 ]; then
@@ -43,7 +43,7 @@ launch_claude() {
   if [ -n "${EFFORT:-}" ]; then
     _has_effort=0
     for _arg in "$@"; do
-      case "$_arg" in --effort) _has_effort=1; break ;; esac
+      case "$_arg" in --effort|--effort=*) _has_effort=1; break ;; esac
     done
     if [ "$_has_effort" -eq 0 ]; then
       _claude_bin="$1"; shift
@@ -72,9 +72,17 @@ launch_claude() {
   # A local proxy (keypool rotation or dual-source failover) owns auth: Claude
   # Code just talks to it with a placeholder credential.
   if [ -n "${KEYPOOL_URL:-}" ] && [ "$_bypass" -eq 0 ]; then
-    set -- "ANTHROPIC_BASE_URL=$KEYPOOL_URL" "$@"
-    set -- "ANTHROPIC_API_KEY=keypool-local" "$@"
-    set -- "ANTHROPIC_AUTH_TOKEN=keypool-local" "$@"
+    # Verify the proxy process is actually alive
+    if [ -n "${KEYPOOL_PID:-}" ] && kill -0 "$KEYPOOL_PID" 2>/dev/null; then
+      set -- "ANTHROPIC_BASE_URL=$KEYPOOL_URL" "$@"
+      set -- "ANTHROPIC_API_KEY=keypool-local" "$@"
+      set -- "ANTHROPIC_AUTH_TOKEN=keypool-local" "$@"
+    else
+      # Proxy URL set but process dead - fall through to direct auth or die
+      info "warn: KEYPOOL_URL set but proxy process dead; falling back to direct auth"
+      KEYPOOL_URL=""
+      KEYPOOL_PID=""
+    fi
   elif [ "${AUTH_MODE:-}" = "keypool" ] && [ "$_bypass" -eq 0 ]; then
     die "keypool proxy not started"
   elif [ -n "$AUTH_TOKEN" ]; then

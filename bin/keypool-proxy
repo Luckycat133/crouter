@@ -86,13 +86,18 @@ if (USE_CANDIDATES) {
   if (!Array.isArray(parsed) || parsed.length === 0) fail('KEYPOOL_CANDIDATES must be a non-empty array');
   parsed.forEach((c, i) => {
     if (!c || !c.url) fail('KEYPOOL_CANDIDATES[' + i + '] missing url');
-    const type = c.type || 'both';
+    const type = c.type;
+    if (!type) fail('KEYPOOL_CANDIDATES[' + i + '] missing type (required)');
     if (['both', 'bearer', 'x-api-key', 'none'].indexOf(type) === -1) {
       fail('KEYPOOL_CANDIDATES[' + i + '] bad type: ' + type);
     }
+    const token = c.token || '';
+    if (type !== 'none' && token === '') {
+      fail('KEYPOOL_CANDIDATES[' + i + '] missing token (required for type ' + type + ')');
+    }
     ATTEMPTS.push({
       target: parseTarget(c.url),
-      token: c.token || '',
+      token: token,
       type: type,
       label: (c.label || 'candidate ' + i) + ' [' + type + ']',
     });
@@ -109,10 +114,10 @@ if (USE_CANDIDATES) {
 const MAX_RETRY = process.env.KEYPOOL_MAX_RETRY
   ? parseInt(process.env.KEYPOOL_MAX_RETRY, 10)
   : ATTEMPTS.length;
-if (!MAX_RETRY || MAX_RETRY < 1) fail('KEYPOOL_MAX_RETRY invalid');
+if (!Number.isInteger(MAX_RETRY) || MAX_RETRY < 0) fail('KEYPOOL_MAX_RETRY invalid');
 
-// Decrement on transient auth/quota failures.
-let remaining = MAX_RETRY;
+// Per-request retry counter (reset for each incoming request).
+// The global MAX_RETRY is the starting budget; each request gets its own copy.
 
 function log(msg) {
   process.stderr.write('keypool-proxy: ' + msg + '\n');
@@ -127,7 +132,7 @@ const server = http.createServer((clientReq, clientRes) => {
   });
   clientReq.on('end', () => {
     const body = Buffer.concat(chunks, size);
-    attempt(0, clientReq, clientRes, body);
+    attempt(0, clientReq, clientRes, body, MAX_RETRY);
   });
   clientReq.on('error', (e) => {
     log('client req error: ' + e.message);
@@ -135,7 +140,7 @@ const server = http.createServer((clientReq, clientRes) => {
   });
 });
 
-function attempt(i, clientReq, clientRes, body) {
+function attempt(i, clientReq, clientRes, body, remaining) {
   if (i >= ATTEMPTS.length || remaining <= 0) {
     clientRes.writeHead(502, { 'content-type': 'application/json' });
     clientRes.end(JSON.stringify({ error: { type: 'keypool_exhausted', message: 'all keys/retries exhausted' } }));
@@ -175,21 +180,22 @@ function attempt(i, clientReq, clientRes, body) {
   const transport = target.protocol === 'https:' ? https : http;
   const upstream = transport.request(options, (upRes) => {
     const status = upRes.statusCode;
-    const transient = status === 429 || status === 401;
+    // Retry on 401 (auth failure), 429 (rate limit), and 5xx (server errors)
+    const transient = status === 429 || status === 401 || (status >= 500 && status < 600);
     if (!transient) {
       // Success or non-retryable error: pipe straight through.
       if (!clientRes.headersSent) clientRes.writeHead(status, upRes.headers);
       upRes.pipe(clientRes);
       return;
     }
-    // Transient (quota / auth): read body, then rotate to next key.
+    // Transient (quota / auth / server error): read body, then rotate to next key.
     const buf = [];
     upRes.on('data', (c) => buf.push(c));
     upRes.on('end', () => {
       remaining -= 1;
       if (remaining > 0 && i + 1 < ATTEMPTS.length) {
         log(cand.label + ' got ' + status + ' -> rotating (remaining=' + remaining + ')');
-        attempt(i + 1, clientReq, clientRes, body);
+        attempt(i + 1, clientReq, clientRes, body, remaining);
       } else {
         log(cand.label + ' got ' + status + ' -> exhausted');
         if (!clientRes.headersSent) clientRes.writeHead(status, upRes.headers);
@@ -202,7 +208,7 @@ function attempt(i, clientReq, clientRes, body) {
     log('upstream error (' + cand.label + '): ' + e.message);
     remaining -= 1;
     if (remaining > 0 && i + 1 < ATTEMPTS.length) {
-      attempt(i + 1, clientReq, clientRes, body);
+      attempt(i + 1, clientReq, clientRes, body, remaining);
     } else {
       clientRes.writeHead(502, { 'content-type': 'application/json' });
       clientRes.end(JSON.stringify({ error: { type: 'keypool_upstream_error', message: e.message } }));

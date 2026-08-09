@@ -24,7 +24,7 @@ EFFORT="max"
 AUTH_MODE="keypool"
 AUTH_KEYS="codex-minimax-token-plan"
 
-EXTRA_ENV="API_TIMEOUT_MS=3000000
+EXTRA_ENV="API_TIMEOUT_MS=300000
 CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1"
 
 # Auto-wire MiniMax MCP (coding + generation) and the multimodal skill when a
@@ -33,3 +33,8 @@ CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1"
 PRE_START="$ROOT_DIR/bin/minimax-mcp-autosetup"
 POST_STOP=""
 HEALTH_CHECK_URL=""
+
+# Optional second surface (MiniMax Coding Plan). Its endpoint and supported
+# models differ from the Token Plan; fill these once you have the key(s):
+# PLUS_URL="https://api.minimaxi.com/anthropic"
+# PLUS_KEYS="minimax-coding-2"

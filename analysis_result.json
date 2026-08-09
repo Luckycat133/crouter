@@ -1,0 +1,11 @@
+{
+  "provider": "antigravity-claude.sh",
+  "issues": [
+    {
+      "severity": "high",
+      "type": "docs_mismatch",
+      "description": "README line 491 incorrectly states 'default and /model opus → claude-opus-4-6-thinking'. The provider has MODEL=\"claude-sonnet-4-6\" (default) and MODEL_OPUS=\"claude-opus-4-6-thinking\". Default maps to sonnet, not opus. Should read: 'Default → claude-sonnet-4-6; /model opus → claude-opus-4-6-thinking; /model sonnet, /model haiku, subagents → claude-sonnet-4-6'"
+    }
+  ],
+  "summary": "Provider implementation is correct and complete; only README documentation has a mapping error for default/opus tiers."
+}

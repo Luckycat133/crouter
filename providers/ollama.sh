@@ -8,6 +8,15 @@ BASE_URL="http://localhost:11434"
 MODEL="glm-4.7-flash"
 CONTEXT_TOKENS="65536"
 
+# Explicit tier aliases (all map to default; override via --model or ANTHROPIC_DEFAULT_*_MODEL)
+MODEL_OPUS="glm-4.7-flash"
+MODEL_SONNET="glm-4.7-flash"
+MODEL_HAIKU="glm-4.7-flash"
+MODEL_SUBAGENT="glm-4.7-flash"
+
+# Optional: set EFFORT for thinking-capable models (e.g. "medium"); leave empty otherwise
+EFFORT=""
+
 # Ollama ignores the auth token value but Claude Code requires a non-empty one.
 # `none` auth mode leaves it unset, so inject a dummy token (and matching API key).
 AUTH_MODE="none"

@@ -6,13 +6,13 @@ PROVIDER_NAME="anthropic"
 PROVIDER_DESC="Anthropic Claude (subscription OAuth preferred, API key fallback)"
 
 BASE_URL="https://api.anthropic.com"
-MODEL="claude-sonnet-5"
+MODEL="claude-sonnet-4"
 CONTEXT_TOKENS="200000"
 
-MODEL_OPUS="claude-opus-5"
-MODEL_SONNET="claude-sonnet-5"
-MODEL_HAIKU="claude-haiku-4-5"
-MODEL_SUBAGENT="claude-sonnet-5"
+MODEL_OPUS="claude-opus-4-5"
+MODEL_SONNET="claude-sonnet-4"
+MODEL_HAIKU="claude-haiku-4"
+MODEL_SUBAGENT="claude-sonnet-4"
 
 EFFORT="max"
 

@@ -6,13 +6,13 @@ PROVIDER_NAME="openai"
 PROVIDER_DESC="OpenAI GPT via official Anthropic-compatible Messages API"
 
 BASE_URL="https://api.openai.com/v1/messages"
-MODEL="gpt-6-terra"
-CONTEXT_TOKENS="1000000"
+MODEL="gpt-5.6-terra"
+CONTEXT_TOKENS="1050000"
 
-MODEL_OPUS="gpt-6-sol"
-MODEL_SONNET="gpt-6-terra"
-MODEL_HAIKU="gpt-6-luna"
-MODEL_SUBAGENT="gpt-6-luna"
+MODEL_OPUS="gpt-5.6-sol"
+MODEL_SONNET="gpt-5.6-terra"
+MODEL_HAIKU="gpt-5.6-luna"
+MODEL_SUBAGENT="gpt-5.6-luna"
 
 EFFORT="high"
 
