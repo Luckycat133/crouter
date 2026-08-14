@@ -22,7 +22,8 @@ load_provider() {
   # loaded in the same shell (crouter doctor / all).
   PROVIDER_NAME= PROVIDER_DESC= BASE_URL= MODEL=
   MODEL_OPUS= MODEL_SONNET= MODEL_HAIKU= MODEL_SUBAGENT=
-  CONTEXT_TOKENS= AUTH_MODE=none AUTH_REFERENCE= AUTH_KEYCHAIN_FALLBACK= _AUTH_SCHEME=
+  CONTEXT_TOKENS= MODEL_CONTEXT_OVERRIDES=
+  AUTH_MODE=none AUTH_REFERENCE= AUTH_KEYCHAIN_FALLBACK= _AUTH_SCHEME=
   EXTRA_ENV= PRE_START= POST_STOP= HEALTH_CHECK_URL= EFFORT=
   AUTH_KEYS= PLUS_URL= PLUS_KEYS=
   # Dual-source contract (anthropic/openai/openrouter).
@@ -41,4 +42,18 @@ load_provider() {
   MODEL_SONNET=${MODEL_SONNET:-$MODEL}
   MODEL_HAIKU=${MODEL_HAIKU:-$MODEL}
   MODEL_SUBAGENT=${MODEL_SUBAGENT:-$MODEL_HAIKU}
+}
+
+# Apply an exact per-model context override after cmd_run has resolved the
+# effective model. Format: whitespace-separated "model=context" entries.
+apply_model_context_override() {
+  _selected_model=$1
+  for _model_context_pair in ${MODEL_CONTEXT_OVERRIDES:-}; do
+    _override_model=${_model_context_pair%%=*}
+    [ "$_override_model" = "$_model_context_pair" ] && continue
+    if [ "$_override_model" = "$_selected_model" ]; then
+      CONTEXT_TOKENS=${_model_context_pair#*=}
+      return
+    fi
+  done
 }

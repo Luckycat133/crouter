@@ -152,6 +152,13 @@ cmd_run() {
   rm -f "$_tmp_args"
   trap - EXIT INT TERM
 
+  # Explicit --model wins; otherwise use the positional shorthand, then the
+  # provider default. Apply any provider-owned context rule to that exact model.
+  if [ "$_model_set" -eq 0 ]; then
+    _main_model=${_pos_model:-$MODEL}
+  fi
+  apply_model_context_override "$_main_model"
+
   AUTH_TOKEN=""
   _bypass_auth=0
   for _arg in "$@"; do

@@ -536,7 +536,7 @@ ollama cp glm-4.7-flash claude-3-5-sonnet
 | --- | --- |
 | Default / opus / sonnet / haiku / subagents | `glm-4.7-flash` (the `MODEL_*` defaults in `providers/ollama.sh`) |
 
-Note: Ollama defaults a model's context window small; agentic Claude Code needs a large one. The provider sets `CLAUDE_CODE_MAX_CONTEXT_TOKENS=65536` as a safe floor — raise it per your VRAM (bake `num_ctx` into a Modelfile, or set `OLLAMA_CONTEXT_LENGTH` before `ollama serve`). Optional `EFFORT` (e.g. `medium`) is available for thinking-capable models; leave it empty otherwise.
+Note: Ollama defaults a model's context window small; agentic Claude Code needs a large one. The provider sets `CLAUDE_CODE_MAX_CONTEXT_TOKENS=65536` as a safe floor. The local `deepseek-v4-flash:q8` profile has an exact-model override of `365K` (`373760` tokens), based on the measured usable/OOM boundary of the M2 Ultra 192 GB benchmark machine. Other Ollama models remain at 65536. The Ollama runtime must also be configured to allow the corresponding context (bake `num_ctx` into a Modelfile, or set `OLLAMA_CONTEXT_LENGTH` before `ollama serve`). Optional `EFFORT` (e.g. `medium`) is available for thinking-capable models; leave it empty otherwise.
 
 > **Verified (2026-08-02):** started `ollama serve` and ran `crouter ollama --model qwen3.5:2b -p "Reply with exactly one word: pong"` end-to-end — Claude Code connected via the injected `ANTHROPIC_BASE_URL=http://localhost:11434` + `ANTHROPIC_AUTH_TOKEN=ollama` and returned `pong`. No proxy, no API key.
 

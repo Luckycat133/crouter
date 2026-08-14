@@ -16,6 +16,8 @@ cat > "$MOCK_CLAUDE" << 'EOF'
 for _a in "$@"; do
   case "$_a" in
     --version|-V|--help|-h)
+      printf 'ANTHROPIC_MODEL=%s\n' "${ANTHROPIC_MODEL:-}"
+      printf 'CLAUDE_CODE_MAX_CONTEXT_TOKENS=%s\n' "${CLAUDE_CODE_MAX_CONTEXT_TOKENS:-}"
       echo "0.2.0"
       exit 0
       ;;
@@ -71,6 +73,24 @@ if "$GATEWAY" help >/dev/null 2>&1; then
   ok "help exits 0"
 else
   bad "help failed"
+fi
+
+# Positional model resolution must reach the launcher, and Ollama's DeepSeek Q8
+# profile must receive its measured context cap without changing other models.
+_deepseek_launch=$("$GATEWAY" ollama deepseek-v4-flash:q8 --version 2>&1)
+if printf '%s\n' "$_deepseek_launch" | grep -q '^ANTHROPIC_MODEL=deepseek-v4-flash:q8$' && \
+   printf '%s\n' "$_deepseek_launch" | grep -q '^CLAUDE_CODE_MAX_CONTEXT_TOKENS=373760$'; then
+  ok "ollama DeepSeek Q8 positional model uses 365K context"
+else
+  bad "ollama DeepSeek Q8 model/context resolution failed"
+fi
+
+_ollama_default_launch=$("$GATEWAY" ollama --version 2>&1)
+if printf '%s\n' "$_ollama_default_launch" | grep -q '^ANTHROPIC_MODEL=glm-4.7-flash$' && \
+   printf '%s\n' "$_ollama_default_launch" | grep -q '^CLAUDE_CODE_MAX_CONTEXT_TOKENS=65536$'; then
+  ok "other Ollama models retain the 65536 default context"
+else
+  bad "ollama default model/context resolution failed"
 fi
 
 # an unknown subcommand is rejected (non-zero exit)

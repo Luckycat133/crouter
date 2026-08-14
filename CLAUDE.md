@@ -18,7 +18,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 1. **Self-Location**: `bin/crouter` dynamically resolves its absolute path following symlinks using `readlink` with `CDPATH=` to ensure safety across environments.
 2. **Configuration & Provider Contracts**: Sourcing `config.sh` (gitignored local overrides) followed by `providers/<name>.sh`. Providers set declarative variables:
    - `BASE_URL`, `MODEL`, `CONTEXT_TOKENS`, `EFFORT` (reasoning effort: `low`|`medium`|`high`|`xhigh`|`max`, passed to Claude Code as `--effort`)
-   - `CONTEXT_TOKENS`: upstream model's context window in tokens. Sets `CLAUDE_CODE_MAX_CONTEXT_TOKENS` at launch. If omitted, the variable is not injected and Claude Code uses its own default.
+   - `CONTEXT_TOKENS`: upstream model's default context window in tokens. Sets `CLAUDE_CODE_MAX_CONTEXT_TOKENS` at launch. If omitted, the variable is not injected and Claude Code uses its own default.
+   - `MODEL_CONTEXT_OVERRIDES`: optional whitespace-separated exact-model overrides in `model=context` form, applied after `--model` / positional model resolution.
    - Model aliases: `MODEL_OPUS`, `MODEL_SONNET`, `MODEL_HAIKU`, `MODEL_SUBAGENT`
    - `AUTH_MODE`: `keychain`, `env`, `command`, `static`, `none`, or `keypool`
    - `AUTH_REFERENCE`: Keychain service name, environment variable name, or command

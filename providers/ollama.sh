@@ -7,6 +7,10 @@ PROVIDER_DESC="Ollama (local/cloud open-weight models) via native Anthropic-comp
 BASE_URL="http://localhost:11434"
 MODEL="glm-4.7-flash"
 CONTEXT_TOKENS="65536"
+# Measured on the local M2 Ultra 192 GB machine: 355,325 prompt tokens passed
+# and 379,904 failed before first token with Metal OOM. Use a 365K cap for
+# this exact Q8 model while leaving every other Ollama model on the safe floor.
+MODEL_CONTEXT_OVERRIDES="deepseek-v4-flash:q8=373760"
 
 # Explicit tier aliases (all map to default; override via --model or ANTHROPIC_DEFAULT_*_MODEL)
 MODEL_OPUS="glm-4.7-flash"
