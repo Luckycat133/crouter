@@ -117,15 +117,30 @@ cmd_run() {
   _n=$#
   _i=0
   _a=""
-  while [ $_i -lt $_n ]; do
+  _expect_model=0
+  for _a in "$@"; do
     _i=$((_i + 1))
-    eval "_a=\${$_i}"
+    if [ "$_expect_model" -eq 1 ]; then
+      case $_a in
+        ''|-*) die "--model requires a non-empty model value" ;;
+      esac
+      _main_model=$_a
+      _model_set=1
+      _seen_flag=1
+      _expect_model=0
+      continue
+    fi
     case "$_a" in
       --model=*)
-        _main_model=${_a#--model=}; _model_set=1; _seen_flag=1 ;;
+        _main_model=${_a#--model=}
+        [ -n "$_main_model" ] || die "--model requires a non-empty model value"
+        _model_set=1
+        _seen_flag=1
+        ;;
       --model)
-        _i=$((_i + 1))
-        eval "_main_model=\${$_i}"; _model_set=1; _seen_flag=1 ;;
+        _expect_model=1
+        _seen_flag=1
+        ;;
       -*)
         _seen_flag=1 ;;
       *)
@@ -135,6 +150,7 @@ cmd_run() {
         ;;
     esac
   done
+  [ "$_expect_model" -eq 0 ] || die "--model requires a non-empty model value"
 
   # Rebuild $@ with the positional model removed so it isn't forwarded to Claude.
   if [ "$_pos_idx" -gt 0 ]; then
@@ -157,6 +173,7 @@ cmd_run() {
   else
     _main_model=$MODEL
   fi
+  apply_model_context_override "$_main_model"
 
   AUTH_TOKEN=""
   _bypass_auth=0

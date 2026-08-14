@@ -198,7 +198,8 @@ surface_state() {
 # ---------------------------------------------------------------------------
 is_dual_source() {
   [ "${AUTH_MODE:-}" = surfaces ] && return 1
-  [ -n "${DEFAULT_TOKEN_ENV:-}" ] || [ -n "${API_KEY_ENV:-}" ] || [ -n "${API_KEY_REF:-}" ]
+  [ -n "${DEFAULT_TOKEN_ENV:-}" ] || [ -n "${DEFAULT_TOKEN_ENV_FALLBACK:-}" ] ||
+    [ -n "${API_KEY_ENV:-}" ] || [ -n "${API_KEY_REF:-}" ]
 }
 
 resolve_dual_source() {
@@ -209,12 +210,10 @@ resolve_dual_source() {
   _DUAL_COUNT=0
 
   # Preferred custom/default credential.
-  if [ -n "${DEFAULT_TOKEN_ENV:-}" ]; then
-    if [ -n "$(printenv "$DEFAULT_TOKEN_ENV" 2>/dev/null)" ]; then
-      _DUAL_DEF_TOKEN=$(printenv "$DEFAULT_TOKEN_ENV")
-    elif [ -n "${DEFAULT_TOKEN_ENV_FALLBACK:-}" ] && [ -n "$(printenv "$DEFAULT_TOKEN_ENV_FALLBACK" 2>/dev/null)" ]; then
-      _DUAL_DEF_TOKEN=$(printenv "$DEFAULT_TOKEN_ENV_FALLBACK")
-    fi
+  if [ -n "${DEFAULT_TOKEN_ENV:-}" ] && [ -n "$(printenv "$DEFAULT_TOKEN_ENV" 2>/dev/null)" ]; then
+    _DUAL_DEF_TOKEN=$(printenv "$DEFAULT_TOKEN_ENV")
+  elif [ -n "${DEFAULT_TOKEN_ENV_FALLBACK:-}" ] && [ -n "$(printenv "$DEFAULT_TOKEN_ENV_FALLBACK" 2>/dev/null)" ]; then
+    _DUAL_DEF_TOKEN=$(printenv "$DEFAULT_TOKEN_ENV_FALLBACK")
   fi
   # Fallback API key (env first, then keychain).
   if [ -n "${API_KEY_ENV:-}" ] && [ -n "$(printenv "$API_KEY_ENV" 2>/dev/null)" ]; then
@@ -361,11 +360,9 @@ start_keypool() {
 # "default", "api", or nothing. Never prints the secrets themselves.
 dual_source_state() {
   _s=""
-  if [ -n "${DEFAULT_TOKEN_ENV:-}" ]; then
-    if [ -n "$(printenv "$DEFAULT_TOKEN_ENV" 2>/dev/null)" ] ||
-       { [ -n "${DEFAULT_TOKEN_ENV_FALLBACK:-}" ] && [ -n "$(printenv "$DEFAULT_TOKEN_ENV_FALLBACK" 2>/dev/null)" ]; }; then
-      _s="default"
-    fi
+  if { [ -n "${DEFAULT_TOKEN_ENV:-}" ] && [ -n "$(printenv "$DEFAULT_TOKEN_ENV" 2>/dev/null)" ]; } ||
+     { [ -n "${DEFAULT_TOKEN_ENV_FALLBACK:-}" ] && [ -n "$(printenv "$DEFAULT_TOKEN_ENV_FALLBACK" 2>/dev/null)" ]; }; then
+    _s="default"
   fi
   if [ -n "${API_KEY_ENV:-}" ] && [ -n "$(printenv "$API_KEY_ENV" 2>/dev/null)" ]; then
     _s="${_s:+$_s+}api"

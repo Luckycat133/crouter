@@ -16,6 +16,8 @@ cat > "$MOCK_CLAUDE" << 'EOF'
 for _a in "$@"; do
   case "$_a" in
     --version|-V|--help|-h)
+      printf 'ANTHROPIC_MODEL=%s\n' "${ANTHROPIC_MODEL:-}"
+      printf 'CLAUDE_CODE_MAX_CONTEXT_TOKENS=%s\n' "${CLAUDE_CODE_MAX_CONTEXT_TOKENS:-}"
       echo "0.2.0"
       exit 0
       ;;
@@ -71,6 +73,32 @@ if "$GATEWAY" help >/dev/null 2>&1; then
   ok "help exits 0"
 else
   bad "help failed"
+fi
+
+# A model option must have a real value instead of consuming the next flag.
+_missing_model=$({ "$GATEWAY" anthropic --model --version; } 2>&1) && _missing_model_rc=0 || _missing_model_rc=$?
+if [ "$_missing_model_rc" -ne 0 ] && printf '%s\n' "$_missing_model" | grep -q -- '--model requires'; then
+  ok "--model rejects a missing value"
+else
+  bad "--model accepted a missing value (rc=$_missing_model_rc, output: $_missing_model)"
+fi
+
+# Exact Ollama profiles may override the provider-wide context without changing
+# arbitrary user-selected models.
+_deepseek_launch=$("$GATEWAY" ollama deepseek-v4-flash:q8 --version 2>&1)
+if printf '%s\n' "$_deepseek_launch" | grep -q '^ANTHROPIC_MODEL=deepseek-v4-flash:q8$' && \
+   printf '%s\n' "$_deepseek_launch" | grep -q '^CLAUDE_CODE_MAX_CONTEXT_TOKENS=373760$'; then
+  ok "Ollama exact model context override is applied"
+else
+  bad "Ollama exact model context override failed"
+fi
+
+_ollama_default_launch=$("$GATEWAY" ollama --version 2>&1)
+if printf '%s\n' "$_ollama_default_launch" | grep -q '^ANTHROPIC_MODEL=glm-4.7-flash$' && \
+   printf '%s\n' "$_ollama_default_launch" | grep -q '^CLAUDE_CODE_MAX_CONTEXT_TOKENS=65536$'; then
+  ok "Ollama default context remains unchanged"
+else
+  bad "Ollama default model context changed unexpectedly"
 fi
 
 # an unknown subcommand is rejected (non-zero exit)

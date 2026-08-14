@@ -80,7 +80,7 @@ load_provider() {
   PROVIDER_NAME= PROVIDER_DESC= BASE_URL= MODEL=
   MODEL_OPUS= MODEL_SONNET= MODEL_HAIKU= MODEL_SUBAGENT=
   MODEL_ALIASES=
-  CONTEXT_TOKENS= AUTO_COMPACT_TOKENS=
+  CONTEXT_TOKENS= AUTO_COMPACT_TOKENS= MODEL_CONTEXT_OVERRIDES=
   AUTH_MODE=none AUTH_REFERENCE= AUTH_KEYCHAIN_FALLBACK= _AUTH_SCHEME=
   EXTRA_ENV= PRE_START= POST_STOP= HEALTH_CHECK_URL= EFFORT=
   AUTH_KEYS= PLUS_URL= PLUS_KEYS=
@@ -117,4 +117,18 @@ load_provider() {
 
 is_surface_provider() {
   [ "${AUTH_MODE:-}" = surfaces ]
+}
+
+# Apply a provider-owned context limit for an exact model ID. The declaration
+# is a whitespace-separated list of model=context entries.
+apply_model_context_override() {
+  _amco_model=$1
+  for _amco_pair in ${MODEL_CONTEXT_OVERRIDES:-}; do
+    _amco_name=${_amco_pair%%=*}
+    [ "$_amco_name" = "$_amco_pair" ] && continue
+    if [ "$_amco_name" = "$_amco_model" ]; then
+      CONTEXT_TOKENS=${_amco_pair#*=}
+      return 0
+    fi
+  done
 }

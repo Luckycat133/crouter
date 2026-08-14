@@ -7,6 +7,9 @@ BASE_URL="http://localhost:11434"
 # Users can override this default with any model available through their Ollama installation.
 MODEL="glm-4.7-flash"
 CONTEXT_TOKENS="65536"
+# This exact local profile was validated with a 365 Ki-token practical cap;
+# other user-selected Ollama models retain the conservative provider default.
+MODEL_CONTEXT_OVERRIDES="deepseek-v4-flash:q8=373760"
 
 # Ollama ignores these dummy credentials, but Claude Code requires non-empty values.
 AUTH_MODE="none"
