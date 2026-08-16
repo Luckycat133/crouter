@@ -4,6 +4,13 @@ All notable changes to this local setup are documented in this file.
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-08-16
+
+### Changed
+
+- `antigravity` provider now defaults to `gemini-3.7-flash-tiered` (the only Gemini 3.7 variant exposed by the account) across all tiers; `gemini-3.7-flash-tiered`, `gemini-3.5-flash-medium`, and `gemini-3.1-pro-low` remain selectable via `--model`.
+- README provider catalog updated to reflect the new Antigravity default.
+
 ## [0.5.1] - 2026-08-09
 
 ### Added

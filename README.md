@@ -92,7 +92,7 @@ limit; the selected vendor model or native backend remains authoritative.
 | `302ai` | API | `claude-sonnet-5` | 1,000,000 | — |
 | `aihubmix` | API | `coding-glm-5.1-free` | — | API MCP |
 | `anthropic` | Console API key | `claude-sonnet-5` | — | — |
-| `antigravity` | local proxy | `gemini-3.1-pro-low` | 1,048,576 | — |
+| `antigravity` | local proxy | `gemini-3.7-flash-tiered` | 1,048,576 | — |
 | `antigravity-claude` | local proxy | `claude-opus-4-6-thinking` | 200,000 | — |
 | `bedrock` | native AWS credentials | `sonnet` alias | — | — |
 | `codex` | local ChatGPT subscription proxy | `gpt-5.6-sol` | 1,050,000 | — |

@@ -6,17 +6,23 @@ PROVIDER_NAME="antigravity"
 PROVIDER_DESC="Gemini models via the local Antigravity proxy"
 
 BASE_URL=$(antigravity_base_url)
-MODEL="gemini-3.1-pro-low"
+MODEL="gemini-3.7-flash-tiered"
 CONTEXT_TOKENS="1048576"
 
-MODEL_OPUS="gemini-3.1-pro-low"
-MODEL_SONNET="gemini-3.5-flash-low"
-MODEL_HAIKU="gemini-3.5-flash-low"
-MODEL_SUBAGENT="gemini-3.5-flash-low"
+# Gemini 3.7 Flash; the account only exposes the -tiered variant, so all tiers
+# map to gemini-3.7-flash-tiered (effort is handled internally by the proxy).
+MODEL_OPUS="gemini-3.7-flash-tiered"
+MODEL_SONNET="gemini-3.7-flash-tiered"
+MODEL_HAIKU="gemini-3.7-flash-tiered"
+MODEL_SUBAGENT="gemini-3.7-flash-tiered"
 
-MODEL_ALIASES="gemini-3.1-pro-high gemini-3-flash"
+# Extra Antigravity Gemini models that aren't tier-mapped. Select explicitly
+# with `crouter antigravity --model <name>` — Claude Code's --model flag picks
+# them up directly. Discovered by `crouter provider show antigravity`.
+MODEL_ALIASES="gemini-3.7-flash-tiered gemini-3.5-flash-medium gemini-3.1-pro-low"
 
-# Gemini effort is encoded in the model name.
+# Gemini effort is encoded in the model name (gemini-3.7-flash-tiered),
+# so we leave Claude Code's --effort unset here to avoid double control.
 EFFORT=""
 
 AUTH_MODE="static"
