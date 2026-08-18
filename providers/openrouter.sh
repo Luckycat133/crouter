@@ -4,8 +4,8 @@ PROVIDER_NAME="openrouter"
 PROVIDER_DESC="OpenRouter (unified gateway, Anthropic-compatible)"
 
 BASE_URL="https://openrouter.ai/api"
-MODEL="openrouter/free"
-CONTEXT_TOKENS=""
+MODEL="nvidia/nemotron-3-ultra-550b-a55b:free"
+CONTEXT_TOKENS="1000000"
 
 EFFORT="high"
 
