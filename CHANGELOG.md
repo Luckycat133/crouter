@@ -4,6 +4,40 @@ All notable changes to this local setup are documented in this file.
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-08-20
+
+### Added
+
+- Ollama direct sessions now use a dependency-free localhost SSE heartbeat
+  relay. It sends one transport-only comment every 60 seconds while a streaming
+  upstream response is silent, preventing Claude Code 2.1.237 from cancelling
+  healthy multi-minute local tool-call generations. The relay exposes a typed
+  health response, forwards request/model events unchanged, survives
+  request-local cancellation, and is covered by an offline integration test.
+
+### Changed
+
+- The Ollama provider now defaults to the locally validated
+  `deepseek-v4-flash:q8` model with `high` Claude Code effort. Its exact-model
+  373,760-token override remains isolated from the 65,536-token fallback used
+  by other explicitly selected Ollama models.
+- Ollama's heartbeat interval is 60 seconds rather than the initial 15-second
+  benchmark workaround, reducing keepalive traffic by 75% while retaining a
+  wide margin below Claude Code's observed five-minute idle cancellation.
+
+### Fixed
+
+- The Ollama relay is launched through the repository-relative `ROOT_DIR`
+  instead of a machine-specific absolute path. crouter now verifies the relay's
+  service identity and stops it only when the current session started it.
+- `crouter provider show ollama` now applies the exact-model override for the
+  default model, so its displayed 373,760-token context matches real launches.
+- README's version badge and `VERSION` metadata now agree on release 0.5.3.
+- Provider-matrix and smoke expectations now agree with the already configured
+  OpenRouter Nemotron 3 Ultra free default and Antigravity Gemini 3.7 tiered
+  catalog; the README and provider audit no longer describe OpenRouter's older
+  dynamic free-router contract.
+
 ## [0.5.2] - 2026-08-16
 
 ### Changed

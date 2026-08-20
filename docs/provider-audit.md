@@ -378,10 +378,17 @@ multi-model plan. The public documentation MCP has no credential.
   Anthropic URL and even included the full `/v1/messages` path. It was removed.
 - [Ollama's Claude Code integration](https://docs.ollama.com/integrations/claude-code) supports
   the local Anthropic endpoint; the installed model catalog remains local.
-- [OpenRouter's Free Models Router](https://openrouter.ai/openrouter/free)
-  documents its Anthropic Messages endpoint and dynamic underlying model set.
-  crouter therefore leaves context unset rather than asserting one limit for
-  every model the router may choose.
+- Local implementation decision: `deepseek-v4-flash:q8` is this machine's
+  crouter default, with `high` effort and a measured 373,760-token client cap.
+  Direct sessions pass through a localhost-only port-11435 relay that emits an
+  SSE comment every 60 seconds during otherwise silent multi-minute generation.
+  The comment is transport metadata, not a model event; request bytes and
+  upstream response events are forwarded unchanged. A session stops only the
+  relay process it started itself.
+- [OpenRouter's Nemotron 3 Ultra free model page](https://openrouter.ai/nvidia/nemotron-3-ultra-550b-a55b%3Afree)
+  documents the exact `nvidia/nemotron-3-ultra-550b-a55b:free` ID and a 1M
+  context. crouter pins that model rather than using the dynamic free-model
+  router, so its 1,000,000-token client limit is an exact-model contract.
 - OpenRouter, Codex, and Antigravity keep their existing documented gateway or
   local-proxy contracts. Their catalogs are not presented as first-party model
   APIs.

@@ -323,6 +323,7 @@ cmd=$1; shift
 cmd_provider_show() {
   _p=$1
   load_provider "$_p"
+  apply_model_context_override "$MODEL"
   _file=$(provider_file "$_p")
 
   printf 'provider:    %s\n' "$_p"

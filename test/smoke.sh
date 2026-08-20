@@ -94,11 +94,11 @@ else
 fi
 
 _ollama_default_launch=$("$GATEWAY" ollama --version 2>&1)
-if printf '%s\n' "$_ollama_default_launch" | grep -q '^ANTHROPIC_MODEL=glm-4.7-flash$' && \
-   printf '%s\n' "$_ollama_default_launch" | grep -q '^CLAUDE_CODE_MAX_CONTEXT_TOKENS=65536$'; then
-  ok "Ollama default context remains unchanged"
+if printf '%s\n' "$_ollama_default_launch" | grep -q '^ANTHROPIC_MODEL=deepseek-v4-flash:q8$' && \
+   printf '%s\n' "$_ollama_default_launch" | grep -q '^CLAUDE_CODE_MAX_CONTEXT_TOKENS=373760$'; then
+  ok "Ollama defaults to the validated DeepSeek profile"
 else
-  bad "Ollama default model context changed unexpectedly"
+  bad "Ollama default DeepSeek profile is not applied"
 fi
 
 # an unknown subcommand is rejected (non-zero exit)
@@ -370,27 +370,38 @@ else
   bad "Kimi Code did not report plan-only auth"
 fi
 
+_ollama_show=$("$GATEWAY" provider show ollama 2>&1)
+_ollama_show_rc=$?
+if [ "$_ollama_show_rc" -eq 0 ] &&
+   printf '%s\n' "$_ollama_show" | grep -q '^default:     deepseek-v4-flash:q8$' &&
+   printf '%s\n' "$_ollama_show" | grep -q '^context:     373760 tokens$' &&
+   printf '%s\n' "$_ollama_show" | grep -q '^effort:      high$'; then
+  ok "ollama provider display applies the default model context override"
+else
+  bad "ollama provider display is inconsistent with its default model"
+fi
+
 _openrouter_show=$("$GATEWAY" provider show openrouter 2>&1)
 _openrouter_show_rc=$?
 if [ "$_openrouter_show_rc" -eq 0 ] &&
-   printf '%s\n' "$_openrouter_show" | grep -q '^default:     openrouter/free$' &&
-   printf '%s\n' "$_openrouter_show" | grep -q '^context:     <unset> tokens$' &&
+   printf '%s\n' "$_openrouter_show" | grep -q '^default:     nvidia/nemotron-3-ultra-550b-a55b:free$' &&
+   printf '%s\n' "$_openrouter_show" | grep -q '^context:     1000000 tokens$' &&
    printf '%s\n' "$_openrouter_show" | grep -q '^effort:      high$'; then
-  ok "openrouter leaves the dynamic free-router context unset"
+  ok "openrouter exposes the pinned Nemotron free model and context"
 else
-  bad "openrouter pins a context for a dynamic model router"
+  bad "openrouter provider display is stale"
 fi
 
 _antigravity_show=$("$GATEWAY" provider show antigravity 2>&1)
 _antigravity_show_rc=$?
 if [ "$_antigravity_show_rc" -eq 0 ] &&
-   printf '%s\n' "$_antigravity_show" | grep -q '^default:     gemini-3\.1-pro-low$' &&
+   printf '%s\n' "$_antigravity_show" | grep -q '^default:     gemini-3\.7-flash-tiered$' &&
    printf '%s\n' "$_antigravity_show" | grep -q '^context:     1048576 tokens$' &&
-   printf '%s\n' "$_antigravity_show" | grep -q '^  opus:      gemini-3\.1-pro-low$' &&
-   printf '%s\n' "$_antigravity_show" | grep -q '^  sonnet:    gemini-3\.5-flash-low$' &&
-   printf '%s\n' "$_antigravity_show" | grep -q '^  haiku:     gemini-3\.5-flash-low$' &&
-   printf '%s\n' "$_antigravity_show" | grep -q '^  subagent:  gemini-3\.5-flash-low$' &&
-   printf '%s\n' "$_antigravity_show" | grep -q '^  extras:    gemini-3\.1-pro-high gemini-3-flash$'; then
+   printf '%s\n' "$_antigravity_show" | grep -q '^  opus:      gemini-3\.7-flash-tiered$' &&
+   printf '%s\n' "$_antigravity_show" | grep -q '^  sonnet:    gemini-3\.7-flash-tiered$' &&
+   printf '%s\n' "$_antigravity_show" | grep -q '^  haiku:     gemini-3\.7-flash-tiered$' &&
+   printf '%s\n' "$_antigravity_show" | grep -q '^  subagent:  gemini-3\.7-flash-tiered$' &&
+   printf '%s\n' "$_antigravity_show" | grep -q '^  extras:    gemini-3\.7-flash-tiered gemini-3\.5-flash-medium gemini-3\.1-pro-low$'; then
   ok "antigravity exposes the supported Gemini catalog and context"
 else
   bad "antigravity exposes an unsupported Gemini catalog or context"

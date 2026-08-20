@@ -33,7 +33,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
    - Native cloud backends: `NATIVE_BACKEND`, `EXTRA_ENV`, and an allowlist in `PASSTHROUGH_ENV`.
    - Session assets: `ASSET_PROFILE` and plan/API-specific plugin directories. `lib/assets.sh` creates a mode-600 MCP config and activates only the current provider's namespaced skills.
    - Lifecycle hooks: `PRE_START`, `POST_STOP`, `HEALTH_CHECK_URL`
-3. **Lifecycle Hooks**: `PRE_START` hook runs prior to launch (e.g. `antigravity_ensure_gateway` auto-starts the local proxy and polls `/health`).
+3. **Lifecycle Hooks**: `PRE_START` hook runs prior to launch (e.g. `antigravity_ensure_gateway` auto-starts the local proxy and polls `/health`; Ollama starts a session-owned SSE heartbeat proxy on port 11435 when one is not already healthy). `POST_STOP` must stop only a process started by the current session.
 4. **Credential Resolution**: Credentials are resolved at launch time without printing secrets. Surface providers build explicit plan-key candidates followed by API-key candidates; user-added Keychain service names come from `.state/keypools/<provider>.tsv`, never provider source. `lib/launch.sh` injects only the matching auth shape. Managed MCP secrets live in a temporary mode-600 file deleted at exit.
    `bin/keypool-proxy` rotates on 401/402/403/429 or connection failure and cools a failed candidate across requests, honoring longer `Retry-After` values. `launch.sh` treats any non-empty `KEYPOOL_URL` as "a local proxy owns auth".
 5. **Isolated Execution**: Launches Claude Code via `env -i` with a clean, terminal-safe minimal environment (`HOME`, `PATH`, `TERM`, `LANG`, etc.) and injected `ANTHROPIC_*` environment variables.
@@ -49,7 +49,7 @@ Subcommands are flat: `crouter <verb> [args]`. Verbs: `claude` (native account/l
 - `bin/keypool-proxy`: Local failover proxy. Candidate mode accepts explicit `{url,type,token,model_map,label}` entries, preserving endpoint/header/model ownership and rotating with the same cooldown semantics. Managed instances require a random session token.
 - `bin/claude-*`: Compatibility launchers — symlinks to `bin/crouter-compat` that delegate to specific provider commands (the provider is derived from the invoked name). `install.sh` generates one per file in `providers/`, so adding a provider needs no edit there.
 - `providers/`: Audited first-party Anthropic-compatible, native-cloud, and explicitly named local-proxy contracts. Domestic providers use plan/API surfaces; unsupported guessed OpenAI/Baichuan routes are excluded.
-- `lib/`: Shared shell modules (`provider.sh`, `auth.sh`, `key-mgmt.sh`, `assets.sh`, `launch.sh`), `antigravity-common.sh`, shared Node proxy primitives (`proxy-common.js`), and dependency-free JSON builders/renderers (`route-build.js`, `provider-assets.js`).
+- `lib/`: Shared shell modules (`provider.sh`, `auth.sh`, `key-mgmt.sh`, `assets.sh`, `launch.sh`), `antigravity-common.sh`, shared Node proxy primitives (`proxy-common.js`), the Ollama SSE keepalive transport (`ollama-heartbeat-proxy.mjs`), and dependency-free JSON builders/renderers (`route-build.js`, `provider-assets.js`).
 - `install.sh`: Creates executable symlinks in `$INSTALL_DIR` (`~/.local/bin`) and copies `config.example.sh` to `config.sh`.
 - `test/`: Hermetic offline contract, proxy, lifecycle, provider-matrix, native-backend, and asset-isolation tests. Run all `test/*.sh`, not only the legacy smoke entry point.
 
@@ -60,3 +60,10 @@ heading in `CHANGELOG.md`, publish releases in reverse chronological order,
 and update the README version badge in the same commit. Provider facts must
 remain tied to primary sources in `docs/provider-audit.md`; never advance its
 audit date without rechecking those sources.
+
+The Ollama provider defaults to `deepseek-v4-flash:q8`, applies its measured
+373,760-token client cap only to that exact model ID, and uses `high` Claude
+Code effort. Its port-11435 proxy sends a transport-only SSE comment every 60
+seconds while upstream generation is silent. Tests must prove the default,
+exact-model override, heartbeat interval, byte-preserving relay, and
+session-owned cleanup behavior.

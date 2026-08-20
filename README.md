@@ -1,7 +1,7 @@
 # crouter
 
 [![CI](https://github.com/Luckycat133/crouter/actions/workflows/ci.yml/badge.svg)](https://github.com/Luckycat133/crouter/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/version-0.5.1-blue)
+![Version](https://img.shields.io/badge/version-0.5.3-blue)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 `crouter` launches Claude Code against audited Anthropic-compatible providers
@@ -103,8 +103,8 @@ limit; the selected vendor model or native backend remains authoritative.
 | `infini` | GenStudio API | `glm-5.1` | — | — |
 | `minimax` | Token Plan + API | `MiniMax-M3` | 1,048,576 | Plan MCP + CLI skill |
 | `moonshot` | Kimi Code membership | `k3-256k` | 262,144 | — |
-| `ollama` | local | `glm-4.7-flash` | 65,536 | — |
-| `openrouter` | API | `openrouter/free` | — | — |
+| `ollama` | local | `deepseek-v4-flash:q8` | 373,760 validated cap | 60s SSE heartbeat |
+| `openrouter` | API | `nvidia/nemotron-3-ultra-550b-a55b:free` | 1,000,000 | — |
 | `ppio` | API | `minimax/minimax-m3` | 1,000,000 | cloud OAuth MCP |
 | `qianfan` | personal Token Plan + API | `deepseek-v4-pro` | — | — |
 | `qianfan-team` | team Token Plan | `deepseek-v3.2` | — | — |
@@ -346,14 +346,28 @@ crouter starts it only when needed and stops it only if that same session owns
 the process; a proxy that was already running is left untouched.
 
 Ollama exposes its native Anthropic compatibility endpoint at
-`http://localhost:11434`. Pull the configured default or select an installed
-model explicitly:
+`http://127.0.0.1:11434`. The local crouter profile defaults to the validated
+`deepseek-v4-flash:q8` model with `high` effort and a 373,760-token client cap.
+Pull that model, or select another installed model explicitly:
 
 ```sh
-ollama pull glm-4.7-flash
+ollama pull deepseek-v4-flash:q8
 crouter ollama
 crouter ollama qwen3.5:2b
 ```
+
+Direct Ollama sessions use a localhost-only transport proxy at
+`http://127.0.0.1:11435`. While Ollama is generating a streaming Messages
+response, the proxy emits one standards-compliant SSE comment every 60 seconds
+so Claude Code does not mistake a healthy multi-minute tool-call generation for
+an idle connection. SSE comments do not change the request, response events, or
+model output. A proxy started by the current session is stopped when Claude
+Code exits; a healthy pre-existing proxy is reused and left running.
+
+The 373,760-token cap applies only to the exact `deepseek-v4-flash:q8` model ID
+validated on the local M2 Ultra 192GB machine. Explicitly selected Ollama models
+retain the conservative 65,536-token fallback unless another exact override is
+added to `MODEL_CONTEXT_OVERRIDES`.
 
 Codex requires `icebear0828/codex-proxy` on port 19000 and a completed ChatGPT
 OAuth PKCE login. Its available catalog remains account-dependent.

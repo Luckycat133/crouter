@@ -29,12 +29,22 @@ assert_eq anthropic.context '' "$CONTEXT_TOKENS"
 assert_eq anthropic.extras claude-fable-5 "$MODEL_ALIASES"
 
 load openrouter
-assert_eq openrouter.model openrouter/free "$MODEL"
-assert_eq openrouter.context '' "$CONTEXT_TOKENS"
+assert_eq openrouter.model nvidia/nemotron-3-ultra-550b-a55b:free "$MODEL"
+assert_eq openrouter.context 1000000 "$CONTEXT_TOKENS"
 
 load ollama
+assert_eq ollama.base http://127.0.0.1:11435 "$BASE_URL"
+assert_eq ollama.model deepseek-v4-flash:q8 "$MODEL"
+assert_eq ollama.context-fallback 65536 "$CONTEXT_TOKENS"
+assert_eq ollama.context-override deepseek-v4-flash:q8=373760 "$MODEL_CONTEXT_OVERRIDES"
+assert_eq ollama.effort high "$EFFORT"
 printf '%s\n' "$EXTRA_ENV" | grep -q '^ANTHROPIC_AUTH_TOKEN=ollama$' || die "ollama auth token mismatch"
 printf '%s\n' "$EXTRA_ENV" | grep -q '^ANTHROPIC_API_KEY=$' || die "ollama API key must be blank"
+printf '%s\n' "$EXTRA_ENV" | grep -q '^API_TIMEOUT_MS=1800000$' || die "ollama API timeout mismatch"
+printf '%s\n' "$EXTRA_ENV" | grep -q '^CLAUDE_STREAM_IDLE_TIMEOUT_MS=1800000$' || die "ollama stream timeout mismatch"
+printf '%s\n' "$PRE_START" | grep -q 'OLLAMA_HEARTBEAT_INTERVAL_MS=60000' || die "ollama heartbeat interval mismatch"
+printf '%s\n' "$POST_STOP" | grep -q '_OLLAMA_HEARTBEAT_PROXY_PID' || die "ollama heartbeat lifecycle cleanup missing"
+assert_eq ollama.health http://127.0.0.1:11435/health "$HEALTH_CHECK_URL"
 
 load bedrock
 assert_eq bedrock.base native://amazon-bedrock "$BASE_URL"
