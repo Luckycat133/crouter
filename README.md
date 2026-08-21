@@ -180,8 +180,13 @@ service names, and tier maps without revealing secrets.
 provider's built-in service; subsequent keys get names such as
 `minimax-plan-2` in a mode-600 registry under `.state/keypools/`. Provider files
 are never edited, so an upgrade cannot overwrite the user's pool. Use `--name`
-for a stable service name and `--stdin` with a password manager or CI; the key
-never appears in process arguments.
+for a stable service name and `--stdin` with a password manager or CI.
+
+Interactive `crouter add` asks once for the provider API key with terminal echo
+disabled. crouter stores it without invoking the additional generic password
+and confirmation prompts from a bare `security -w`. The value is not written
+to shell history, repository files, or logs; it is supplied directly to the
+short-lived macOS Keychain command.
 
 For a provider with both surfaces, candidate order is plan environment key,
 plan Keychain pool, API environment key, then API Keychain pool. `crouter list

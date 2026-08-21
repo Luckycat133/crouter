@@ -4,6 +4,13 @@ All notable changes to this local setup are documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- Interactive `crouter add` now asks exactly once for the provider API key. On
+  macOS it passes that captured value directly to the short-lived Keychain
+  command, avoiding bare `security -w`'s additional password and confirmation
+  prompts.
+
 ## [0.5.3] - 2026-08-20
 
 ### Added

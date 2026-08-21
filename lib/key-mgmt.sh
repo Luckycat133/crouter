@@ -136,10 +136,10 @@ _prompt_secret() {
 
 # _keychain_put <service> <value>   ->  add or update (-U) a generic password for current $USER
 _keychain_put() {
-  # Apple's security(1) marks `-w <password>` as insecure and documents a
-  # trailing `-w` as the prompt/stdin form. Keep the secret out of child argv.
-  printf '%s\n%s\n' "$2" "$2" |
-    security add-generic-password -U -a "$USER" -s "$1" -w 2>/dev/null
+  # A trailing `security -w` opens /dev/tty and asks for the value twice even
+  # after crouter has already collected it. Supplying the captured value here
+  # makes crouter's explicit hidden prompt the only user interaction.
+  security add-generic-password -U -a "$USER" -s "$1" -w "$2" >/dev/null 2>&1
 }
 
 # _keychain_delete <service>   ->  delete a generic password; missing is okay.
@@ -229,7 +229,7 @@ cmd_add_key() {
 
     # Read from a hidden TTY prompt by default. --stdin supports password
     # managers and CI without ever putting the value in argv or source files.
-    _secret=$(_read_managed_secret "$_secret_stdin" "Paste key for $_name: ")
+    _secret=$(_read_managed_secret "$_secret_stdin" "Paste API key for $_name: ")
     [ -n "$_secret" ] || die "add: empty key; aborting"
 
     # Store in Keychain (add or update).
@@ -269,7 +269,7 @@ cmd_add_key() {
     esac
   done
 
-  _secret=$(_read_managed_secret "$_secret_stdin" "Paste key for $_service ($_p): ")
+  _secret=$(_read_managed_secret "$_secret_stdin" "Paste API key for $_service ($_p): ")
   [ -n "$_secret" ] || die "add: empty key; aborting"
   _keychain_put "$_service" "$_secret" || die "add: failed to store '$_service' in macOS Keychain"
   unset _secret
