@@ -6,6 +6,18 @@ All notable changes to this local setup are documented in this file.
 
 ### Fixed
 
+- Ollama DeepSeek V4 sessions now keep Claude Code's `high`/`max` request and
+  its Anthropic thinking block intact. Current Ollama releases expose only an
+  unbounded local thinking toggle through this compatibility path, so crouter
+  reports the effective mode honestly instead of deleting the request and
+  accidentally creating a 2^31-1-token reasoning budget. The Ollama provider
+  still defaults to Claude Code's `max` request.
+- Text-only Ollama DeepSeek V4 sessions no longer abort when Claude Code's
+  `Read` tool adds a screenshot to the next Anthropic Messages request. The
+  localhost relay replaces only those DeepSeek image blocks with a text-only
+  fallback notice, allowing the agent to continue with DOM, console, Canvas,
+  or pixel-statistics inspection. Requests for other Ollama models are left
+  byte-for-byte unchanged so native multimodal models retain image input.
 - Interactive `crouter add` now asks exactly once for the provider API key. On
   macOS it passes that captured value directly to the short-lived Keychain
   command, avoiding bare `security -w`'s additional password and confirmation

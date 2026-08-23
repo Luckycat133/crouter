@@ -352,7 +352,7 @@ the process; a proxy that was already running is left untouched.
 
 Ollama exposes its native Anthropic compatibility endpoint at
 `http://127.0.0.1:11434`. The local crouter profile defaults to the validated
-`deepseek-v4-flash:q8` model with `high` effort and a 373,760-token client cap.
+`deepseek-v4-flash:q8` model with `max` effort and a 373,760-token client cap.
 Pull that model, or select another installed model explicitly:
 
 ```sh
@@ -365,9 +365,20 @@ Direct Ollama sessions use a localhost-only transport proxy at
 `http://127.0.0.1:11435`. While Ollama is generating a streaming Messages
 response, the proxy emits one standards-compliant SSE comment every 60 seconds
 so Claude Code does not mistake a healthy multi-minute tool-call generation for
-an idle connection. SSE comments do not change the request, response events, or
-model output. A proxy started by the current session is stopped when Claude
-Code exits; a healthy pre-existing proxy is reused and left running.
+an idle connection. For DeepSeek V4 requests, it preserves Claude Code's
+Anthropic thinking request and logs the requested/effective mode, model, and
+output ceiling without logging prompt content. Current Ollama releases reduce
+this Anthropic path to their unbounded local thinking toggle; they do not yet
+provide a token-bounded equivalent of cloud `max`. crouter therefore labels
+the effective mode accurately and does not rewrite it into a misleading
+2^31-1-token budget. Because this DeepSeek GGUF is text-only, the relay also turns image
+blocks produced by Claude Code's `Read` tool into a text fallback notice. This
+prevents Ollama's missing-`mmproj` HTTP 500 from terminating the agent and lets
+it continue with DOM, console, Canvas, or pixel-statistics inspection. This
+fallback is scoped to DeepSeek V4 model IDs; image blocks for other Ollama
+models remain unchanged. A proxy started by the current session is stopped
+when Claude Code exits; a healthy pre-existing proxy is reused and left
+running.
 
 The 373,760-token cap applies only to the exact `deepseek-v4-flash:q8` model ID
 validated on the local M2 Ultra 192GB machine. Explicitly selected Ollama models

@@ -375,7 +375,7 @@ _ollama_show_rc=$?
 if [ "$_ollama_show_rc" -eq 0 ] &&
    printf '%s\n' "$_ollama_show" | grep -q '^default:     deepseek-v4-flash:q8$' &&
    printf '%s\n' "$_ollama_show" | grep -q '^context:     373760 tokens$' &&
-   printf '%s\n' "$_ollama_show" | grep -q '^effort:      high$'; then
+   printf '%s\n' "$_ollama_show" | grep -q '^effort:      max$'; then
   ok "ollama provider display applies the default model context override"
 else
   bad "ollama provider display is inconsistent with its default model"

@@ -11,8 +11,13 @@ CONTEXT_TOKENS="65536"
 # This exact local profile was validated with a 365K-token practical cap;
 # other user-selected Ollama models retain the conservative provider default.
 MODEL_CONTEXT_OVERRIDES="deepseek-v4-flash:q8=373760"
-EFFORT="high"
+EFFORT="max"
 
+# DeepSeek V4 receives Claude Code's max effort through output_config. The
+# localhost proxy removes a conflicting top-level thinking=enabled toggle so
+# Ollama preserves the string-valued native think level instead of reducing it
+# to the boolean think=true.
+#
 # Local models can spend several minutes emitting a large tool-call payload
 # without yielding another user-visible content block.  Claude Code's default
 # stream watchdog otherwise mistakes that healthy generation for a stalled
@@ -28,7 +33,7 @@ API_TIMEOUT_MS=1800000
 CLAUDE_STREAM_IDLE_TIMEOUT_MS=1800000
 CLAUDE_BYTE_STREAM_IDLE_TIMEOUT_MS=1800000"
 
-PRE_START='_OLLAMA_HEARTBEAT_PROXY_PID=; curl -fsS --max-time 3 http://127.0.0.1:11434 >/dev/null 2>&1 || die "Ollama not reachable at http://127.0.0.1:11434 — start it (ollama serve) and pull a model first"; if ! curl -fsS --max-time 1 http://127.0.0.1:11435/health 2>/dev/null | grep -q '"service":"crouter-ollama-heartbeat"'; then OLLAMA_HEARTBEAT_INTERVAL_MS=60000 nohup node "$ROOT_DIR/lib/ollama-heartbeat-proxy.mjs" >>/tmp/crouter-ollama-heartbeat-proxy.log 2>&1 & _OLLAMA_HEARTBEAT_PROXY_PID=$!; for _ollama_proxy_try in 1 2 3 4 5 6 7 8 9 10; do curl -fsS --max-time 1 http://127.0.0.1:11435/health 2>/dev/null | grep -q '"service":"crouter-ollama-heartbeat"' && break; sleep 0.2; done; fi; curl -fsS --max-time 1 http://127.0.0.1:11435/health 2>/dev/null | grep -q '"service":"crouter-ollama-heartbeat"' || die "Ollama heartbeat proxy failed to start at http://127.0.0.1:11435"'
+PRE_START='_OLLAMA_HEARTBEAT_PROXY_PID=; curl -fsS --max-time 3 http://127.0.0.1:11434 >/dev/null 2>&1 || die "Ollama not reachable at http://127.0.0.1:11434 — start it (ollama serve) and pull a model first"; if ! curl -fsS --max-time 1 http://127.0.0.1:11435/health 2>/dev/null | grep -q crouter-ollama-heartbeat; then OLLAMA_HEARTBEAT_INTERVAL_MS=60000 nohup node "$ROOT_DIR/lib/ollama-heartbeat-proxy.mjs" >>/tmp/crouter-ollama-heartbeat-proxy.log 2>&1 & _OLLAMA_HEARTBEAT_PROXY_PID=$!; for _ollama_proxy_try in 1 2 3 4 5 6 7 8 9 10; do curl -fsS --max-time 1 http://127.0.0.1:11435/health 2>/dev/null | grep -q crouter-ollama-heartbeat && break; sleep 0.2; done; fi; curl -fsS --max-time 1 http://127.0.0.1:11435/health 2>/dev/null | grep -q crouter-ollama-heartbeat || die "Ollama heartbeat proxy failed to start at http://127.0.0.1:11435"'
 
 POST_STOP='if [ -n "${_OLLAMA_HEARTBEAT_PROXY_PID:-}" ]; then kill "$_OLLAMA_HEARTBEAT_PROXY_PID" 2>/dev/null || true; wait "$_OLLAMA_HEARTBEAT_PROXY_PID" 2>/dev/null || true; _OLLAMA_HEARTBEAT_PROXY_PID=; fi'
 HEALTH_CHECK_URL="http://127.0.0.1:11435/health"
