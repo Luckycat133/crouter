@@ -7,10 +7,18 @@ BASE_URL="http://127.0.0.1:11435"
 # This machine's validated local default. Users can still select any installed
 # Ollama model with `crouter ollama <model>` or `--model <model>`.
 MODEL="deepseek-v4-flash:q8"
+_ollama_last_model=$(load_last_selected_model ollama 2>/dev/null || true)
+if [ -n "$_ollama_last_model" ]; then
+  MODEL="$_ollama_last_model"
+fi
+unset _ollama_last_model
 CONTEXT_TOKENS="65536"
-# This exact local profile was validated with a 365K-token practical cap;
-# other user-selected Ollama models retain the conservative provider default.
-MODEL_CONTEXT_OVERRIDES="deepseek-v4-flash:q8=373760"
+# DeepSeek keeps its validated 365K practical cap. Only the selected Qwen MTP
+# tag gets its native 256K context; other Ollama models retain 65536.
+MODEL_CONTEXT_OVERRIDES="deepseek-v4-flash:q8=373760 qwen3.8:27b-mtp-q8_0=262144"
+# For this exact Qwen MTP tag, route Claude Code's tier and subagent aliases to
+# the same model instead of inheriting DeepSeek's aliases.
+MODEL_SELF_ROUTE_MODELS="qwen3.8:27b-mtp-q8_0"
 EFFORT="max"
 
 # DeepSeek V4 receives Claude Code's max effort through output_config. The

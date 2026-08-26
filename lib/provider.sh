@@ -80,7 +80,7 @@ load_provider() {
   PROVIDER_NAME= PROVIDER_DESC= BASE_URL= MODEL=
   MODEL_OPUS= MODEL_SONNET= MODEL_HAIKU= MODEL_SUBAGENT=
   MODEL_ALIASES=
-  CONTEXT_TOKENS= AUTO_COMPACT_TOKENS= MODEL_CONTEXT_OVERRIDES=
+  CONTEXT_TOKENS= AUTO_COMPACT_TOKENS= MODEL_CONTEXT_OVERRIDES= MODEL_SELF_ROUTE_MODELS=
   AUTH_MODE=none AUTH_REFERENCE= AUTH_KEYCHAIN_FALLBACK= _AUTH_SCHEME=
   EXTRA_ENV= PRE_START= POST_STOP= HEALTH_CHECK_URL= EFFORT=
   AUTH_KEYS= PLUS_URL= PLUS_KEYS=
@@ -119,16 +119,59 @@ is_surface_provider() {
   [ "${AUTH_MODE:-}" = surfaces ]
 }
 
-# Apply a provider-owned context limit for an exact model ID. The declaration
-# is a whitespace-separated list of model=context entries.
+# Apply a provider-owned context limit. The declaration is a whitespace-separated
+# list of model=context entries; an entry ending in ':' is treated as a model
+# prefix so a family of tags can share one context profile.
 apply_model_context_override() {
   _amco_model=$1
   for _amco_pair in ${MODEL_CONTEXT_OVERRIDES:-}; do
     _amco_name=${_amco_pair%%=*}
     [ "$_amco_name" = "$_amco_pair" ] && continue
-    if [ "$_amco_name" = "$_amco_model" ]; then
+    case "$_amco_model" in
+      "$_amco_name"|"$_amco_name"*)
       CONTEXT_TOKENS=${_amco_pair#*=}
+      return 0
+        ;;
+    esac
+  done
+}
+
+# Route all Claude Code model tiers to a selected local model. This prevents an
+# explicit model argument from leaving Opus/Sonnet/Haiku/subagents on the
+# provider's default model. Entries are exact model IDs.
+apply_model_self_route() {
+  _amsr_model=$1
+  for _amsr_name in ${MODEL_SELF_ROUTE_MODELS:-}; do
+    if [ "$_amsr_name" = "$_amsr_model" ]; then
+      MODEL_OPUS=$_amsr_model
+      MODEL_SONNET=$_amsr_model
+      MODEL_HAIKU=$_amsr_model
+      MODEL_SUBAGENT=$_amsr_model
       return 0
     fi
   done
+}
+
+crouter_model_state_file() {
+  printf '%s/crouter/last-model-%s' "${XDG_STATE_HOME:-$HOME/.local/state}" "$1"
+}
+
+load_last_selected_model() {
+  _clsm_file=$(crouter_model_state_file "$1")
+  [ -r "$_clsm_file" ] || return 0
+  _clsm_model=$(cat "$_clsm_file") || return 0
+  case "$_clsm_model" in
+    ''|*[!A-Za-z0-9._:/@_-]*) return 0 ;;
+  esac
+  printf '%s' "$_clsm_model"
+}
+
+remember_last_selected_model() {
+  _rlsm_provider=$1
+  _rlsm_model=$2
+  [ -n "$_rlsm_model" ] || return 0
+  _rlsm_dir="${XDG_STATE_HOME:-$HOME/.local/state}/crouter"
+  mkdir -p "$_rlsm_dir" 2>/dev/null || return 0
+  umask 077
+  printf '%s\n' "$_rlsm_model" > "$(crouter_model_state_file "$_rlsm_provider")" 2>/dev/null || :
 }

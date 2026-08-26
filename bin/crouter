@@ -173,7 +173,9 @@ cmd_run() {
   else
     _main_model=$MODEL
   fi
-  apply_model_context_override "$_main_model"
+apply_model_context_override "$_main_model"
+apply_model_self_route "$_main_model"
+remember_last_selected_model ollama "$_main_model"
 
   AUTH_TOKEN=""
   _bypass_auth=0
