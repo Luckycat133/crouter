@@ -15,10 +15,10 @@ unset _ollama_last_model
 CONTEXT_TOKENS="65536"
 # DeepSeek keeps its validated 365K practical cap. Only the selected Qwen MTP
 # tag gets its native 256K context; other Ollama models retain 65536.
-MODEL_CONTEXT_OVERRIDES="deepseek-v4-flash:q8=373760 qwen3.8:27b-mtp-q8_0=262144"
+MODEL_CONTEXT_OVERRIDES="deepseek-v4-flash:q8=373760 deepseek-v4-flash=373760 qwen3.8:27b-mtp-q8_0=262144 qwen3.8-max=262144"
 # For this exact Qwen MTP tag, route Claude Code's tier and subagent aliases to
 # the same model instead of inheriting DeepSeek's aliases.
-MODEL_SELF_ROUTE_MODELS="qwen3.8:27b-mtp-q8_0"
+MODEL_SELF_ROUTE_MODELS="deepseek-v4-flash:q8 deepseek-v4-flash qwen3.8:27b-mtp-q8_0 qwen3.8-max"
 EFFORT="max"
 
 # DeepSeek V4 receives Claude Code's max effort through output_config. The
