@@ -451,6 +451,20 @@ git diff --check
 Version is read from `VERSION`. Bash and zsh completions are under
 `completions/`.
 
+### Push gate
+
+`.githooks/pre-push` runs the whole offline suite (about 30 seconds) and the
+Node syntax check before every push, and refuses the push while either is red.
+Enable it once per clone:
+
+```sh
+git config core.hooksPath .githooks
+```
+
+The suite is offline and hermetic: no credentials, no Keychain entry, and no
+network access. Bypass a known-bad push with `git push --no-verify`; CI still
+gates the branch, so prefer fixing the failures.
+
 ## Maintenance and license
 
 The project is maintained in

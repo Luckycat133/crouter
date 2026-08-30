@@ -1,0 +1,44 @@
+#!/bin/sh
+# Refuse a push while crouter's offline contract suite is red.
+#
+# Git runs this before every push once it is enabled:
+#   git config core.hooksPath .githooks
+# Emergency bypass (CI still gates the branch, so use it sparingly):
+#   git push --no-verify
+#
+# The suite is offline and hermetic: no Keychain entry, no credentials, and no
+# network access are required. Keep it that way when adding tests.
+set -u
+
+ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$ROOT_DIR" || exit 1
+
+printf 'pre-push: running crouter offline tests\n'
+
+fail=0
+for _test in test/*.sh; do
+  [ -f "$_test" ] || continue
+  if ! sh "$_test" >/dev/null 2>&1; then
+    printf 'FAIL  %s\n' "$_test" >&2
+    fail=1
+  fi
+done
+
+if command -v node >/dev/null 2>&1; then
+  for _script in bin/gateway bin/keypool-proxy lib/*.js lib/*.mjs; do
+    [ -f "$_script" ] || continue
+    if ! node --check "$_script" >/dev/null 2>&1; then
+      printf 'FAIL  node --check %s\n' "$_script" >&2
+      fail=1
+    fi
+  done
+fi
+
+if [ "$fail" -ne 0 ]; then
+  printf '\nPush blocked: the offline contract suite is red.\n' >&2
+  printf 'Fix the failures above, or bypass once with: git push --no-verify\n' >&2
+  exit 1
+fi
+
+printf 'pre-push: all offline tests passed\n'
+exit 0

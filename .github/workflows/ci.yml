@@ -16,7 +16,7 @@ jobs:
 
       - name: Run shellcheck
         run: |
-          files=$(git ls-files | grep -E '\.sh$|\.bash$|^bin/(crouter|crouter-compat)$')
+          files=$(git ls-files | grep -E '\.sh$|\.bash$|^bin/(crouter|crouter-compat)$|^\.githooks/')
           if [ -n "$files" ]; then
             # SC1007:  CDPATH= cd / VAR= VAR2= one-liner resets are intentional POSIX idioms
             # SC1090/SC1091: providers and config are sourced at runtime (dynamic paths)

@@ -9,6 +9,7 @@ antigravity-claude-proxy/
 # dot-directories and re-include the ones this repo actually tracks.
 .*/
 !.github/
+!.githooks/
 
 # Local-only working files: skill checkouts and personal task/planning notes.
 data/
