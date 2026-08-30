@@ -18,10 +18,14 @@ All notable changes to this local setup are documented in this file.
   fallback notice, allowing the agent to continue with DOM, console, Canvas,
   or pixel-statistics inspection. Requests for other Ollama models are left
   byte-for-byte unchanged so native multimodal models retain image input.
-- Interactive `crouter add` now asks exactly once for the provider API key. On
-  macOS it passes that captured value directly to the short-lived Keychain
-  command, avoiding bare `security -w`'s additional password and confirmation
-  prompts.
+- Interactive `crouter add` still asks exactly once for the provider API key,
+  and the captured value now reaches the macOS Keychain without ever entering
+  a child process's argv (world-readable via ps). security(1) on current
+  macOS ignores piped stdin for its `-w` password prompt and reads /dev/tty
+  directly, so crouter drives that prompt through a pty with the system
+  expect(1); the secret is loaded from the environment and unset before the
+  security child spawns. A regression test proves the Keychain child argv
+  stays secret-free.
 
 ## [0.5.3] - 2026-08-20
 

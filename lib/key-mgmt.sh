@@ -136,10 +136,41 @@ _prompt_secret() {
 
 # _keychain_put <service> <value>   ->  add or update (-U) a generic password for current $USER
 _keychain_put() {
-  # A trailing `security -w` opens /dev/tty and asks for the value twice even
-  # after crouter has already collected it. Supplying the captured value here
-  # makes crouter's explicit hidden prompt the only user interaction.
-  security add-generic-password -U -a "$USER" -s "$1" -w "$2" >/dev/null 2>&1
+  # security(1) on current macOS ignores piped stdin for its `-w` password
+  # prompt and reads /dev/tty directly (verified 2026-08-30: a pipe hangs
+  # until the user types, and `security -i` behaves the same). Inline
+  # `-w "$secret"` works but exposes the secret in the world-readable child
+  # argv, visible to any local user via ps. Drive the prompt through a pty
+  # with the system expect instead: the secret is loaded from the
+  # environment and unset before the security child spawns, so it crosses
+  # neither argv nor the child's environment, and the user is never prompted.
+  command -v expect >/dev/null 2>&1 || {
+    echo "expect(1) not found; cannot store secrets without leaking them via argv" >&2
+    return 127
+  }
+  _kcp_rc=0
+  CR_KEYCHAIN_SERVICE="$1" CR_KEYCHAIN_SECRET="$2" \
+    expect -f - >/dev/null 2>&1 <<'EOF' || _kcp_rc=$?
+set timeout 10
+set service $env(CR_KEYCHAIN_SERVICE)
+set secret $env(CR_KEYCHAIN_SECRET)
+unset env(CR_KEYCHAIN_SECRET)
+spawn security add-generic-password -U -a $env(USER) -s $service -w
+expect {
+    -re {password data for new item} { send "$secret\r" }
+    eof { exit 1 }
+    timeout { exit 124 }
+}
+expect {
+    -re {retype} { send "$secret\r" }
+    eof { exit 1 }
+    timeout { exit 124 }
+}
+expect eof
+catch wait result
+exit [lindex $result 3]
+EOF
+  return "$_kcp_rc"
 }
 
 # _keychain_delete <service>   ->  delete a generic password; missing is okay.

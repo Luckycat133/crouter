@@ -50,6 +50,9 @@ case $1 in
     ;;
   add-generic-password)
     shift
+    # Leak guard: the secret must never travel in the child argv (world
+    # readable via ps). Real security(1) takes it over a /dev/tty prompt.
+    printf '%s\n' "$@" > "$KEYCHAIN_DIR/add-argv"
     _service= _value=
     while [ $# -gt 0 ]; do
       case $1 in
@@ -61,7 +64,9 @@ case $1 in
           if [ $# -gt 0 ]; then
             _value=$1; shift
           else
+            printf 'password data for new item: '
             IFS= read -r _value || exit 91
+            printf 'retype password for new item: '
             IFS= read -r _confirm || exit 92
             [ "$_value" = "$_confirm" ] || exit 93
           fi ;;
@@ -98,6 +103,10 @@ run_crouter() {
 
 printf 'plan-one\n' | run_crouter add demo --surface plan --stdin >/dev/null
 [ "$(cat "$KEYCHAIN_DIR/demo-plan-primary")" = plan-one ]
+if grep -q 'plan-one' "$KEYCHAIN_DIR/add-argv" 2>/dev/null; then
+  printf 'FAIL  Keychain child argv contained the secret\n' >&2
+  exit 1
+fi
 [ "$before" = "$(cksum "$FAKE_ROOT/providers/demo.sh")" ]
 [ ! -e "$STATE_DIR/keypools/demo.tsv" ]
 
