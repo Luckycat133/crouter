@@ -15,7 +15,7 @@ The current provider values were checked against vendor documentation on
 2026-08-08. See [docs/provider-audit.md](docs/provider-audit.md) for the source
 matrix and decisions.
 
-Release 0.5.1 is implementation-complete against the repository's offline
+Release 0.5.3 is implementation-complete against the repository's offline
 contract suite under POSIX `sh` and `dash`. Live catalog access, remaining
 quota, and account entitlement still require the account owner's credentials
 and may incur provider charges.
@@ -92,7 +92,7 @@ limit; the selected vendor model or native backend remains authoritative.
 | `302ai` | API | `claude-sonnet-5` | 1,000,000 | — |
 | `aihubmix` | API | `coding-glm-5.1-free` | — | API MCP |
 | `anthropic` | Console API key | `claude-sonnet-5` | — | — |
-| `antigravity` | local proxy | `gemini-3.7-flash-tiered` | 1,048,576 | — |
+| `antigravity` | local proxy | `gemini-3.7-flash` | 1,048,576 | — |
 | `antigravity-claude` | local proxy | `claude-opus-4-6-thinking` | 200,000 | — |
 | `bedrock` | native AWS credentials | `sonnet` alias | — | — |
 | `codex` | local ChatGPT subscription proxy | `gpt-5.6-sol` | 1,050,000 | — |

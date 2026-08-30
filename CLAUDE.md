@@ -62,7 +62,7 @@ remain tied to primary sources in `docs/provider-audit.md`; never advance its
 audit date without rechecking those sources.
 
 The Ollama provider defaults to `deepseek-v4-flash:q8`, applies its measured
-373,760-token client cap only to that exact model ID, and uses `high` Claude
+373,760-token client cap only to that exact model ID, and uses `max` Claude
 Code effort. Its port-11435 proxy sends a transport-only SSE comment every 60
 seconds while upstream generation is silent. Tests must prove the default,
 exact-model override, heartbeat interval, byte-preserving relay, and
