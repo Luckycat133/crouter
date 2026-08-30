@@ -30,6 +30,12 @@ chmod +x "$MOCK_CLAUDE"
 # Clean up on exit
 trap 'rm -rf "$MOCK_DIR"' EXIT INT TERM
 
+# Hermetic state: ollama launches persist the last selected model under
+# XDG_STATE_HOME. Keep test runs out of the user's real state directory and
+# prevent cross-test pollution of the declared-default assertions.
+XDG_STATE_HOME="$MOCK_DIR/state"
+export XDG_STATE_HOME
+
 # Export CLAUDE_BIN for the launchers
 export CLAUDE_BIN="$MOCK_CLAUDE"
 
@@ -395,13 +401,13 @@ fi
 _antigravity_show=$("$GATEWAY" provider show antigravity 2>&1)
 _antigravity_show_rc=$?
 if [ "$_antigravity_show_rc" -eq 0 ] &&
-   printf '%s\n' "$_antigravity_show" | grep -q '^default:     gemini-3\.7-flash-tiered$' &&
+   printf '%s\n' "$_antigravity_show" | grep -q '^default:     gemini-3\.7-flash$' &&
    printf '%s\n' "$_antigravity_show" | grep -q '^context:     1048576 tokens$' &&
-   printf '%s\n' "$_antigravity_show" | grep -q '^  opus:      gemini-3\.7-flash-tiered$' &&
-   printf '%s\n' "$_antigravity_show" | grep -q '^  sonnet:    gemini-3\.7-flash-tiered$' &&
-   printf '%s\n' "$_antigravity_show" | grep -q '^  haiku:     gemini-3\.7-flash-tiered$' &&
-   printf '%s\n' "$_antigravity_show" | grep -q '^  subagent:  gemini-3\.7-flash-tiered$' &&
-   printf '%s\n' "$_antigravity_show" | grep -q '^  extras:    gemini-3\.7-flash-tiered gemini-3\.5-flash-medium gemini-3\.1-pro-low$'; then
+   printf '%s\n' "$_antigravity_show" | grep -q '^  opus:      gemini-3\.7-flash$' &&
+   printf '%s\n' "$_antigravity_show" | grep -q '^  sonnet:    gemini-3\.7-flash$' &&
+   printf '%s\n' "$_antigravity_show" | grep -q '^  haiku:     gemini-3\.7-flash$' &&
+   printf '%s\n' "$_antigravity_show" | grep -q '^  subagent:  gemini-3\.7-flash$' &&
+   printf '%s\n' "$_antigravity_show" | grep -q '^  extras:    gemini-3\.5-flash-medium gemini-3\.1-pro-low$'; then
   ok "antigravity exposes the supported Gemini catalog and context"
 else
   bad "antigravity exposes an unsupported Gemini catalog or context"

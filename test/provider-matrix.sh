@@ -5,6 +5,12 @@ set -eu
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 PROVIDERS_DIR="$ROOT_DIR/providers"
+# Hermetic state: ollama.sh reads the last selected model from XDG_STATE_HOME.
+# Point it at an empty temp dir so this suite always asserts the DECLARED
+# provider contract instead of whichever model a previous local run selected.
+XDG_STATE_HOME=$(mktemp -d 2>/dev/null || mktemp -d -t crouter-matrix-state)
+export XDG_STATE_HOME
+trap 'rm -rf "$XDG_STATE_HOME"' EXIT INT TERM
 die() { printf 'FAIL  %s\n' "$*" >&2; exit 1; }
 . "$ROOT_DIR/lib/provider.sh"
 
@@ -36,7 +42,8 @@ load ollama
 assert_eq ollama.base http://127.0.0.1:11435 "$BASE_URL"
 assert_eq ollama.model deepseek-v4-flash:q8 "$MODEL"
 assert_eq ollama.context-fallback 65536 "$CONTEXT_TOKENS"
-assert_eq ollama.context-override deepseek-v4-flash:q8=373760 "$MODEL_CONTEXT_OVERRIDES"
+assert_eq ollama.context-override "deepseek-v4-flash:q8=373760 deepseek-v4-flash=373760 qwen3.8:27b-mtp-q8_0=262144 qwen3.8-max=262144" "$MODEL_CONTEXT_OVERRIDES"
+assert_eq ollama.self-route "deepseek-v4-flash:q8 deepseek-v4-flash qwen3.8:27b-mtp-q8_0 qwen3.8-max" "$MODEL_SELF_ROUTE_MODELS"
 assert_eq ollama.effort max "$EFFORT"
 printf '%s\n' "$EXTRA_ENV" | grep -q '^ANTHROPIC_AUTH_TOKEN=ollama$' || die "ollama auth token mismatch"
 printf '%s\n' "$EXTRA_ENV" | grep -q '^ANTHROPIC_API_KEY=$' || die "ollama API key must be blank"
