@@ -359,14 +359,32 @@ upstream request.
 
 ### Volcengine Ark
 
-- [Ark Coding Plan gateway](https://www.volcengine.com/article/37839)
-  documents `https://ark.cn-beijing.volces.com/api/coding` for Anthropic tools.
-- [Ark Coding Plan catalog](https://www.volcengine.com/article/37570) lists
-  `doubao-seed-2.0-code`, Pro/Lite variants, and `ark-code-latest`.
+Volcano Engine offers two distinct subscription plan interfaces:
+1. `volcengine` (Ark Agent Plan):
+   - Gateway endpoint: `https://ark.cn-beijing.volces.com/api/plan` for Anthropic tools.
+   - Empirically validated multi-vendor models: `doubao-seed-evolving` (default, 1M context),
+     `deepseek-v4-pro` (1M), `glm-5.3` / `glm-latest` (1M), `kimi-k3` (1M / 256K), `minimax-m3` (1M),
+     `glm-5.3-flash` (1M / 256K, multimodal), `deepseek-v4-flash` (1M / 256K), `kimi-k2.7-code` (256K),
+     `kimi-k2.6` (256K), `minimax-m2.7` (256K), `doubao-seed-2.1-turbo` (256K), `doubao-seed-2.0-code` (256K),
+     `doubao-seed-2.0-lite` (256K), `doubao-seed-2.0-mini` (256K), and `ark-code-latest`.
+   - Defaults to `doubao-seed-evolving` with 1,000,000 tokens context. Haiku maps to
+     `doubao-seed-2.1-turbo`. Context overrides apply to non-1M models (256K).
+   - Uses `VOLCENGINE_PLAN_KEY` with fallbacks to `VOLCENGINE_AGENT_PLAN_KEY`,
+     `VOLCENGINE_CODING_PLAN_KEY`, `VOLCANO_ENGINE_API_KEY`, `ARK_API_KEY`, `VOLCENGINE_API_KEY`.
+     `PLAN_KEYS` checks `volcengine-coding-plan`, `volcengine-agent-plan`, `volcengine-plan`.
 
-Decision: model punctuation uses the documented dots. Context is left unset
-because the available primary material does not state a single limit for the
-multi-model plan. The public documentation MCP has no credential.
+2. `volcengine-coding` (Ark Coding Plan):
+   - [Ark Coding Plan gateway](https://www.volcengine.com/article/37839)
+     documents `https://ark.cn-beijing.volces.com/api/coding` for Anthropic tools.
+   - [Ark Coding Plan catalog](https://www.volcengine.com/article/37570) lists
+     `doubao-seed-evolving` (1M), Seed 2.1 variants (`doubao-seed-2.1-pro`,
+     `doubao-seed-2.1-turbo`), Seed 2.0 variants, `ark-code-latest`, and DeepSeek variants.
+   - Dedicated coding gateway using `VOLCENGINE_CODING_PLAN_KEY`.
+
+   `volcengine` (Agent Plan) automatically injects the official Doubao Search MCP
+   (`mcp-server-askecho-search-infinity`), DataPro professional datasets MCP, and
+   OpenViking control-plane MCP alongside the public Ark documentation MCP.
+   `volcengine-coding` (Coding Plan) provides the public documentation MCP.
 
 ## Exclusions and non-vendor routes
 

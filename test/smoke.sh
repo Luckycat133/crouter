@@ -336,7 +336,7 @@ fi
 # ---------------------------------------------------------------------------
 # Providers with explicit auth-surface assertions.
 # ---------------------------------------------------------------------------
-for _dp in anthropic openrouter codex 302ai aihubmix infini minimax dashscope moonshot ppio z-ai siliconflow stepfun volcengine tencent qianfan qianfan-team qianfan-coding qiniu huawei xiaomi; do
+for _dp in anthropic openrouter codex 302ai aihubmix infini minimax dashscope moonshot ppio z-ai siliconflow stepfun volcengine volcengine-coding tencent qianfan qianfan-team qianfan-coding qiniu huawei xiaomi; do
   if "$GATEWAY" list 2>/dev/null | grep -q "^$_dp "; then
     ok "$_dp provider is listed"
   else

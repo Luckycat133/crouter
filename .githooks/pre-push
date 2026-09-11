@@ -18,7 +18,10 @@ printf 'pre-push: running crouter offline tests\n'
 fail=0
 for _test in test/*.sh; do
   [ -f "$_test" ] || continue
-  if ! sh "$_test" >/dev/null 2>&1; then
+  [ "${CROUTER_PREPUSH_VERBOSE:-0}" = 1 ] && printf '  %s\n' "$_test"
+  # A test must never read the push ref list that git feeds this hook on
+  # stdin, so close it off. Set CROUTER_PREPUSH_VERBOSE=1 to trace runs.
+  if ! sh "$_test" </dev/null >/dev/null 2>&1; then
     printf 'FAIL  %s\n' "$_test" >&2
     fail=1
   fi

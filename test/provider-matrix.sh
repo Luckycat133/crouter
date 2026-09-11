@@ -40,10 +40,10 @@ assert_eq openrouter.context 1000000 "$CONTEXT_TOKENS"
 
 load ollama
 assert_eq ollama.base http://127.0.0.1:11435 "$BASE_URL"
-assert_eq ollama.model deepseek-v4-flash:q8 "$MODEL"
+assert_eq ollama.model qwen3.8-27b "$MODEL"
 assert_eq ollama.context-fallback 65536 "$CONTEXT_TOKENS"
-assert_eq ollama.context-override "deepseek-v4-flash:q8=373760 deepseek-v4-flash=373760 qwen3.8:27b-mtp-q8_0=262144 qwen3.8-max=262144" "$MODEL_CONTEXT_OVERRIDES"
-assert_eq ollama.self-route "deepseek-v4-flash:q8 deepseek-v4-flash qwen3.8:27b-mtp-q8_0 qwen3.8-max" "$MODEL_SELF_ROUTE_MODELS"
+assert_eq ollama.context-override "deepseek-v4-flash:q8=373760 deepseek-v4-flash=373760 qwen3.8-27b=262144" "$MODEL_CONTEXT_OVERRIDES"
+assert_eq ollama.self-route "deepseek-v4-flash:q8 deepseek-v4-flash qwen3.8-27b" "$MODEL_SELF_ROUTE_MODELS"
 assert_eq ollama.effort max "$EFFORT"
 printf '%s\n' "$EXTRA_ENV" | grep -q '^ANTHROPIC_AUTH_TOKEN=ollama$' || die "ollama auth token mismatch"
 printf '%s\n' "$EXTRA_ENV" | grep -q '^ANTHROPIC_API_KEY=$' || die "ollama API key must be blank"
@@ -189,10 +189,17 @@ assert_eq stepfun.assets stepfun "$ASSET_PROFILE"
 
 load volcengine
 assert_eq volcengine.auth surfaces "$AUTH_MODE"
-assert_eq volcengine.model doubao-seed-2.0-code "$MODEL"
-assert_eq volcengine.context '' "$CONTEXT_TOKENS"
-assert_eq volcengine.plan.url https://ark.cn-beijing.volces.com/api/coding "$PLAN_URL"
+assert_eq volcengine.model doubao-seed-evolving "$MODEL"
+assert_eq volcengine.context 1000000 "$CONTEXT_TOKENS"
+assert_eq volcengine.plan.url https://ark.cn-beijing.volces.com/api/plan "$PLAN_URL"
 assert_eq volcengine.assets volcengine "$ASSET_PROFILE"
+
+load volcengine-coding
+assert_eq volcengine-coding.auth surfaces "$AUTH_MODE"
+assert_eq volcengine-coding.model doubao-seed-evolving "$MODEL"
+assert_eq volcengine-coding.context 1000000 "$CONTEXT_TOKENS"
+assert_eq volcengine-coding.plan.url https://ark.cn-beijing.volces.com/api/coding "$PLAN_URL"
+assert_eq volcengine-coding.assets volcengine-coding "$ASSET_PROFILE"
 
 load tencent
 assert_eq tencent.auth surfaces "$AUTH_MODE"
@@ -254,7 +261,7 @@ assert_eq xiaomi.api.model mimo-v2.5-pro "$API_MODEL"
 assert_eq xiaomi.plan.url https://token-plan-cn.xiaomimimo.com/anthropic "$PLAN_URL"
 assert_eq xiaomi.api.url https://api.xiaomimimo.com/anthropic "$API_URL"
 
-for _provider in 302ai aihubmix infini minimax moonshot ppio z-ai dashscope dashscope-coding deepseek siliconflow stepfun volcengine tencent tencent-coding qianfan qianfan-team qianfan-coding qiniu huawei xiaomi; do
+for _provider in 302ai aihubmix infini minimax moonshot ppio z-ai dashscope dashscope-coding deepseek siliconflow stepfun volcengine volcengine-coding tencent tencent-coding qianfan qianfan-team qianfan-coding qiniu huawei xiaomi; do
   load "$_provider"
   case $BASE_URL in
     */v1/messages|*/v3/messages) die "$_provider BASE_URL must be a prefix; Claude Code appends /v1/messages" ;;

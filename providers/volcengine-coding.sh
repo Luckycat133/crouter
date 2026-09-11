@@ -1,0 +1,44 @@
+#!/bin/sh
+# Volcengine Ark Coding Plan; dedicated coding gateway.
+PROVIDER_NAME="volcengine-coding"
+PROVIDER_DESC="Volcengine Ark Coding Plan"
+
+# Fallback to common Volcano Engine env vars if VOLCENGINE_CODING_PLAN_KEY is unset
+if [ -z "${VOLCENGINE_CODING_PLAN_KEY:-}" ]; then
+  if [ -n "${VOLCANO_ENGINE_API_KEY:-}" ]; then
+    export VOLCENGINE_CODING_PLAN_KEY="$VOLCANO_ENGINE_API_KEY"
+  elif [ -n "${VOLCENGINE_API_KEY:-}" ]; then
+    export VOLCENGINE_CODING_PLAN_KEY="$VOLCENGINE_API_KEY"
+  elif [ -n "${ARK_API_KEY:-}" ]; then
+    export VOLCENGINE_CODING_PLAN_KEY="$ARK_API_KEY"
+  fi
+fi
+
+BASE_URL="https://ark.cn-beijing.volces.com/api/coding"
+MODEL="doubao-seed-evolving"
+CONTEXT_TOKENS="1000000"
+MODEL_OPUS="doubao-seed-evolving"
+MODEL_SONNET="doubao-seed-evolving"
+MODEL_HAIKU="doubao-seed-2.1-turbo"
+MODEL_SUBAGENT="doubao-seed-evolving"
+MODEL_ALIASES="doubao-seed-2.1-pro doubao-seed-2.1-turbo doubao-seed-2.0-code doubao-seed-2.0-pro doubao-seed-2.0-lite doubao-seed-code-preview-latest ark-code-latest deepseek-v4-pro deepseek-v4-flash deepseek-v4 deepseek-v3.2"
+MODEL_CONTEXT_OVERRIDES="doubao-seed-2.1-turbo=262144 doubao-seed-2.0-code=262144 doubao-seed-2.0-lite=131072"
+MODEL_SELF_ROUTE_MODELS="$MODEL_ALIASES"
+EFFORT="high"
+
+AUTH_MODE="surfaces"
+PLAN_URL="https://ark.cn-beijing.volces.com/api/coding"
+PLAN_AUTH_TYPE="bearer"
+PLAN_KEY_ENV="VOLCENGINE_CODING_PLAN_KEY"
+PLAN_KEYS="volcengine-coding-plan"
+PLAN_MODEL="doubao-seed-evolving"
+PLAN_MODEL_OPUS="doubao-seed-evolving"
+PLAN_MODEL_SONNET="doubao-seed-evolving"
+PLAN_MODEL_HAIKU="doubao-seed-2.1-turbo"
+PLAN_MODEL_SUBAGENT="doubao-seed-evolving"
+
+ASSET_PROFILE="volcengine-coding"
+EXTRA_ENV="CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1"
+PRE_START=""
+POST_STOP=""
+HEALTH_CHECK_URL=""

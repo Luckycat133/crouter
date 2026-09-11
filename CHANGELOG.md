@@ -4,6 +4,19 @@ All notable changes to this local setup are documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Volcengine now supports both subscription gateways following provider pair conventions:
+  `volcengine` fronts the multi-vendor Ark Agent Plan (`/api/plan`, validated for
+  `doubao-seed-evolving`, `deepseek-v4-pro`, `glm-5.3`, `kimi-k3`, `minimax-m3`),
+  while `volcengine-coding` isolates the dedicated Coding Plan (`/api/coding`).
+  Both use current models, 1M context, and tier mappings with Keychain keypool fallback.
+- Session-scoped dynamic MCP injection for Volcano Engine Ark Agent Plan:
+  `volcengine` automatically provisions and switches official Doubao Search
+  (`mcp-server-askecho-search-infinity`), DataPro professional datasets, and
+  OpenViking control-plane MCPs alongside public Ark documentation in temporary
+  session assets without polluting `~/.claude.json`. Coding Plan isolates the public docs MCP.
+
 ### Fixed
 
 - Ollama DeepSeek V4 sessions now keep Claude Code's `high`/`max` request and
