@@ -48,15 +48,18 @@ for target in $SHORTCUTS; do
   ln -sf "$ROOT_DIR/bin/crouter-compat" "$INSTALL_DIR/$target"
 done
 
-# Remove only obsolete crouter-owned compatibility links. OpenAI and Baichuan
-# do not expose an official Anthropic Messages endpoint, so keeping these
-# launchers would advertise a route that cannot work.
-for obsolete in claude-openai claude-baichuan; do
-  if [ -L "$INSTALL_DIR/$obsolete" ]; then
-    case $(readlink "$INSTALL_DIR/$obsolete" 2>/dev/null) in
-      "$ROOT_DIR/bin/crouter"|"$ROOT_DIR/bin/crouter-compat") rm -f "$INSTALL_DIR/$obsolete" ;;
-    esac
-  fi
+# A provider can disappear between installs. Remove only this checkout's
+# compatibility links whose provider declaration no longer exists; leave
+# shortcuts belonging to another checkout or tool untouched.
+for shortcut in "$INSTALL_DIR"/claude-*; do
+  [ -L "$shortcut" ] || continue
+  case $(readlink "$shortcut" 2>/dev/null) in
+    "$ROOT_DIR/bin/crouter"|"$ROOT_DIR/bin/crouter-compat") ;;
+    *) continue ;;
+  esac
+  provider=${shortcut##*/}
+  provider=${provider#claude-}
+  [ -f "$ROOT_DIR/providers/$provider.sh" ] || rm -f "$shortcut"
 done
 
 if [ ! -f "$ROOT_DIR/config.sh" ]; then

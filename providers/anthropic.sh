@@ -9,11 +9,11 @@ MODEL="claude-sonnet-5"
 # global Claude Code compact window across models with different limits.
 CONTEXT_TOKENS=""
 
-MODEL_OPUS="claude-opus-5"
+MODEL_OPUS="claude-opus-5-5"
 MODEL_SONNET="claude-sonnet-5"
 MODEL_HAIKU="claude-haiku-4-5"
 MODEL_SUBAGENT="claude-sonnet-5"
-MODEL_ALIASES="claude-fable-5"
+MODEL_ALIASES="claude-fable-5-1"
 
 EFFORT=""
 

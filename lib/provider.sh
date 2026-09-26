@@ -127,10 +127,18 @@ apply_model_context_override() {
   for _amco_pair in ${MODEL_CONTEXT_OVERRIDES:-}; do
     _amco_name=${_amco_pair%%=*}
     [ "$_amco_name" = "$_amco_pair" ] && continue
-    case "$_amco_model" in
-      "$_amco_name"|"$_amco_name"*)
+    if [ "$_amco_model" = "$_amco_name" ]; then
       CONTEXT_TOKENS=${_amco_pair#*=}
       return 0
+    fi
+    case "$_amco_name" in
+      *:)
+        case "$_amco_model" in
+          "$_amco_name"*)
+            CONTEXT_TOKENS=${_amco_pair#*=}
+            return 0
+            ;;
+        esac
         ;;
     esac
   done

@@ -2,7 +2,13 @@
 # crouter - unified launcher for Claude Code against multiple providers.
 #
 # Usage:
+#   crouter                               Launch the selected provider or native app
+#   crouter run [args...]                 Launch the selected target with arguments
+#   crouter use [<provider>|app/<name>]   Show or select a persistent target
+#   crouter use --clear                   Clear the persistent target
 #   crouter claude                        Native Claude Code account/login passthrough
+#   crouter app list                      List supported native coding-agent CLIs
+#   crouter app <name> [args...]          Launch an installed CLI with its own login
 #   crouter <provider> [<model>] [claude args...]   Launch (optional positional model)
 #   crouter all                           Unified gateway: one URL, switch providers via /model
 #   crouter all --check                   Print the redacted configured route graph; do not launch
@@ -41,6 +47,37 @@ BIN_DIR=$(CDPATH= cd -- "$(dirname -- "$SELF")" && pwd)
 ROOT_DIR=$(CDPATH= cd -- "$BIN_DIR/.." && pwd)
 PROVIDERS_DIR=$ROOT_DIR/providers
 LIB_DIR=$ROOT_DIR/lib
+
+# Native coding agents own their login and environment. Handle this path before
+# sourcing config.sh or any provider helper so local configuration cannot add
+# endpoint variables, credentials, or side effects to an unrelated CLI.
+if [ "${1:-}" = app ]; then
+  . "$LIB_DIR/native-apps.sh"
+  shift
+  native_app_dispatch "$@"
+  exit $?
+fi
+
+# Selection is read as data and validated before either launch path. Native
+# apps are dispatched here, before local configuration or provider helpers.
+case ${1:-} in
+  use|run|'')
+    . "$LIB_DIR/native-apps.sh"
+    . "$LIB_DIR/selection.sh"
+    if [ "${1:-}" = use ]; then
+      shift
+      selection_dispatch "$@"
+      exit $?
+    fi
+    [ "${1:-}" = run ] && shift
+    selection_require || exit $?
+    if [ "$CROUTER_SELECTION_KIND" = app ]; then
+      native_app_run "$CROUTER_SELECTION_NAME" "$@"
+      exit $?
+    fi
+    set -- "$CROUTER_SELECTION_NAME" "$@"
+    ;;
+esac
 
 # ---------------------------------------------------------------------------
 # Version (single source of truth: $ROOT_DIR/VERSION)
@@ -173,9 +210,8 @@ cmd_run() {
   else
     _main_model=$MODEL
   fi
-apply_model_context_override "$_main_model"
-apply_model_self_route "$_main_model"
-remember_last_selected_model ollama "$_main_model"
+  apply_model_context_override "$_main_model"
+  apply_model_self_route "$_main_model"
 
   AUTH_TOKEN=""
   _bypass_auth=0
@@ -269,12 +305,102 @@ status_one() {
     else
       _auth=MISSING
     fi
+    case ${NATIVE_BACKEND:-} in
+      bedrock|vertex) _auth=UNVERIFIED ;;
+      foundry)
+        if [ -n "${ANTHROPIC_FOUNDRY_AUTH_TOKEN:-}" ] ||
+           [ -n "${ANTHROPIC_FOUNDRY_API_KEY:-}" ]; then
+          _auth=ok
+        else
+          # Azure CLI is only one path in the SDK default credential chain.
+          # A local diagnostic cannot prove or disprove service principals,
+          # managed identity, or a previously authenticated CLI session.
+          _auth=UNVERIFIED
+        fi
+        ;;
+    esac
     if [ -n "$HEALTH_CHECK_URL" ]; then
       if check_health; then _health=up; else _health=DOWN; fi
     else
       _health='-'
     fi
     printf '%-22s auth:%-9s health:%-6s %s\n' "$1" "$_auth" "$_health" "$BASE_URL"
+    _status=0
+    if [ "$_auth" = UNVERIFIED ] && [ "${2:-0}" -eq 1 ]; then
+      case ${NATIVE_BACKEND:-} in
+        bedrock) info "note  AWS credential chain is unverified; doctor cannot check Bedrock account or model access" ;;
+        vertex) info "note  Google ADC is unverified; doctor cannot check Vertex project or model access" ;;
+        foundry) info "note  Azure credential chain is unverified; doctor cannot check Foundry account or model access" ;;
+      esac
+    fi
+    if [ "${NATIVE_BACKEND:-}" = foundry ] &&
+       [ -z "${ANTHROPIC_FOUNDRY_RESOURCE:-}" ] &&
+       [ -z "${ANTHROPIC_FOUNDRY_BASE_URL:-}" ]; then
+      if [ "${2:-0}" -eq 1 ]; then
+        info "note  Foundry endpoint not visible to crouter; check ANTHROPIC_FOUNDRY_RESOURCE or ANTHROPIC_FOUNDRY_BASE_URL in the shell, config.sh, or Claude settings"
+      fi
+    fi
+    if [ "${NATIVE_BACKEND:-}" = vertex ] &&
+       [ -z "${ANTHROPIC_VERTEX_PROJECT_ID:-}" ]; then
+      if [ "${2:-0}" -eq 1 ]; then
+        info "note  Vertex project not visible to crouter; check ANTHROPIC_VERTEX_PROJECT_ID in the shell, config.sh, or Claude settings"
+      fi
+    fi
+    # Match the launch paths that need Node, including managed MCP rendering.
+    _needs_node=0
+    case "$AUTH_MODE" in
+      surfaces) _needs_node=1 ;;
+      keypool)
+        _doctor_key_count=$(set -- ${AUTH_KEYS:-}; printf '%s' "$#")
+        if [ "$_doctor_key_count" -ne 1 ] || [ -n "${PLUS_KEYS:-}" ]; then _needs_node=1; fi
+        ;;
+    esac
+    if [ "${CROUTER_PROVIDER_ASSETS:-1}" != 0 ] && [ -n "${ASSET_PROFILE:-}" ]; then
+      _needs_node=1
+    fi
+    case "$PROVIDER_NAME" in ollama|antigravity|antigravity-claude) _needs_node=1 ;; esac
+    if [ "${2:-0}" -eq 1 ] && [ "$_needs_node" -eq 1 ]; then
+      _doctor_node=$(command -v "$NODE_BIN" 2>/dev/null || true)
+      if [ -z "$_doctor_node" ] || [ ! -f "$_doctor_node" ] || [ ! -x "$_doctor_node" ]; then
+        _status=1
+        info "FAIL  node unavailable; install Node.js or set NODE_BIN in config.sh to an executable Node binary, then retry crouter doctor '$1'"
+      fi
+    fi
+    if [ "$_auth" = MISSING ]; then
+      _status=1
+      if [ "${2:-0}" -eq 1 ]; then
+        if [ "${NATIVE_BACKEND:-}" = foundry ]; then
+          info "next: set ANTHROPIC_FOUNDRY_AUTH_TOKEN or ANTHROPIC_FOUNDRY_API_KEY, or configure Azure SDK credentials, then retry crouter doctor '$1'"
+        elif is_surface_provider; then
+          if [ -n "${PLAN_URL:-}" ]; then _doctor_surface=plan; else _doctor_surface=api; fi
+          info "next: run crouter add '$1' --surface $_doctor_surface to configure a credential"
+        elif is_dual_source; then
+          if [ -n "${API_KEY_REF:-}" ]; then
+            info "next: run crouter add '$1' to configure an API credential"
+          else
+            info "next: set ${DEFAULT_TOKEN_ENV:-${DEFAULT_TOKEN_ENV_FALLBACK:-${API_KEY_ENV:-the provider credential environment variable}}} and retry crouter doctor '$1'"
+          fi
+        else
+          case "$AUTH_MODE" in
+            keychain|keypool) info "next: run crouter add '$1' to configure a credential" ;;
+            env)
+              info "next: export $AUTH_REFERENCE with your provider credential and retry crouter doctor '$1'"
+              [ -z "${AUTH_KEYCHAIN_FALLBACK:-}" ] || info "      or store it in Keychain with crouter add '$1'"
+              ;;
+            command) info "next: check the configured authentication command for '$1'; it must return a nonempty credential" ;;
+            *) info "next: check AUTH_MODE in providers/$1.sh" ;;
+          esac
+        fi
+      fi
+    fi
+    if [ "$_health" = DOWN ]; then
+      _status=1
+      if [ "${2:-0}" -eq 1 ]; then
+        info "next: check the configured health URL and service connectivity, then retry crouter doctor '$1'"
+        [ -z "$PRE_START" ] || info "      doctor does not start the service; crouter '$1' runs its startup hook"
+      fi
+    fi
+    exit "$_status"
   )
 }
 
@@ -306,9 +432,9 @@ cmd_doctor() {
 
   info ""
   if [ -n "${1:-}" ]; then
-    status_one "$1"
+    status_one "$1" 1 || _fail=1
   else
-    for _n in $(provider_names); do status_one "$_n"; done
+    for _n in $(provider_names); do status_one "$_n" || :; done
   fi
   return $_fail
 }
@@ -317,7 +443,6 @@ cmd_doctor() {
 # ---------------------------------------------------------------------------
 # Dispatch
 # ---------------------------------------------------------------------------
-[ $# -ge 1 ] || { usage; exit 1; }
 cmd=$1; shift
 
 # cmd_provider_show <provider>
@@ -406,8 +531,8 @@ cmd_provider_show() {
       [ -n "${AUTH_KEYCHAIN_FALLBACK:-}" ] &&
         printf '  keychain fallback: %s\n' "$AUTH_KEYCHAIN_FALLBACK"
       ;;
-    command)  printf '  reference: %s\n' "$AUTH_REFERENCE" ;;
-    static)   printf '  reference: %s (literal placeholder)\n' "$AUTH_REFERENCE" ;;
+    command)  printf '  reference: <configured command>\n' ;;
+    static)   printf '  reference: <redacted>\n' ;;
     none)     ;;
     native)
       printf '  backend:   %s\n' "${NATIVE_BACKEND:-<unset>}"
@@ -430,13 +555,20 @@ cmd_provider_show() {
   if [ -n "$EXTRA_ENV" ]; then
     printf '\nextra env:\n'
     _old_ifs=$IFS; IFS='
-'; for _pair in $EXTRA_ENV; do printf '  %s\n' "$_pair"; done; IFS=$_old_ifs
+'
+    for _pair in $EXTRA_ENV; do
+      case $_pair in
+        *=*) printf '  %s=<redacted>\n' "${_pair%%=*}" ;;
+        *) printf '  <invalid entry>\n' ;;
+      esac
+    done
+    IFS=$_old_ifs
   fi
   if [ -n "$PRE_START" ] || [ -n "$POST_STOP" ] || [ -n "$HEALTH_CHECK_URL" ]; then
     printf '\nhooks:\n'
-    [ -n "$PRE_START" ]       && printf '  PRE_START:        %s\n' "$PRE_START"
-    [ -n "$POST_STOP" ]       && printf '  POST_STOP:        %s\n' "$POST_STOP"
-    [ -n "$HEALTH_CHECK_URL" ] && printf '  HEALTH_CHECK_URL: %s\n' "$HEALTH_CHECK_URL"
+    [ -n "$PRE_START" ]       && printf '  PRE_START:        <configured>\n'
+    [ -n "$POST_STOP" ]       && printf '  POST_STOP:        <configured>\n'
+    [ -n "$HEALTH_CHECK_URL" ] && printf '  HEALTH_CHECK_URL: <configured>\n'
   fi
 }
 
@@ -452,36 +584,37 @@ cmd_config_path() {
 }
 
 # cmd_config_show
-#   Print effective configuration knobs. Lines that look like KEY=VALUE get the
-#   value redacted if its variable name contains KEY/TOKEN/SECRET.
+#   Print an allowlist of effective non-secret settings, never config source.
 cmd_config_show() {
-  printf 'ROOT_DIR:      %s\n' "$ROOT_DIR"
-  printf 'VERSION:       %s\n' "$VERSION"
-  printf 'INSTALL_DIR:   %s\n' "${INSTALL_DIR:-$HOME/.local/bin}"
-  printf 'LOG_DIR:       %s\n' "${LOG_DIR:-$ROOT_DIR/logs}"
-  printf 'STATE_DIR:     %s\n' "${STATE_DIR:-$ROOT_DIR/.state}"
-  printf 'CLAUDE_BIN:    %s\n' "${CLAUDE_BIN:-$(command -v claude 2>/dev/null || echo '<not found>')}"
-  printf 'NODE_BIN:      %s\n' "${NODE_BIN:-$(command -v node 2>/dev/null || echo '<not found>')}"
-  printf '\n'
+  # Paths and binary names can contain arbitrary user-supplied values. Report
+  # presence only; the explicit config-path command locates the file for editing.
+  printf 'ROOT_DIR:      <repository>\n'
+  printf 'VERSION:       <use crouter --version>\n'
   if [ -f "$ROOT_DIR/config.sh" ]; then
-    printf 'config.sh source (sensitive values redacted):\n'
-    while IFS= read -r _line; do
-      case "$_line" in
-        ''|'#'*) printf '  %s\n' "$_line" ;;
-        *=*)
-          _name=${_line%%=*}
-          case "$_name" in
-            *KEY*|*TOKEN*|*SECRET*|*PASSWORD*)
-              printf '  %s=<redacted>\n' "$_name" ;;
-            *) printf '  %s\n' "$_line" ;;
-          esac
-          ;;
-        *) printf '  %s\n' "$_line" ;;
-      esac
-    done < "$ROOT_DIR/config.sh"
+    printf 'CONFIG_FILE:   <present; use crouter config path>\n'
   else
-    printf 'no config.sh (using built-in defaults)\n'
+    printf 'CONFIG_FILE:   <none; using built-in defaults>\n'
   fi
+  if [ -n "${INSTALL_DIR:-}" ]; then
+    printf 'INSTALL_DIR:   <configured>\n'
+  else
+    printf 'INSTALL_DIR:   <default: ~/.local/bin>\n'
+  fi
+  [ "${LOG_DIR:-}" = "$ROOT_DIR/logs" ] && _config_path_state='<default: repository logs>' || _config_path_state='<configured>'
+  printf 'LOG_DIR:       %s\n' "$_config_path_state"
+  [ "${STATE_DIR:-}" = "$ROOT_DIR/.state" ] && _config_path_state='<default: repository .state>' || _config_path_state='<configured>'
+  printf 'STATE_DIR:     %s\n' "$_config_path_state"
+  [ -z "$CLAUDE_BIN" ] && _config_path_state='<not found>' || _config_path_state='<configured>'
+  printf 'CLAUDE_BIN:    %s\n' "$_config_path_state"
+  [ -z "$NODE_BIN" ] && _config_path_state='<not found>' || _config_path_state='<configured>'
+  printf 'NODE_BIN:      %s\n' "$_config_path_state"
+  # Normalize switches instead of echoing arbitrary config values.
+  _config_bypass=0; [ "${BYPASS_PERMISSIONS:-0}" != 1 ] || _config_bypass=1
+  _config_assets=1; [ "${CROUTER_PROVIDER_ASSETS:-1}" != 0 ] || _config_assets=0
+  _config_strict=0; [ "${CROUTER_STRICT_PROVIDER_MCP:-1}" != 1 ] || _config_strict=1
+  printf 'BYPASS_PERMISSIONS: %s\n' "$_config_bypass"
+  printf 'CROUTER_PROVIDER_ASSETS: %s\n' "$_config_assets"
+  printf 'CROUTER_STRICT_PROVIDER_MCP: %s\n' "$_config_strict"
 }
 
 # cmd_logs_list
@@ -520,7 +653,7 @@ cmd_logs_tail() {
 }
 
 # cmd_uninstall [-y]
-#   Reverse of install.sh: remove the crouter + claude-<provider> symlinks.
+#   Reverse of install.sh: remove only this checkout's crouter shortcuts.
 cmd_uninstall() {
   _yes=0
   while [ $# -gt 0 ]; do
@@ -531,13 +664,6 @@ cmd_uninstall() {
     esac
   done
   _dir=${INSTALL_DIR:-$HOME/.local/bin}
-  # Same derivation as install.sh: one claude-<provider> shortcut per provider
-  # file, so a new provider is uninstalled without editing this list.
-  _targets="crouter"
-  for _pf in "$PROVIDERS_DIR"/*.sh; do
-    [ -f "$_pf" ] || continue
-    _targets="$_targets claude-$(basename "$_pf" .sh)"
-  done
 
   if [ "$_yes" -eq 0 ]; then
     printf 'remove crouter and provider shortcuts from %s? [y/N] ' "$_dir" >/dev/tty
@@ -546,23 +672,15 @@ cmd_uninstall() {
     case "$_ans" in y|Y|yes|YES) ;; *) info "aborted"; return 0 ;; esac
   fi
 
-  for _t in $_targets; do
-    if [ -L "$_dir/$_t" ]; then
-      case $(readlink "$_dir/$_t" 2>/dev/null) in
+  for _shortcut in "$_dir/crouter" "$_dir"/claude-*; do
+    if [ -L "$_shortcut" ]; then
+      case $(readlink "$_shortcut" 2>/dev/null) in
         "$ROOT_DIR/bin/crouter"|"$ROOT_DIR/bin/crouter-compat")
-          rm -f "$_dir/$_t" && info "removed $_dir/$_t" ;;
-        *) info "skipped non-crouter symlink: $_dir/$_t" ;;
+          rm -f "$_shortcut" && info "removed $_shortcut" ;;
+        *) info "skipped non-crouter symlink: $_shortcut" ;;
       esac
-    elif [ -e "$_dir/$_t" ]; then
-      info "skipped non-crouter file: $_dir/$_t"
-    fi
-  done
-  for _t in claude-openai claude-baichuan; do
-    if [ -L "$_dir/$_t" ]; then
-      case $(readlink "$_dir/$_t" 2>/dev/null) in
-        "$ROOT_DIR/bin/crouter"|"$ROOT_DIR/bin/crouter-compat")
-          rm -f "$_dir/$_t" && info "removed obsolete $_dir/$_t" ;;
-      esac
+    elif [ -e "$_shortcut" ]; then
+      info "skipped non-crouter file: $_shortcut"
     fi
   done
 }
@@ -577,11 +695,12 @@ cmd_uninstall() {
 # untouched and still launches directly.
 # ---------------------------------------------------------------------------
 
-# Build a routes JSON file covering every provider. Prints the temp file path.
+# Build a routes JSON file covering every provider into a caller-owned file.
 # Credential discovery lives here (shell owns Keychain/env); the JSON shapes
 # live in lib/route-build.js.
 build_all_routes() {
-  _rt=$(mktemp -t call-routes.XXXXXX)
+  _routes_dest=$1
+  _rt=$2
   for _n in $(provider_names); do
     if ! (
       load_provider "$_n"
@@ -661,14 +780,11 @@ build_all_routes() {
       CR_NONE_TOKEN="$_te" \
         "$NODE_BIN" "$LIB_DIR/route-build.js" candidates
     ) >> "$_rt"; then
-      rm -f "$_rt"
       die "failed to build unified routes for provider '$_n'"
     fi
   done
-  _arr=$(mktemp -t call-routes-arr.XXXXXX)
-  "$NODE_BIN" "$LIB_DIR/route-build.js" combine "$_rt" "$_arr"
-  rm -f "$_rt"
-  echo "$_arr"
+  "$NODE_BIN" "$LIB_DIR/route-build.js" combine "$_rt" "$_routes_dest" || \
+    die "failed to combine unified provider routes"
 }
 
 _default_namespaced_model() {
@@ -686,8 +802,34 @@ cmd_all() {
   esac
   [ "$_check" -eq 0 ] || [ $# -eq 0 ] || die "all --check does not accept Claude arguments"
   _gwpid=""
-  trap 'kill "${_gwpid:-}" 2>/dev/null' EXIT INT TERM
-  _routes_file=$(build_all_routes) || die "failed to build unified provider routes"
+  _routes_file=""
+  _build_routes_file=""
+  _out=""
+  _all_cleanup_done=0
+  _all_cleanup() {
+    [ "${_all_cleanup_done:-0}" -eq 0 ] || return 0
+    _all_cleanup_done=1
+    if [ -n "${_gwpid:-}" ]; then
+      kill "$_gwpid" 2>/dev/null || true
+      wait "$_gwpid" 2>/dev/null || true
+    fi
+    [ -z "${_out:-}" ] || rm -f "$_out"
+    [ -z "${_build_routes_file:-}" ] || rm -f "$_build_routes_file"
+    [ -z "${_routes_file:-}" ] || rm -f "$_routes_file"
+    cleanup_provider_assets || true
+    return 0
+  }
+  trap '_all_cleanup' EXIT
+  trap '_all_cleanup; exit 130' INT
+  trap '_all_cleanup; exit 143' TERM
+  _routes_file=$(mktemp "${TMPDIR:-/tmp}/call-routes-arr.XXXXXX") || \
+    die "failed to create unified route file"
+  _build_routes_file=$(mktemp "${TMPDIR:-/tmp}/call-routes.XXXXXX") || \
+    die "failed to create unified route build file"
+  build_all_routes "$_routes_file" "$_build_routes_file" || \
+    die "failed to build unified provider routes"
+  rm -f "$_build_routes_file"
+  _build_routes_file=""
   [ -s "$_routes_file" ] || die "no providers found to build the gateway"
   if [ "$_check" -eq 1 ]; then
     if "$NODE_BIN" "$LIB_DIR/route-build.js" inspect "$_routes_file"; then
@@ -695,11 +837,12 @@ cmd_all() {
     else
       _check_rc=$?
     fi
-    rm -f "$_routes_file"
+    _all_cleanup
     trap - EXIT INT TERM
     return "$_check_rc"
   fi
-  _out=$(mktemp -t call-gw.XXXXXX)
+  _out=$(mktemp "${TMPDIR:-/tmp}/call-gw.XXXXXX") || \
+    die "failed to create unified gateway output file"
   _gateway_token=$("$NODE_BIN" -e "process.stdout.write(require('crypto').randomBytes(32).toString('hex'))") || \
     die "failed to generate a local gateway token"
   CROUTER_ROUTES_FILE="$_routes_file" CROUTER_GATEWAY_PORT="${CROUTER_GATEWAY_PORT:-18799}" \
@@ -717,14 +860,14 @@ cmd_all() {
     _i=$((_i + 1))
   done
   if [ -z "$_port" ]; then
-    rm -f "$_out" "$_routes_file"
     die "unified gateway failed to start"
   fi
   rm -f "$_out"
+  _out=""
   info "crouter all: unified gateway on http://127.0.0.1:$_port — switch providers with /model <provider>/<model>"
   # Launch Claude Code pointed at the gateway (single fixed URL).
   GATEWAY_PID="$_gwpid"
-  POST_STOP="kill \"\$GATEWAY_PID\" 2>/dev/null; rm -f \"$_routes_file\" 2>/dev/null"
+  POST_STOP='kill "$GATEWAY_PID" 2>/dev/null; rm -f "$_routes_file" 2>/dev/null'
   _def=$(_default_namespaced_model "$_routes_file")
   BASE_URL="http://127.0.0.1:$_port"
   MODEL="$_def"; MODEL_OPUS="$_def"; MODEL_SONNET="$_def"; MODEL_HAIKU="$_def"; MODEL_SUBAGENT="$_def"

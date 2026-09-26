@@ -15,19 +15,6 @@ _new_local_proxy_token() {
   "$NODE_BIN" -e "process.stdout.write(require('crypto').randomBytes(32).toString('hex'))"
 }
 
-# Keychain availability cache (disk-backed): avoids repeating `security` lookups.
-_kc_cache_dir() { printf '%s/.kc-cache' "${LOG_DIR:-$ROOT_DIR/logs}"; }
-_kc_state() {
-  _d=$(_kc_cache_dir)
-  _f="$_d/$1"
-  [ -f "$_f" ] && cat "$_f" 2>/dev/null
-  return 0
-}
-_kc_set_state() {
-  mkdir -p "$(_kc_cache_dir)" 2>/dev/null
-  printf '%s' "$2" > "$(_kc_cache_dir)/$1" 2>/dev/null
-}
-
 resolve_auth() {
   AUTH_TOKEN=
   case $AUTH_MODE in
@@ -385,16 +372,7 @@ check_auth() {
   fi
   case $AUTH_MODE in
     keychain)
-      _st=$(_kc_state "$AUTH_REFERENCE")
-      if [ -z "$_st" ]; then
-        if security find-generic-password -a "$USER" -s "$AUTH_REFERENCE" >/dev/null 2>&1; then
-          _st=ok
-        else
-          _st=missing
-        fi
-        _kc_set_state "$AUTH_REFERENCE" "$_st"
-      fi
-      [ "$_st" = ok ]
+      security find-generic-password -a "$USER" -s "$AUTH_REFERENCE" >/dev/null 2>&1
       ;;
     env)
       _v=$(printenv "$AUTH_REFERENCE" 2>/dev/null)

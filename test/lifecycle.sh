@@ -64,14 +64,6 @@ printf 'ok    POST_STOP runs exactly once\n'
 
 # A signal delivered by the Claude child immediately after it starts must not
 # land before the launcher's final cleanup trap is active.
-_launch_trap_line=$(awk 'index($0, "trap '\''_crouter_launch_cleanup'\'' EXIT") { print NR; exit }' "$ROOT_DIR/lib/launch.sh")
-_child_start_line=$(awk 'index($0, "env -i \"$@\" &") { print NR; exit }' "$ROOT_DIR/lib/launch.sh")
-if [ -z "$_launch_trap_line" ] || [ -z "$_child_start_line" ] ||
-   [ "$_launch_trap_line" -ge "$_child_start_line" ]; then
-  printf 'FAIL  launch cleanup trap is not active before the Claude child starts\n' >&2
-  exit 1
-fi
-
 SIGNAL_CLAUDE="$TMP_DIR/signal-claude"
 cat > "$SIGNAL_CLAUDE" <<'MOCK'
 #!/bin/sh
@@ -109,6 +101,10 @@ set +e
 _signal_launch_rc=$?
 set -e
 
+[ "$_signal_launch_rc" -eq 143 ] || {
+  printf 'FAIL  TERM launcher exit status was %s, expected 143\n' "$_signal_launch_rc" >&2
+  exit 1
+}
 [ -s "$SIGNAL_PID_FILE" ] || {
   printf 'FAIL  signal-race Claude child did not start\n' >&2
   exit 1

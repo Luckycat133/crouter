@@ -19,6 +19,13 @@
 #ANTIGRAVITY_PROXY_DIR="$ROOT_DIR/antigravity-claude-proxy"
 #ANTIGRAVITY_PORT=18080
 
+# The default qwen3.8-27b profile expects an OpenAI-compatible MLX server.
+# Existing default: 10.211.55.2:18080. Override both values for your machine;
+# a locally running MLX server can use 127.0.0.1. Other selected Ollama models
+# use Ollama at 127.0.0.1:11434 and do not need these settings.
+#MLX_UPSTREAM_HOST=127.0.0.1
+#MLX_UPSTREAM_PORT=18080
+
 # Provider-owned MCPs and skills are activated only for the current crouter
 # session; crouter never edits ~/.claude.json or globally installs a plugin.
 # Disable all managed assets with 0. Default: 1.

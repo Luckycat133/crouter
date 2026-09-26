@@ -30,3 +30,48 @@ grep -q '^user command$' "$INSTALL_DIR/crouter" || {
 }
 
 printf 'ok    installer preflights and preserves command-name collisions\n'
+
+rm -f "$INSTALL_DIR/crouter"
+if ! INSTALL_DIR="$INSTALL_DIR" PATH="$PATH" sh "$FAKE_ROOT/install.sh" >"$TMP_DIR/install.out" 2>&1; then
+  printf 'FAIL  initial isolated install failed\n' >&2
+  cat "$TMP_DIR/install.out" >&2
+  exit 1
+fi
+[ "$(readlink "$INSTALL_DIR/claude-demo")" = "$FAKE_ROOT/bin/crouter-compat" ] || {
+  printf 'FAIL  initial install omitted its provider shortcut\n' >&2
+  exit 1
+}
+
+# Simulate removal of a provider, plus old shortcuts that target either owned
+# launcher. Links to other checkouts and unrelated files must survive.
+ln -s "$FAKE_ROOT/bin/crouter-compat" "$INSTALL_DIR/claude-retired-compat"
+ln -s "$FAKE_ROOT/bin/crouter" "$INSTALL_DIR/claude-retired-main"
+ln -s "$TMP_DIR/other/bin/crouter-compat" "$INSTALL_DIR/claude-other-checkout"
+ln -s /usr/bin/true "$INSTALL_DIR/claude-external"
+printf 'user shortcut\n' > "$INSTALL_DIR/claude-user"
+rm -f "$FAKE_ROOT/providers/demo.sh"
+printf 'PROVIDER_NAME="new"\nBASE_URL="https://example.invalid"\nMODEL="new"\n' \
+  > "$FAKE_ROOT/providers/new.sh"
+
+if ! INSTALL_DIR="$INSTALL_DIR" PATH="$PATH" sh "$FAKE_ROOT/install.sh" >"$TMP_DIR/reinstall.out" 2>&1; then
+  printf 'FAIL  isolated reinstall failed\n' >&2
+  cat "$TMP_DIR/reinstall.out" >&2
+  exit 1
+fi
+for stale in demo retired-compat retired-main; do
+  [ ! -e "$INSTALL_DIR/claude-$stale" ] && [ ! -L "$INSTALL_DIR/claude-$stale" ] || {
+    printf 'FAIL  reinstall left owned retired shortcut: %s\n' "$stale" >&2
+    exit 1
+  }
+done
+[ "$(readlink "$INSTALL_DIR/claude-new")" = "$FAKE_ROOT/bin/crouter-compat" ] || {
+  printf 'FAIL  reinstall omitted the new provider shortcut\n' >&2
+  exit 1
+}
+[ -L "$INSTALL_DIR/claude-other-checkout" ] &&
+[ "$(readlink "$INSTALL_DIR/claude-external")" = /usr/bin/true ] &&
+grep -q '^user shortcut$' "$INSTALL_DIR/claude-user" || {
+  printf 'FAIL  reinstall changed a shortcut outside this checkout\n' >&2
+  exit 1
+}
+printf 'ok    reinstall prunes only retired shortcuts owned by this checkout\n'

@@ -6,6 +6,22 @@ All notable changes to this local setup are documented in this file.
 
 ### Added
 
+- Add Meta Model API, Requesty, and NagaAI Claude Code Messages routes with
+  audited base URLs, Bearer key bindings, model tiers, and context defaults.
+  Add Muse Code and Kilo Code to native CLI selection; Muse Code login and
+  subscription stay separate from the Meta Model API key route.
+- `crouter use <provider|app/name>` saves a validated default target in a
+  mode-600 XDG state file. Bare `crouter` and `crouter run [args...]` launch
+  that target; `crouter use` shows it and `crouter use --clear` removes it.
+  Native app selections retain the early config-free launch path, and direct
+  provider or app launches do not alter the saved target.
+- Add documented Fireworks, Vercel AI Gateway, and LongCat Messages API routes,
+  plus Claude Code's native Microsoft Foundry backend. API credentials stay
+  bound to their own endpoints and header formats.
+- `crouter app list` and `crouter app <name> [args...]` launch fourteen official
+  coding-agent CLIs through their own authentication, without sourcing
+  `config.sh` or routing subscription credentials through crouter providers.
+  Cursor uses its current `agent` command with `cursor-agent` as a legacy fallback.
 - Volcengine now supports both subscription gateways following provider pair conventions:
   `volcengine` fronts the multi-vendor Ark Agent Plan (`/api/plan`, validated for
   `doubao-seed-evolving`, `deepseek-v4-pro`, `glm-5.3`, `kimi-k3`, `minimax-m3`),
@@ -18,6 +34,42 @@ All notable changes to this local setup are documented in this file.
   session assets without polluting `~/.claude.json`. Coding Plan isolates the public docs MCP.
 
 ### Fixed
+
+- Reinstall now prunes retired `claude-*` shortcuts owned by the current
+  checkout, and uninstall removes all owned shortcuts even after a provider is
+  removed. Both preserve regular files and links owned by other checkouts.
+- Diagnose Keychain credentials with a fresh lookup instead of a permanent
+  `.kc-cache`, so external additions and removals appear immediately.
+- Make Bash/Zsh completion aware of `config`, `logs`, `provider`, and `list`
+  subcommand depth while retaining native app names and avoiding config sourcing.
+- Refresh documented provider defaults: MiniMax China's current Anthropic host
+  and 1M compact window, Anthropic/Vercel/302.AI Opus 5.5, Xiaomi MiMo 2.6 Pro,
+  and DeepSeek's `deepseek-flash` fast-tier mapping. Remove retired Huawei
+  Token Plan models from the advertised aliases.
+- Keep Volcengine Agent Plan and Coding Plan credentials on their own gateways.
+  The Agent Plan accepts only its named key and alias; neither plan silently
+  falls back to a generic Ark API key or the other plan's key.
+- Make targeted provider diagnostics fail on known missing credentials or an
+  unhealthy service, with actionable next steps; keep no-argument diagnostics
+  as an overview. Native SDK credential chains are reported as unverified.
+- Preserve documented Bedrock, Vertex, and Foundry credential paths and Claude
+  settings in isolated launches, including unexported `config.sh` assignments.
+  Forward only explicit cloud model pins and support Foundry Bearer tokens.
+- Show only known safe effective settings in `config show`, preventing config
+  source, multiline credentials, and unknown values from being printed.
+- Redact provider environment values, hook commands, and literal authentication
+  references in `provider show`; targeted health diagnostics no longer echo a
+  potentially sensitive health URL.
+
+- Preserve piped stdin when launching Claude in the isolated environment.
+- Remember model selections only for actual Ollama launches; other providers
+  and help/version commands no longer overwrite the saved local model.
+- Apply model context overrides to exact IDs, allowing prefix matching only
+  for explicitly declared colon-terminated families.
+- Limit DeepSeek image fallback to Anthropic content blocks, preserving arbitrary
+  tool input data and message metadata.
+- Remove incoming transfer framing before sending buffered Ollama requests with
+  a calculated Content-Length.
 
 - Ollama DeepSeek V4 sessions now keep Claude Code's `high`/`max` request and
   its Anthropic thinking block intact. Current Ollama releases expose only an

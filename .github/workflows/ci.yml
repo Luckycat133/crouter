@@ -30,7 +30,7 @@ jobs:
 
       - name: Check Node syntax
         run: |
-          for file in bin/gateway bin/keypool-proxy lib/*.js; do
+          for file in bin/gateway bin/keypool-proxy lib/*.js lib/*.mjs; do
             node --check "$file"
           done
 
@@ -39,7 +39,7 @@ jobs:
           for shell in sh dash; do
             for test_file in test/*.sh; do
               printf 'running %s %s\n' "$shell" "$test_file"
-              "$shell" "$test_file"
+              TEST_SHELL="$shell" "$shell" "$test_file"
             done
           done
 

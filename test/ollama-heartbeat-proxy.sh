@@ -17,18 +17,22 @@ const root = process.env.CROUTER_TEST_ROOT;
 const proxyPath = `${root}/lib/ollama-heartbeat-proxy.mjs`;
 const expectedBody = JSON.stringify({ model: 'deepseek-v4-flash:q8', stream: true, messages: [{ role: 'user', content: 'ping' }] });
 const receivedBodies = [];
+const receivedHeaders = [];
 
 const upstream = http.createServer((request, response) => {
   const chunks = [];
   request.on('data', chunk => chunks.push(chunk));
   request.on('end', () => {
     receivedBodies.push(Buffer.concat(chunks).toString('utf8'));
+    receivedHeaders.push(request.headers);
     setTimeout(() => {
       response.writeHead(200, { 'content-type': 'text/event-stream' });
       response.end('event: message_start\ndata: {"type":"message_start"}\n\n');
     }, 180);
   });
 });
+let child;
+try {
 upstream.listen(0, '127.0.0.1');
 await once(upstream, 'listening');
 const upstreamPort = upstream.address().port;
@@ -39,7 +43,7 @@ await once(reservation, 'listening');
 const proxyPort = reservation.address().port;
 await new Promise(resolve => reservation.close(resolve));
 
-const child = spawn(process.execPath, [proxyPath], {
+child = spawn(process.execPath, [proxyPath], {
   env: {
     ...process.env,
     OLLAMA_HEARTBEAT_PORT: String(proxyPort),
@@ -71,21 +75,35 @@ assert.equal(health.heartbeat_ms, 40);
 assert.equal(health.effort_rewrite, 'deepseek-anthropic-pass-through-v2');
 assert.equal(health.image_fallback, 'deepseek-text-image-v1');
 
-async function send(body) {
+async function send(body, chunked = false) {
   return await new Promise((resolve, reject) => {
   const request = http.request({
     host: '127.0.0.1',
     port: proxyPort,
     path: '/v1/messages?beta=true',
     method: 'POST',
-    headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) },
+    headers: { 'content-type': 'application/json', ...(chunked
+      ? { 'transfer-encoding': 'chunked', trailer: 'x-test-trailer' }
+      : { 'content-length': Buffer.byteLength(body) }) },
   }, response => {
     const chunks = [];
     response.on('data', chunk => chunks.push(chunk));
-    response.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    response.on('end', () => {
+      if (response.statusCode !== 200) reject(new Error(`proxy returned HTTP ${response.statusCode}`));
+      else resolve(Buffer.concat(chunks).toString('utf8'));
+    });
   });
   request.on('error', reject);
-    request.end(body);
+    request.setTimeout(2000, () => request.destroy(new Error('proxy request timed out')));
+    if (chunked) {
+      const bytes = Buffer.from(body);
+      request.write(bytes.subarray(0, 13));
+      request.write(bytes.subarray(13));
+      request.addTrailers({ 'x-test-trailer': 'complete' });
+      request.end();
+    } else {
+      request.end(body);
+    }
   });
 }
 
@@ -159,14 +177,80 @@ const otherModelImageBody = JSON.stringify({
 await send(otherModelImageBody);
 assert.equal(receivedBodies[6], otherModelImageBody);
 
+// Buffering a chunked request must replace its framing, including when a
+// DeepSeek image fallback changes the byte length and SSE starts early.
+for (const stream of [false, true]) {
+  const chunkedBody = JSON.stringify({
+    model: 'deepseek-v4-flash:q8', stream,
+    messages: [{ role: 'user', content: [
+      { type: 'text', text: '你好' },
+      { type: 'image', source: { type: 'base64', data: 'chunked-image' } },
+    ] }],
+  });
+  const before = receivedBodies.length;
+  const result = await send(chunkedBody, true);
+  assert.equal(receivedBodies.length, before + 1, 'chunked request must reach the upstream handler');
+  assert.match(result, /event: message_start/);
+  assert.doesNotMatch(result, /event: error/);
+  assert.equal(receivedHeaders.at(-1)['transfer-encoding'], undefined);
+  assert.equal(receivedHeaders.at(-1).trailer, undefined);
+  assert.equal(Number(receivedHeaders.at(-1)['content-length']), Buffer.byteLength(receivedBodies.at(-1)));
+  assert.equal(JSON.parse(receivedBodies.at(-1)).messages[0].content[1].type, 'text');
+  if (stream) assert.match(result, /: crouter-ollama-heartbeat/);
+}
+
+// Only Anthropic content positions are eligible for image fallback. Tool
+// input and metadata may legitimately use the same type discriminator.
+const scopedImages = {
+  model: 'deepseek-v4-flash:q8', stream: false,
+  thinking: { type: 'enabled', budget_tokens: 16000 },
+  output_config: { effort: 'max' },
+  metadata: { type: 'image', path: 'request.png' },
+  messages: [{
+    role: 'assistant', metadata: { type: 'image', path: 'message.png' },
+    content: [{ type: 'tool_use', id: 'tool-1', name: 'render', input: {
+      type: 'image', path: 'poster.png', layers: [{ type: 'image', path: 'layer.png' }],
+    } }],
+  }, {
+    role: 'user', content: [
+      { type: 'image', source: { type: 'base64', data: 'direct-image' }, cache_control: { type: 'ephemeral' } },
+      { type: 'tool_result', tool_use_id: 'tool-1', metadata: { type: 'image', path: 'result.png' }, content: [
+        { type: 'text', text: 'keep text', metadata: { type: 'image', path: 'text.png' } },
+        { type: 'image', source: { type: 'base64', data: 'nested-image' } },
+      ] },
+    ],
+  }],
+};
+await send(JSON.stringify(scopedImages));
+const scopedForwarded = JSON.parse(receivedBodies.at(-1));
+assert.deepEqual(scopedForwarded.messages[0], scopedImages.messages[0], 'image fallback must preserve tool input and message metadata');
+assert.deepEqual(scopedForwarded.metadata, scopedImages.metadata);
+assert.deepEqual(scopedForwarded.thinking, scopedImages.thinking);
+assert.deepEqual(scopedForwarded.output_config, scopedImages.output_config);
+const [directImage, toolResult] = scopedForwarded.messages[1].content;
+assert.equal(directImage.type, 'text');
+assert.deepEqual(directImage.cache_control, { type: 'ephemeral' });
+assert.deepEqual(toolResult.metadata, scopedImages.messages[1].content[1].metadata);
+assert.deepEqual(toolResult.content[0], scopedImages.messages[1].content[1].content[0]);
+assert.equal(toolResult.content[1].type, 'text');
+assert.doesNotMatch(receivedBodies.at(-1), /direct-image|nested-image/);
+
 assert.match(childOutput, /"requested_effort":"max","effective_effort":"ollama_think_enabled","rewritten":false/);
 assert.match(childOutput, /"requested_effort":"xhigh","effective_effort":"ollama_think_enabled","rewritten":false/);
 assert.match(childOutput, /"effective_effort":"disabled","rewritten":false/);
 assert.match(childOutput, /"type":"image_fallback".*"images_downgraded":1/);
 
-child.kill('SIGTERM');
-await once(child, 'exit');
-await new Promise(resolve => upstream.close(resolve));
+} finally {
+  if (child && child.exitCode === null && child.signalCode === null) {
+    const exited = once(child, 'exit');
+    child.kill('SIGTERM');
+    const forceKill = setTimeout(() => child.kill('SIGKILL'), 1000);
+    await exited;
+    clearTimeout(forceKill);
+  }
+  upstream.closeAllConnections();
+  await new Promise(resolve => upstream.close(resolve));
+}
 console.log('ok    Ollama heartbeat proxy preserves bytes and DeepSeek thinking requests, emits SSE comments, and downgrades unsupported images');
 NODE
 

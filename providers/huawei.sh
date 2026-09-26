@@ -10,7 +10,7 @@ MODEL_OPUS="glm-5.1"
 MODEL_SONNET="glm-5.1"
 MODEL_HAIKU="glm-5.1"
 MODEL_SUBAGENT="glm-5.1"
-MODEL_ALIASES="glm-5 kimi-k2.6 deepseek-v3.2 deepseek-v4-flash"
+MODEL_ALIASES="kimi-k2.6 deepseek-v4-flash"
 EFFORT="high"
 
 AUTH_MODE="surfaces"

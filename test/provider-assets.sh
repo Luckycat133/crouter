@@ -41,7 +41,7 @@ const minimax = load('minimax').mcpServers;
 assert.deepStrictEqual(minimax['crouter-minimax-token-plan'], {
   command: 'uvx',
   args: ['minimax-coding-plan-mcp==0.0.4', '-y'],
-  env: {MINIMAX_API_KEY: 'plan-secret', MINIMAX_API_HOST: 'https://api.minimaxi.com'},
+  env: {MINIMAX_API_KEY: 'plan-secret', MINIMAX_API_HOST: 'https://api.minimax.cn'},
 });
 
 const zai = load('zai').mcpServers;

@@ -3,19 +3,9 @@
 PROVIDER_NAME="volcengine"
 PROVIDER_DESC="Volcengine Ark Agent Plan (Multi-Model Gateway)"
 
-# Fallback to common Volcano Engine env vars
-if [ -z "${VOLCENGINE_PLAN_KEY:-}" ]; then
-  if [ -n "${VOLCENGINE_AGENT_PLAN_KEY:-}" ]; then
-    export VOLCENGINE_PLAN_KEY="$VOLCENGINE_AGENT_PLAN_KEY"
-  elif [ -n "${VOLCENGINE_CODING_PLAN_KEY:-}" ]; then
-    export VOLCENGINE_PLAN_KEY="$VOLCENGINE_CODING_PLAN_KEY"
-  elif [ -n "${VOLCANO_ENGINE_API_KEY:-}" ]; then
-    export VOLCENGINE_PLAN_KEY="$VOLCANO_ENGINE_API_KEY"
-  elif [ -n "${ARK_API_KEY:-}" ]; then
-    export VOLCENGINE_PLAN_KEY="$ARK_API_KEY"
-  elif [ -n "${VOLCENGINE_API_KEY:-}" ]; then
-    export VOLCENGINE_PLAN_KEY="$VOLCENGINE_API_KEY"
-  fi
+# The Agent Plan key is only interchangeable with its Agent Plan alias.
+if [ -z "${VOLCENGINE_PLAN_KEY:-}" ] && [ -n "${VOLCENGINE_AGENT_PLAN_KEY:-}" ]; then
+  export VOLCENGINE_PLAN_KEY="$VOLCENGINE_AGENT_PLAN_KEY"
 fi
 
 BASE_URL="https://ark.cn-beijing.volces.com/api/plan"
@@ -35,7 +25,7 @@ AUTH_MODE="surfaces"
 PLAN_URL="https://ark.cn-beijing.volces.com/api/plan"
 PLAN_AUTH_TYPE="bearer"
 PLAN_KEY_ENV="VOLCENGINE_PLAN_KEY"
-PLAN_KEYS="volcengine-coding-plan volcengine-agent-plan volcengine-plan"
+PLAN_KEYS="volcengine-agent-plan volcengine-plan"
 PLAN_MODEL="doubao-seed-evolving"
 PLAN_MODEL_OPUS="doubao-seed-evolving"
 PLAN_MODEL_SONNET="doubao-seed-evolving"

@@ -18,6 +18,7 @@ for _a in "$@"; do
     --version|-V|--help|-h)
       printf 'ANTHROPIC_MODEL=%s\n' "${ANTHROPIC_MODEL:-}"
       printf 'CLAUDE_CODE_MAX_CONTEXT_TOKENS=%s\n' "${CLAUDE_CODE_MAX_CONTEXT_TOKENS:-}"
+      printf 'ANTHROPIC_API_KEY=%s\n' "${ANTHROPIC_API_KEY:-}"
       echo "0.2.0"
       exit 0
       ;;
@@ -100,11 +101,11 @@ else
 fi
 
 _ollama_default_launch=$("$GATEWAY" ollama --version 2>&1)
-if printf '%s\n' "$_ollama_default_launch" | grep -q '^ANTHROPIC_MODEL=deepseek-v4-flash:q8$' && \
-   printf '%s\n' "$_ollama_default_launch" | grep -q '^CLAUDE_CODE_MAX_CONTEXT_TOKENS=373760$'; then
-  ok "Ollama defaults to the validated DeepSeek profile"
+if printf '%s\n' "$_ollama_default_launch" | grep -q '^ANTHROPIC_MODEL=qwen3.8-27b$' && \
+   printf '%s\n' "$_ollama_default_launch" | grep -q '^CLAUDE_CODE_MAX_CONTEXT_TOKENS=262144$'; then
+  ok "Ollama help preserves the default Qwen profile"
 else
-  bad "Ollama default DeepSeek profile is not applied"
+  bad "Ollama default Qwen profile is not applied"
 fi
 
 # an unknown subcommand is rejected (non-zero exit)
@@ -379,8 +380,8 @@ fi
 _ollama_show=$("$GATEWAY" provider show ollama 2>&1)
 _ollama_show_rc=$?
 if [ "$_ollama_show_rc" -eq 0 ] &&
-   printf '%s\n' "$_ollama_show" | grep -q '^default:     deepseek-v4-flash:q8$' &&
-   printf '%s\n' "$_ollama_show" | grep -q '^context:     373760 tokens$' &&
+   printf '%s\n' "$_ollama_show" | grep -q '^default:     qwen3.8-27b$' &&
+   printf '%s\n' "$_ollama_show" | grep -q '^context:     262144 tokens$' &&
    printf '%s\n' "$_ollama_show" | grep -q '^effort:      max$'; then
   ok "ollama provider display applies the default model context override"
 else
@@ -470,11 +471,14 @@ else
   bad "doctor did not report MISSING for an unconfigured Anthropic API provider"
 fi
 
-# openrouter must explicitly blank ANTHROPIC_API_KEY (upstream requirement).
-if "$GATEWAY" provider openrouter 2>&1 | grep -q '^  ANTHROPIC_API_KEY=$'; then
-  ok "openrouter blanks ANTHROPIC_API_KEY via EXTRA_ENV"
+# Provider display redacts assignment values; the child still gets the
+# explicit empty ANTHROPIC_API_KEY required by OpenRouter's Claude setup.
+_openrouter_env=$(OPENROUTER_API_KEY=smoke-only-key "$GATEWAY" openrouter --version 2>&1)
+if printf '%s\n' "$_openrouter_show" | grep -q '^  ANTHROPIC_API_KEY=<redacted>$' &&
+   printf '%s\n' "$_openrouter_env" | grep -q '^ANTHROPIC_API_KEY=$'; then
+  ok "openrouter blanks ANTHROPIC_API_KEY in the child without showing provider values"
 else
-  bad "openrouter does not blank ANTHROPIC_API_KEY"
+  bad "openrouter does not safely blank ANTHROPIC_API_KEY"
 fi
 
 # --- local failover proxy: bearer default -> x-api-key fallback on 429 ------

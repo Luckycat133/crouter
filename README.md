@@ -11,9 +11,10 @@ separate routing surfaces. It fails over on HTTP 401/402/403/429 without
 restarting Claude Code and temporarily cools down an exhausted candidate so
 the next request does not immediately spend another retry on it.
 
-The current provider values were checked against vendor documentation on
-2026-08-08. See [docs/provider-audit.md](docs/provider-audit.md) for the source
-matrix and decisions.
+The original catalog was checked against vendor documentation on 2026-08-08;
+new routes and selected existing contracts were rechecked on 2026-09-26. See
+[docs/provider-audit.md](docs/provider-audit.md) for the source matrix and
+decisions.
 
 Release 0.5.3 is implementation-complete against the repository's offline
 contract suite under POSIX `sh` and `dash`. Live catalog access, remaining
@@ -24,11 +25,12 @@ and may incur provider charges.
 
 - [Install](#install)
 - [Usage](#usage)
+- [Native coding-agent CLIs](#native-coding-agent-clis)
 - [Provider catalog](#provider-catalog)
 - [Token Plan and API key isolation](#token-plan-and-api-key-isolation)
 - [Provider MCPs and skills](#provider-mcps-and-skills)
 - [Unified gateway](#unified-gateway)
-- [Native Bedrock and Vertex](#native-bedrock-and-vertex)
+- [Native Bedrock, Vertex, and Foundry](#native-bedrock-vertex-and-foundry)
 - [Antigravity and local providers](#antigravity-and-local-providers)
 - [Adding a provider](#adding-a-provider)
 - [Security](#security)
@@ -44,17 +46,41 @@ crouter list
 
 The installer creates `crouter` and one `claude-<provider>` compatibility
 shortcut per file in `providers/`. Re-run it after moving the repository or
-adding/removing providers.
+adding/removing providers. Reinstall prunes retired shortcuts only when they
+point to this checkout. `crouter uninstall -y` removes all shortcuts owned by
+this checkout, including retired ones, and preserves other files and links.
 
 Requirements:
 
-- Claude Code
+- [Claude Code v2.1.280+](https://code.claude.com/docs/en/model-config) for the
+  Opus 5.5 preset
 - Node.js (for the local keypool and unified gateway)
 - macOS Keychain's `security` command when using Keychain credentials
 - `uvx` only for the MiniMax Token Plan MCP
 
 `config.sh` is optional and gitignored. Copy `config.example.sh` when local
 overrides are needed.
+
+## Diagnostics
+
+`crouter doctor <provider>` exits nonzero when a required credential is known
+to be missing, a configured health endpoint is down, or a required local tool
+is unavailable. It prints the next configuration or connectivity check to make.
+Required Node executables are checked for pooled routing, managed MCP profiles,
+and local Node providers. Native Bedrock, Vertex, and Foundry SDK credentials
+may be supplied through Claude settings or an external credential chain; doctor
+reports `UNVERIFIED` when it cannot establish their status offline. It checks
+credential discovery and configured health URLs, not live model entitlement,
+and does not start local services. `crouter doctor` keeps the overview behavior: unavailable optional
+providers appear in the output without failing the command on their own.
+Keychain availability is checked fresh for each invocation, so adding or
+removing an item outside crouter is reflected on the next diagnostic run.
+
+`crouter config show` lists normalized effective switches and whether known path
+and binary settings are configured, without printing their values. It does not
+print `config.sh` source, unknown variables, or credentials, even if a secret was
+assigned to a path setting. Use `crouter config path` to locate the file for local
+editing and `crouter --version` to check the installed version.
 
 ## Usage
 
@@ -64,8 +90,20 @@ crouter provider show dashscope
 crouter doctor minimax
 
 crouter claude                     # native Claude account login
+crouter app list                   # installed coding-agent CLIs
+crouter app codex --help           # run Codex with its own login and flags
+crouter app muse                   # run Muse Code with its own login
+crouter use app/codex              # select Codex for future launches
+crouter                            # launch the selected target
+crouter run --help                 # forward arguments to the selected target
+crouter use                       # show the selected target
+crouter use minimax               # select a Claude Code provider instead
+crouter use --clear               # remove the selection
 crouter anthropic                  # Anthropic Console API key
 crouter minimax
+crouter meta                       # Meta Model API key, billed as API usage
+crouter requesty                   # Requesty API key
+crouter nagaai                     # NagaAI inference API key
 crouter dashscope qwen3.7-max
 crouter deepseek --model 'deepseek-v4-pro[1m]'
 
@@ -79,8 +117,71 @@ crouter all --check               # redacted route proof, no launch/network
 crouter all
 ```
 
-The first bare argument before any flag is a primary-model override. Remaining
-arguments are forwarded to Claude Code.
+For provider launches, the first bare argument before any flag is a
+primary-model override. Remaining arguments are forwarded to Claude Code.
+
+`crouter use <provider>` selects a provider from `crouter list`, while
+`crouter use app/<name>` selects a native CLI from `crouter app list`. The
+selection affects future bare `crouter` and `crouter run [args...]` launches;
+it does not change an already running client. Direct `crouter <provider>` and
+`crouter app <name>` launches remain available and do not change the selection.
+For example, `crouter use minimax` followed by `crouter run -p 'hello'` uses
+the MiniMax provider through Claude Code, while `crouter use app/gemini`
+followed by `crouter run --help` invokes Gemini with its own account.
+
+The selected target is stored as a single mode-600 file at
+`${XDG_STATE_HOME:-$HOME/.local/state}/crouter/selection`. If it is missing,
+invalid, or points to a removed target, select another target with
+`crouter use <provider>` or `crouter use app/<name>`; `crouter use --clear`
+removes it.
+Selection never edits Claude, Codex, Gemini, or other client settings. Native
+app launches use each CLI's own authentication and skip `config.sh` and
+provider setup.
+
+## Native coding-agent CLIs
+
+`crouter app list` shows which officially documented coding-agent commands are
+installed. `crouter app <name> [args...]` executes the selected CLI with its
+own authentication and forwards the arguments unchanged. This path skips
+`config.sh` and provider setup entirely, so it does not create a proxy, inject
+a model, or copy provider credentials into a different service. External
+`claude`, `codex`, and IDE settings are not rewritten.
+
+| App name | Executed command | Official CLI documentation |
+| --- | --- | --- |
+| `claude` | `claude` | [Claude Code](https://code.claude.com/docs/en/cli-usage) |
+| `codex` | `codex` | [OpenAI Codex](https://developers.openai.com/codex/cli) |
+| `gemini` | `gemini` | [Gemini CLI](https://github.com/google-gemini/gemini-cli) |
+| `opencode` | `opencode` | [OpenCode](https://opencode.ai/docs/cli) |
+| `copilot` | `copilot` | [GitHub Copilot CLI](https://docs.github.com/en/copilot/get-started/cli-quickstart) |
+| `cursor` | `agent` (`cursor-agent` fallback) | [Cursor CLI](https://cursor.com/docs/cli/overview) |
+| `kiro` | `kiro-cli` | [Kiro CLI](https://kiro.dev/docs/cli/) |
+| `qoder` | `qoder` | [Qoder CLI](https://docs.qoder.com/cli/cli-reference) |
+| `kimi` | `kimi` | [Kimi Code CLI](https://github.com/MoonshotAI/kimi-code/blob/main/docs/en/reference/kimi-command.md) |
+| `qwen` | `qwen` | [Qwen Code](https://github.com/QwenLM/qwen-code) |
+| `amp` | `amp` | [Amp CLI](https://ampcode.com/docs/cli) |
+| `vibe` | `vibe` | [Mistral Vibe CLI](https://docs.mistral.ai/getting-started/quickstarts/vibe-code/install-cli) |
+| `muse` | `muse` | [Meta Muse Code](https://dev.meta.ai/docs/muse-code) |
+| `kilo` | `kilo` | [Kilo Code CLI](https://kilo.ai/docs/code-with-ai/platforms/cli) |
+
+For Claude Code, `crouter claude` remains the existing native-login shortcut.
+`crouter app claude` accepts an inherited `CLAUDE_BIN` environment variable;
+`CLAUDE_BIN` set only inside `config.sh` applies to `crouter claude`.
+`crouter app muse` keeps Muse Code's browser login or `META_API_KEY` in that
+client. `crouter meta` instead uses a separately created `MODEL_API_KEY` for
+Meta Model API; [Muse Code subscriptions](https://dev.meta.ai/docs/muse-code/subscriptions)
+do not cover additional Model API keys.
+
+Provider routing and client selection are separate: `crouter <provider>` uses
+that provider's Anthropic Messages contract with Claude Code, while
+`crouter app codex` and `crouter app gemini` use those clients' own login and
+settings. Codex custom providers currently require the [Responses API](https://learn.chatgpt.com/docs/config-file/config-reference);
+Gemini's [custom base URL](https://geminicli.com/docs/reference/configuration/)
+still sends Gemini API requests. An Anthropic Messages URL cannot be inserted
+into either client as a working provider without a validated protocol adapter.
+OpenCode [V2](https://opencode.ai/v2/docs/providers) documents an
+Anthropic-compatible adapter, but its configuration differs from V1, so crouter
+does not rewrite either version's settings automatically.
 
 ## Provider catalog
 
@@ -99,25 +200,32 @@ limit; the selected vendor model or native backend remains authoritative.
 | `dashscope` | Token Plan + API | `qwen3.8-max` | 983,616 | Plan media skill + API WebSearch MCP |
 | `dashscope-coding` | Coding Plan | `qwen3.7-plus` | — | — |
 | `deepseek` | API | `deepseek-v4-pro[1m]` | 1,000,000 | native web search |
+| `fireworks` | API | `accounts/fireworks/models/glm-5p3-flash` | — | — |
+| `foundry` | native Azure credentials, Bearer token, or Foundry API key | `sonnet` alias | — | — |
 | `huawei` | Token Plan + API | `glm-5.1` | — | — |
 | `infini` | GenStudio API | `glm-5.1` | — | — |
-| `minimax` | Token Plan + API | `MiniMax-M3` | 1,048,576 | Plan MCP + CLI skill |
+| `longcat` | Token Pack + pay-as-you-go on one API key | `LongCat-2.5-Preview` | 1,000,000 | — |
+| `meta` | Model API key | `muse-spark-1.3` | 1,048,576 | — |
+| `minimax` | Token Plan + API | `MiniMax-M3` | 1,000,000 | Plan MCP + CLI skill |
 | `moonshot` | Kimi Code membership | `k3-256k` | 262,144 | — |
-| `ollama` | local | `deepseek-v4-flash:q8` | 373,760 validated cap | 60s SSE heartbeat |
+| `nagaai` | API | `claude-sonnet-4.5` | — | — |
+| `ollama` | local MLX/Ollama | `qwen3.8-27b` | 262,144 for Qwen; 373,760 for DeepSeek V4 Flash | 60s SSE heartbeat |
 | `openrouter` | API | `nvidia/nemotron-3-ultra-550b-a55b:free` | 1,000,000 | — |
 | `ppio` | API | `minimax/minimax-m3` | 1,000,000 | cloud OAuth MCP |
 | `qianfan` | personal Token Plan + API | `deepseek-v4-pro` | — | — |
 | `qianfan-team` | team Token Plan | `deepseek-v3.2` | — | — |
 | `qianfan-coding` | legacy Coding Plan | `qianfan-code-latest` | — | — |
 | `qiniu` | enterprise subscription + API | `deepseek/deepseek-v3.2-251201` | — | optional managed MCPs |
+| `requesty` | API | `anthropic/claude-sonnet-5` | — | — |
 | `siliconflow` | API | `Pro/moonshotai/Kimi-K2.6` | — | — |
 | `stepfun` | Step Plan + API | `step-3.7-flash` | 262,144 | StepSearch MCP + skill |
 | `tencent` | personal Token Plan + TokenHub API | `tc-code-latest` | — | optional WebSearch MCP |
 | `tencent-coding` | Coding Plan | `tc-code-latest` | — | — |
+| `vercel` | AI Gateway API key | `anthropic/claude-sonnet-5` | — | — |
 | `vertex` | native Google ADC | `sonnet` alias | — | — |
 | `volcengine` | Ark Agent Plan | `doubao-seed-evolving` | 1,000,000 | Ark Docs + Doubao Search + DataPro + OpenViking MCPs |
 | `volcengine-coding` | Ark Coding Plan | `doubao-seed-evolving` | 1,000,000 | Ark Docs MCP |
-| `xiaomi` | Token Plan + API | `mimo-v2.5-pro[1m]` | 1,048,576 | — |
+| `xiaomi` | Token Plan + API | `mimo-v2.6-pro[1m]` | 1,048,576 | — |
 | `z-ai` | Coding Plan + API | `glm-5.2[1m]` | 1,000,000 | vision/search/reader/zread MCPs |
 
 DeepSeek additionally follows its official 786,432-token automatic compaction
@@ -128,6 +236,12 @@ an Anthropic Messages base URL that Claude Code can call directly. `codex`
 continues to support a ChatGPT subscription through its explicitly documented
 local translation proxy; crouter does not mislabel OpenAI's normal API as
 Anthropic-compatible.
+
+OpenCode Zen and Cloudflare AI Gateway are documented as deferred candidates in
+the [provider audit](docs/provider-audit.md): Zen's Messages authentication
+header is not specified clearly enough for an enabled preset, and Cloudflare's
+route requires an account-specific URL. The `app` command can still run an
+installed OpenCode CLI using its own login.
 
 ## Token Plan and API key isolation
 
@@ -172,6 +286,10 @@ and user-added services in the local key registry:
 | `infini` | — | `INFINI_API_KEY` |
 | `ppio` | — | `PPIO_API_KEY` |
 | `xiaomi` | `XIAOMI_TOKEN_PLAN_KEY` | `XIAOMI_API_KEY` |
+
+`VOLCENGINE_AGENT_PLAN_KEY` is an alias for `VOLCENGINE_PLAN_KEY`. Agent Plan
+and Coding Plan keys are accepted only by their respective endpoints; generic
+Ark API keys are not used as subscription fallbacks.
 
 Use `crouter provider show <name>` to inspect the URL, auth type, Keychain
 service names, and tier maps without revealing secrets.
@@ -281,7 +399,7 @@ Current profiles:
 
 DeepSeek's documented web search is a server-side model tool rather than a
 downloadable MCP. Kimi documents how users can add generic MCPs and skills to
-Kimi CLI, but not a Kimi-owned Claude Code plan package. Those providers, and
+Kimi Code CLI, but not a Kimi-owned Claude Code plan package. Those providers, and
 every other vendor without a documented plan-specific asset, get an
 intentionally empty strict profile. crouter does not invent or install
 unofficial packages.
@@ -308,7 +426,7 @@ crouter all
 `crouter all` exposes a namespaced `/v1/models` catalog on
 `127.0.0.1:${CROUTER_GATEWAY_PORT:-18799}` and uses the same bound candidates
 and per-surface model maps. Its paid `/v1/messages` route requires a random
-per-session local token. Native Bedrock/Vertex routes are excluded because their
+per-session local token. Native Bedrock/Vertex/Foundry routes are excluded because their
 SDK signers live inside Claude Code.
 
 `crouter all --check` builds the same configured route graph, prints only redacted
@@ -330,9 +448,9 @@ An explicit Claude `--mcp-config` flag wins; setting
 Use `crouter <provider>` when vendor assets, a stored Claude account login, or a
 native cloud backend are needed.
 
-## Native Bedrock and Vertex
+## Native Bedrock, Vertex, and Foundry
 
-`bedrock` and `vertex` use Claude Code's supported native integrations. crouter
+`bedrock`, `vertex`, and `foundry` use Claude Code's supported native integrations. crouter
 does not start a third-party localhost proxy or guess date-suffixed cloud model
 IDs.
 
@@ -342,10 +460,24 @@ AWS_PROFILE=my-profile AWS_REGION=us-east-1 crouter bedrock
 ANTHROPIC_VERTEX_PROJECT_ID=my-project \
 CLOUD_ML_REGION=us-east5 \
 crouter vertex
+
+ANTHROPIC_FOUNDRY_RESOURCE=my-resource crouter foundry
 ```
 
-Only provider-declared AWS/Google credential variables survive the launcher's
-isolated `env -i` environment.
+Only provider-declared AWS/Google/Microsoft credential and endpoint variables
+survive the launcher's isolated `env -i` environment. This includes alternate
+AWS credential/config file paths, Google ADC and version-specific Vertex model
+regions, and Foundry API keys or `ANTHROPIC_FOUNDRY_AUTH_TOKEN` Bearer tokens.
+`CLAUDE_CONFIG_DIR` reaches native backends so their setup wizards can read
+settings saved outside `~/.claude`. These values can also be assigned in
+`config.sh` without `export`.
+
+Claude Code resolves cloud model aliases itself. crouter passes a deployment or
+model pin only when you explicitly set `ANTHROPIC_DEFAULT_*_MODEL` (or
+`CLAUDE_CODE_SUBAGENT_MODEL`). In Foundry, set
+`ANTHROPIC_FOUNDRY_RESOURCE` for the simplest endpoint setup; its deployment
+names are account-specific. `crouter doctor` reports native credentials as
+`UNVERIFIED` when SDK or Claude settings cannot be checked offline.
 
 ## Antigravity and local providers
 
@@ -356,14 +488,23 @@ crouter starts it only when needed and stops it only if that same session owns
 the process; a proxy that was already running is left untouched.
 
 Ollama exposes its native Anthropic compatibility endpoint at
-`http://127.0.0.1:11434`. The local crouter profile defaults to the validated
-`deepseek-v4-flash:q8` model with `max` effort and a 373,760-token client cap.
-Pull that model, or select another installed model explicitly:
+`http://127.0.0.1:11434`. The local crouter profile defaults to
+`qwen3.8-27b` through the MLX adapter at port 11436 with `max` effort and a
+262,144-token client cap. That Qwen preset expects an OpenAI-compatible MLX
+server at `10.211.55.2:18080` by default (the existing local VM setup). Set
+`MLX_UPSTREAM_HOST` and `MLX_UPSTREAM_PORT` in `config.sh` or your environment
+to point it at another server, for example `127.0.0.1:18080`. crouter probes
+the selected MLX endpoint before launch and passes that same address to the
+adapter. An already running adapter must use the selected upstream; if it
+does not, stop it before relaunching.
+
+For a model installed in Ollama, select its exact installed ID explicitly. This
+uses Ollama at `127.0.0.1:11434` and does not require the MLX server:
 
 ```sh
 ollama pull deepseek-v4-flash:q8
-crouter ollama
-crouter ollama qwen3.5:2b
+crouter ollama deepseek-v4-flash:q8
+crouter ollama <other-installed-model>
 ```
 
 Direct Ollama sessions use a localhost-only transport proxy at
@@ -385,10 +526,10 @@ models remain unchanged. A proxy started by the current session is stopped
 when Claude Code exits; a healthy pre-existing proxy is reused and left
 running.
 
-The 373,760-token cap applies only to the exact `deepseek-v4-flash:q8` model ID
-validated on the local M2 Ultra 192GB machine. Explicitly selected Ollama models
-retain the conservative 65,536-token fallback unless another exact override is
-added to `MODEL_CONTEXT_OVERRIDES`.
+The 373,760-token cap applies only to the exact `deepseek-v4-flash:q8` and
+`deepseek-v4-flash` model IDs validated locally. Other explicitly selected
+Ollama models retain the conservative 65,536-token fallback unless another
+exact override is added to `MODEL_CONTEXT_OVERRIDES`.
 
 Codex requires `icebear0828/codex-proxy` on port 19000 and a completed ChatGPT
 OAuth PKCE login. Its available catalog remains account-dependent.
@@ -454,7 +595,8 @@ git diff --check
 ```
 
 Version is read from `VERSION`. Bash and zsh completions are under
-`completions/`.
+`completions/`; they complete management subcommands at the correct argument
+depth without loading `config.sh` or provider declarations.
 
 ### Push gate
 

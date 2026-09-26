@@ -8,10 +8,192 @@ contracts. It is a configuration audit, not a promise that an account owns a
 particular plan or model. Vendor catalogs can vary by region, plan tier, and
 account entitlements.
 
-The release contains 29 provider contracts, including 21 mainland-China
+The catalog contains 37 provider contracts, including 22 mainland-China
 provider entries. Counts include separate products when their credentials or
 endpoints cannot safely share a route, such as DashScope/Coding Plan,
 Qianfan personal/team/legacy Coding Plan, and Tencent personal/Coding Plan.
+
+## Targeted documentation recheck — 2026-09-26
+
+This recheck covers Kimi Code and Z.AI only; the full audit date above remains
+unchanged. It verifies published contracts, not live account entitlements.
+
+- Kimi's [model configuration](https://www.kimi.com/code/docs/en/kimi-code/models.html)
+  and [overview](https://www.kimi.com/code/docs/en/) distinguish the China
+  endpoint `https://api.kimi.com/coding/` from the overseas endpoint
+  `https://api.kimi.ai/coding/`. The English Claude Code guide uses the overseas
+  endpoint. Keep the current China endpoint; this is not evidence of retirement.
+- Z.AI's [current Claude Code example](https://docs.z.ai/devpack/tool/claude)
+  maps Opus/Sonnet to `glm-5.3[1m]` and Haiku to `glm-5.3-flash[1m]`, with the
+  same endpoint, bearer authentication and 1,000,000 compact window. Its
+  [model overview](https://docs.z.ai/guides/overview/overview) still lists GLM-5.2
+  with 1M context and GLM-4.7. Existing model defaults are retained; adopting
+  the newer recommendation is a separate model upgrade, not a confirmed fix.
+
+## Provider defaults and credential isolation recheck — 2026-09-26
+
+These changes use current vendor documentation and catalog entries. They do
+not establish that a particular account owns the updated models or plans.
+
+- [MiniMax's China Claude Code guide](https://platform.minimax.cn/docs/token-plan/claude-code)
+  now uses `https://api.minimax.cn/anthropic`, `MiniMax-M3`, and a 1,000,000
+  auto-compaction window. Its [text generation guide](https://platform.minimax.cn/docs/guides/text-generation)
+  recommends the same Anthropic-compatible host for general API use. The
+  [Token Plan MCP guide](https://platform.minimax.cn/docs/token-plan/mcp-guide)
+  separately sets `MINIMAX_API_HOST=https://api.minimax.cn` for the session
+  MCP. Keep plan and API credentials in separate pools.
+- [Anthropic's current model overview](https://platform.claude.com/docs/en/models/overview)
+  lists `claude-opus-5-5` and `claude-fable-5-1`; the direct API route now
+  advertises these exact IDs. [Vercel's Opus 5.5 announcement](https://vercel.com/changelog/claude-opus-5-5-now-available-on-ai-gateway)
+  gives `anthropic/claude-opus-5.5` for its Messages gateway. The
+  [302.AI catalog](https://302.ai/search) lists `claude-opus-5-5` for its
+  original-format API; its prior Fable 5 alias remains explicit.
+- [Xiaomi's current Claude Code guide](https://mimo.mi.com/docs/zh-CN/tokenplan/integration/claudecode)
+  now recommends `mimo-v2.6-pro` and documents `[1m]` on 1M-capable logical
+  IDs. The logical default is `mimo-v2.6-pro[1m]` and each surface maps it to
+  raw `mimo-v2.6-pro`; old raw V2.5 IDs remain available as migration aliases.
+- [DeepSeek's Claude Code integration](https://api-docs.deepseek.com/quick_start/agent_integrations/claude_code/)
+  maps Haiku and subagents to `deepseek-flash`. The previous
+  `deepseek-v4-flash` stays an explicit alias. The [Anthropic API guide](https://api-docs.deepseek.com/guides/anthropic_api/)
+  still supports `x-api-key`, so the existing header remains valid.
+- [Huawei's current Token Plan overview](https://support.huaweicloud.com/Token-Plan-maas/tokenplan-maas-0001.html)
+  says `GLM-5` and `DeepSeek-V3.2` have been removed from the subscription.
+  Those IDs no longer appear in the shared alias list; an API customer may
+  still specify an account-specific model explicitly.
+- [Volcengine Agent Plan](https://docs.volcengine.com/docs/ark/agent-plan-enterprise-other-tools?lang=zh)
+  uses a dedicated `/api/plan` endpoint and plan-only API key, distinct from
+  regular Ark API keys. Its [Coding Plan guide](https://docs.volcengine.com/docs/ark/coding-plan-enterprise-ai-opencode?lang=zh)
+  uses `/api/coding` and a separate Coding Plan key. The Agent Plan reads only
+  `VOLCENGINE_PLAN_KEY` or its `VOLCENGINE_AGENT_PLAN_KEY` alias and only its
+  own Keychain services; Coding Plan reads only
+  `VOLCENGINE_CODING_PLAN_KEY` and `volcengine-coding-plan`. The two plans do
+  not borrow each other's keys or generic Ark API keys.
+
+## Additional direct routes and native backend — 2026-09-26
+
+This focused addition checks published endpoints, header shapes and model IDs.
+It does not check account entitlements or make credentialed API calls.
+
+- **Fireworks AI:** [Anthropic compatibility](https://docs.fireworks.ai/tools-sdks/anthropic-compatibility)
+  gives `POST https://api.fireworks.ai/inference/v1/messages`, the base prefix
+  `https://api.fireworks.ai/inference`, and `Authorization: Bearer` with
+  `FIREWORKS_API_KEY`. Its [serverless quickstart](https://docs.fireworks.ai/getting-started/quickstart)
+  uses `accounts/fireworks/models/glm-5p3-flash` with the Anthropic SDK and
+  also demonstrates `accounts/fireworks/models/kimi-k3`. The [GLM model page](https://fireworks.ai/models/fireworks/glm-5p3-flash)
+  lists serverless pay-per-token billing and a 1040k-token context. The
+  provider leaves the global context unset because the selectable catalog is
+  broader than that model. Fireworks [Nexus/FireConnect](https://docs.fireworks.ai/nexus/harnesses)
+  is a distinct product with a custom-header route and is not part of this
+  API-key preset.
+- **Vercel AI Gateway:** Its [Messages API guide](https://vercel.com/docs/ai-gateway/sdks-and-apis/anthropic-messages-api)
+  specifies `https://ai-gateway.vercel.sh` before `/v1/messages`, accepts the
+  `AI_GATEWAY_API_KEY` as `Authorization: Bearer`, and shows Claude Code's
+  `ANTHROPIC_AUTH_TOKEN` configuration. Vercel's published catalog and
+  Opus 5.5 announcement verify
+  `anthropic/claude-opus-5.5`, `anthropic/claude-sonnet-5`, and
+  `anthropic/claude-haiku-4.5` on the Messages API: [Opus](https://vercel.com/changelog/claude-opus-5-5-now-available-on-ai-gateway),
+  [Sonnet](https://vercel.com/ai-gateway/models/claude-sonnet-5), and
+  [Haiku](https://vercel.com/ai-gateway/models/claude-haiku-4.5). The model
+  tiers have different context limits, so no global limit is injected. Gateway
+  API usage is [billed at API rates](https://vercel.com/docs/ai-gateway/pricing).
+  Its separate [Claude Max gateway pass-through](https://vercel.com/docs/ai-gateway/coding-agents/claude-code)
+  is not treated as a crouter API credential or placed in `crouter all`.
+- **LongCat:** The [platform quickstart](https://longcat.chat/platform/docs/)
+  gives `POST https://api.longcat.chat/anthropic/v1/messages`, Bearer API-key
+  authentication, the exact `LongCat-2.5-Preview` and `LongCat-2.0` IDs, and
+  1M context for each. Its [Claude Code guide](https://longcat.chat/platform/docs/ClaudeCode.html)
+  maps all tiers to `LongCat-2.5-Preview`. The [FAQ](https://longcat.chat/platform/docs/FAQ.html)
+  confirms one platform key works for the Anthropic route. Token Packs and
+  pay-as-you-go are billing balances behind this same key and route; no
+  second credential surface is invented. An older [Messages reference](https://longcat.ai/platform/docs/api/messages)
+  still mentions only `LongCat-2.0`, so the current quickstart and Claude Code
+  guide take precedence for the new default.
+- **Microsoft Foundry:** [Claude Code's Foundry guide](https://code.claude.com/docs/en/microsoft-foundry)
+  specifies `CLAUDE_CODE_USE_FOUNDRY=1`, either
+  `ANTHROPIC_FOUNDRY_RESOURCE` or `ANTHROPIC_FOUNDRY_BASE_URL`, and
+  `ANTHROPIC_FOUNDRY_AUTH_TOKEN` Bearer, `ANTHROPIC_FOUNDRY_API_KEY`, or the
+  Azure SDK default credential chain. Azure CLI is only one chain member.
+  Microsoft's [setup example](https://learn.microsoft.com/en-us/azure/foundry/foundry-models/how-to/configure-claude-code?tabs=bash)
+  shows explicit base URL without `/anthropic`, while Anthropic's example
+  includes that suffix. crouter therefore recommends
+  `ANTHROPIC_FOUNDRY_RESOURCE` and passes an explicit base URL unchanged.
+  The tier IDs `claude-opus-4-6`, `claude-sonnet-4-6`, and
+  `claude-haiku-4-5` are Microsoft example deployments, not portable defaults.
+  crouter keeps `MODEL=sonnet` as a logical alias and forwards
+  `ANTHROPIC_DEFAULT_*_MODEL` only when the user pins an actual deployment.
+  This lets Claude Code use its documented main-model fallback when no Haiku
+  deployment exists. The isolated launch passes declared
+  [Azure SDK identity variables](https://learn.microsoft.com/en-us/javascript/api/overview/azure/identity-readme?view=azure-node-latest),
+  `AZURE_CONFIG_DIR`, `CLAUDE_CONFIG_DIR`, and unexported `config.sh` values.
+  `doctor foundry` reports an unobserved SDK chain or endpoint as `UNVERIFIED`:
+  Claude settings may provide the endpoint, and offline checks cannot prove
+  sign-in, resource access, or model entitlement.
+
+Deferred candidates: [OpenCode Zen](https://opencode.ai/docs/zen) lists
+`/zen/v1/messages` for Claude and some Qwen models, but its published Bearer
+example is for `/zen/v1/systemone`; the Messages authentication contract is
+not established clearly enough for an enabled preset. [Cloudflare Workers AI
+REST](https://developers.cloudflare.com/ai-gateway/usage/rest-api/) requires
+an account ID inside its URL and a Workers AI-scoped token; the current static
+provider contract cannot require and validate that ID safely. Its separate
+[AI Gateway Anthropic integration](https://developers.cloudflare.com/ai-gateway/integrations/coding-agents/claude-code/)
+uses another path and header. Neither route is configured by guesswork.
+
+## Additional Messages routes and native CLIs — 2026-09-26
+
+These routes use published Claude Code/Messages contracts. The two native CLI
+entries execute each client's own login and settings; no subscription token is
+reused as a provider API key. A 2026-09-26 invalid-key probe reached each
+configured `/v1/messages` endpoint's authentication rejection (Meta and
+NagaAI 401, Requesty 403); this did not test model entitlement or inference.
+
+- **Meta Model API:** Its [coding-agent guide](https://dev.meta.ai/docs/coding-agents)
+  specifies `https://api.meta.ai` as the Claude Code base before `/v1/messages`,
+  Bearer auth via `ANTHROPIC_AUTH_TOKEN` from `MODEL_API_KEY`, the exact
+  `muse-spark-1.3` ID for all aliases and subagents, 1,048,576 context, and
+  `ENABLE_TOOL_SEARCH=true` to retain Claude Code MCP tool search. This is
+  separate from Meta's [Muse Code CLI](https://dev.meta.ai/docs/muse-code),
+  which runs as `muse` with its own browser login or `META_API_KEY`.
+  [Muse Code subscriptions](https://dev.meta.ai/docs/muse-code/subscriptions)
+  apply only within that CLI; additional Model API keys use pay-as-you-go.
+- **Requesty:** The [Claude Code integration](https://docs.requesty.ai/integrations/claude-code)
+  gives `https://router.requesty.ai` as the Messages base and a Bearer
+  Requesty API key. Its current model pages list exact IDs for
+  [Sonnet 5](https://www.requesty.ai/models/anthropic/claude-sonnet-5),
+  [Opus 5.5](https://www.requesty.ai/models/anthropic/claude-opus-5-5), and
+  [Haiku 4.5](https://www.requesty.ai/models/anthropic/claude-haiku-4-5).
+  Those model pages show an OpenAI-compatible `/v1` base, which is not used
+  for Claude Code's Messages route. Requesty's generic quickstart also gives
+  an Anthropic SDK path under `/anthropic/v1/messages`, but the Claude Code
+  guide's root base reached Requesty auth at `/v1/messages` in the invalid-key
+  probe; the other path returned 404. Their context sizes differ, so the
+  provider does not inject one global limit.
+- **NagaAI:** Its [Claude Code guide](https://docs.naga.ac/integrations/agents/claude-code)
+  specifies `https://api.naga.ac`, Bearer auth and explicit empty
+  `ANTHROPIC_API_KEY`, with `claude-opus-4.5`, `claude-sonnet-4.5` and
+  `claude-haiku-4.5` tier IDs. The crouter-defined `NAGAAI_API_KEY` environment
+  name reads a [standard inference key](https://docs.naga.ac/get-started/authentication),
+  not an administrative provisioning key. No global context is injected.
+- **Kilo Code CLI:** Its [official CLI guide](https://kilo.ai/docs/code-with-ai/platforms/cli)
+  documents the `kilo` command and its own `/connect` flow. Its gateway is not
+  listed as an Anthropic Messages provider here.
+
+## Client protocol boundary — 2026-09-26
+
+Native CLI selection runs each client with its own authentication. It does not
+make an Anthropic Messages provider usable by a different protocol client.
+[Codex custom model providers](https://learn.chatgpt.com/docs/config-file/config-reference)
+currently support `responses` as their only `wire_api`; its
+[ChatGPT login and API-key login](https://learn.chatgpt.com/docs/auth) have
+different billing. [Gemini CLI configuration](https://geminicli.com/docs/reference/configuration/)
+limits `GOOGLE_GEMINI_BASE_URL` to Gemini API requests with Gemini API-key
+authentication. Neither client is assigned one of this catalog's Messages
+URLs or another client's subscription credential. [OpenCode V2](https://opencode.ai/v2/docs/providers)
+documents an `anthropic-compatible` package, while its [V1 provider format](https://opencode.ai/docs/providers)
+differs; no implicit settings edit is safe without version-specific validation.
+[Anthropic's gateway guidance](https://code.claude.com/docs/en/llm-gateway)
+also states that routing Claude Code to non-Claude models is unsupported by
+Anthropic, even when a third-party gateway offers an Anthropic-format API.
 
 ## Acceptance rules
 
@@ -52,8 +234,8 @@ The audit also applies these rules:
   distinguishes third-party API integrations.
 - [Claude Code model configuration](https://code.claude.com/docs/en/model-config)
   is the basis for the model aliases and context annotation behavior.
-- [Claude model overview](https://platform.claude.com/docs/en/about-claude/models/overview)
-  lists the current Opus 5, Sonnet 5, Fable 5, and Haiku 4.5 model IDs and
+- [Claude model overview](https://platform.claude.com/docs/en/models/overview)
+  lists the current Opus 5.5, Sonnet 5, Fable 5.1, and Haiku 4.5 model IDs and
   their different context limits.
 - [Claude Code on Amazon Bedrock](https://code.claude.com/docs/en/amazon-bedrock)
   documents `CLAUDE_CODE_USE_BEDROCK=1` and the AWS credential chain.
@@ -71,9 +253,21 @@ separate Console API-key route using `x-api-key`; neither direct failover nor
 does not inject one global context value because its configured catalog mixes
 1M Opus/Sonnet/Fable with 200K Haiku.
 
-Bedrock and Vertex use Claude Code's native signers. The previous localhost
+Bedrock, Vertex, and Foundry use Claude Code's native signers. The previous localhost
 proxy definitions and guessed future/date-suffixed model IDs were removed.
 Native routes are not placed behind `crouter all`.
+
+The [Bedrock guide](https://code.claude.com/docs/en/amazon-bedrock) documents
+alternate `AWS_SHARED_CREDENTIALS_FILE` and `AWS_CONFIG_FILE` locations,
+`ANTHROPIC_BEDROCK_BASE_URL`, AWS chain controls, explicit model pins, and
+`$CLAUDE_CONFIG_DIR/settings.json`. The [Vertex guide](https://code.claude.com/docs/en/google-vertex-ai)
+documents `ANTHROPIC_VERTEX_BASE_URL`, model-specific
+`VERTEX_REGION_CLAUDE_*` values, explicit pins, and the same optional Claude
+settings directory. Native launches allow only provider-declared credentials
+and narrowly validated Vertex model-region variable names through `env -i`.
+Unexported `config.sh` values are included. `doctor` treats credentials and
+settings-held project/endpoint values it cannot inspect as `UNVERIFIED`, and
+still fails for definite missing local tools or configured health failures.
 
 ### MiniMax
 
@@ -83,15 +277,18 @@ Native routes are not placed behind `crouter all`.
 - [Token Plan overview](https://platform.minimaxi.com/docs/token-plan/intro)
   states that Token Plan keys and pay-as-you-go API keys are not
   interchangeable.
-- [MiniMax Token Plan MCP](https://platform.minimaxi.com/docs/token-plan/mcp-guide)
-  documents `uvx minimax-coding-plan-mcp -y`, the China API host, and the
+- [MiniMax Token Plan MCP](https://platform.minimax.cn/docs/token-plan/mcp-guide)
+  documents `uvx minimax-coding-plan-mcp -y`,
+  `MINIMAX_API_HOST=https://api.minimax.cn`, and the
   Token Plan key environment variable.
 - [MiniMax CLI](https://platform.minimaxi.com/docs/token-plan/minimax-cli)
   is exposed by the session skill through pinned `mmx-cli@1.0.19`.
 
 Decision: both billing surfaces use the China Anthropic prefix but keep
 independent credential pools. The MCP uses pinned PyPI release `0.0.4` and is
-activated only when a plan credential is present.
+activated only when a plan credential is present. The active prefix is
+`https://api.minimax.cn/anthropic`, and both maximum context and automatic
+compaction are set to 1,000,000 tokens.
 
 ### Kimi Code
 
@@ -158,20 +355,21 @@ workspace-specific prefix.
 ### DeepSeek
 
 - [Models and pricing](https://api-docs.deepseek.com/quick_start/pricing)
-  documents `deepseek-v4-flash`, `deepseek-v4-pro`, the
+  documents `deepseek-flash`, `deepseek-v4-pro`, the
   `https://api.deepseek.com/anthropic` prefix, and 1M context.
 - [Anthropic API guide](https://api-docs.deepseek.com/guides/anthropic_api)
   documents `ANTHROPIC_API_KEY` and full `x-api-key` support.
 - [Claude Code integration](https://api-docs.deepseek.com/quick_start/agent_integrations/claude_code)
   recommends `deepseek-v4-pro[1m]` for default, Opus, and Sonnet,
-  `deepseek-v4-flash` for Haiku and subagents, and maximum effort. It also
+  `deepseek-flash` for Haiku and subagents, and maximum effort. It also
   sets the auto-compaction window to 786,432 and documents DeepSeek's
   server-side web-search tool.
 
 Decision: DeepSeek is API-only and uses `x-api-key`, not Bearer. The public
 default/Opus/Sonnet mapping carries Claude Code's `[1m]` annotation and is
 stripped to raw `deepseek-v4-pro` on the upstream request; Haiku and subagents
-map to V4 Flash. Maximum context and automatic compaction remain separate
+map to `deepseek-flash`. `deepseek-v4-flash` remains an explicit migration
+alias. Maximum context and automatic compaction remain separate
 settings. Web search is model-native, not a downloadable MCP package.
 
 ### SiliconFlow
@@ -196,15 +394,17 @@ provider-owned, so crouter does not install them.
 - [2026 product updates](https://help.302.ai/docs/geng-xin-ri-zhi-2026) record
   the July launches of `claude-sonnet-5` and `claude-opus-5`; the
   [Sonnet 5 product page](https://302.ai/product/detail/claude-sonnet-5)
-  confirms native Messages support and its 1M context. The current pricing
-  catalog retains `claude-haiku-4-5-20251001` for the fast tier.
+  confirms native Messages support and its 1M context. The current
+  [model catalog](https://302.ai/search) additionally lists
+  `claude-opus-5-5`; the pricing catalog retains
+  `claude-haiku-4-5-20251001` for the fast tier.
 - [Claude Code dedicated route](https://302.ai/product/detail/anthropic-claude-opus-4-1-20250805-Code)
   documents a separate `/cc` prefix but also warns that it may substitute GLM
   or Kimi during Claude risk-control periods.
 
 Decision: `302ai` uses the original Messages API so an explicitly selected
 model remains an exact contract. It is API-only; Sonnet 5 is the balanced 1M
-default, Opus 5 and Haiku 4.5 own their logical tiers, and Fable 5 remains an
+default, Opus 5.5 and Haiku 4.5 own their logical tiers, and Fable 5 remains an
 explicit premium alias.
 
 ### AIHubMix
@@ -344,7 +544,7 @@ because it depends on the selected MaaS model.
 
 - [Claude Code integration](https://mimo.mi.com/docs/zh-CN/tokenplan/integration/claudecode)
   documents the China Token Plan Anthropic prefix, bearer config, and
-  `mimo-v2.5-pro`; it requires Claude Code's `[1m]` annotation when enabling
+  `mimo-v2.6-pro`; it requires Claude Code's `[1m]` annotation when enabling
   the million-token window.
 - [Token Plan quick access](https://mimo.mi.com/docs/en-US/tokenplan/Token%20Plan/quick-access)
   states that `tp-` plan keys and `sk-` API keys and their base URLs are
@@ -353,9 +553,9 @@ because it depends on the selected MaaS model.
   states that both V2.5 models support 1M context.
 
 Decision: plan and API surfaces remain isolated even though they expose the
-same upstream model. The public logical ID is `mimo-v2.5-pro[1m]`; crouter
+same upstream model. The public logical ID is `mimo-v2.6-pro[1m]`; crouter
 removes the Claude Code annotation through the surface model map before the
-upstream request.
+upstream request. Raw V2.5 IDs remain as explicit migration aliases.
 
 ### Volcengine Ark
 
@@ -369,9 +569,8 @@ Volcano Engine offers two distinct subscription plan interfaces:
      `doubao-seed-2.0-lite` (256K), `doubao-seed-2.0-mini` (256K), and `ark-code-latest`.
    - Defaults to `doubao-seed-evolving` with 1,000,000 tokens context. Haiku maps to
      `doubao-seed-2.1-turbo`. Context overrides apply to non-1M models (256K).
-   - Uses `VOLCENGINE_PLAN_KEY` with fallbacks to `VOLCENGINE_AGENT_PLAN_KEY`,
-     `VOLCENGINE_CODING_PLAN_KEY`, `VOLCANO_ENGINE_API_KEY`, `ARK_API_KEY`, `VOLCENGINE_API_KEY`.
-     `PLAN_KEYS` checks `volcengine-coding-plan`, `volcengine-agent-plan`, `volcengine-plan`.
+   - Uses `VOLCENGINE_PLAN_KEY` or its `VOLCENGINE_AGENT_PLAN_KEY` alias.
+     `PLAN_KEYS` checks only `volcengine-agent-plan` and `volcengine-plan`.
 
 2. `volcengine-coding` (Ark Coding Plan):
    - [Ark Coding Plan gateway](https://www.volcengine.com/article/37839)
@@ -379,7 +578,8 @@ Volcano Engine offers two distinct subscription plan interfaces:
    - [Ark Coding Plan catalog](https://www.volcengine.com/article/37570) lists
      `doubao-seed-evolving` (1M), Seed 2.1 variants (`doubao-seed-2.1-pro`,
      `doubao-seed-2.1-turbo`), Seed 2.0 variants, `ark-code-latest`, and DeepSeek variants.
-   - Dedicated coding gateway using `VOLCENGINE_CODING_PLAN_KEY`.
+   - Dedicated coding gateway using only `VOLCENGINE_CODING_PLAN_KEY` and
+     the `volcengine-coding-plan` Keychain service.
 
    `volcengine` (Agent Plan) automatically injects the official Doubao Search MCP
    (`mcp-server-askecho-search-infinity`), DataPro professional datasets MCP, and
@@ -396,13 +596,15 @@ Volcano Engine offers two distinct subscription plan interfaces:
   Anthropic URL and even included the full `/v1/messages` path. It was removed.
 - [Ollama's Claude Code integration](https://docs.ollama.com/integrations/claude-code) supports
   the local Anthropic endpoint; the installed model catalog remains local.
-- Local implementation decision: `deepseek-v4-flash:q8` is this machine's
-  crouter default, with `high` effort and a measured 373,760-token client cap.
-  Direct sessions pass through a localhost-only port-11435 relay that emits an
-  SSE comment every 60 seconds during otherwise silent multi-minute generation.
-  The comment is transport metadata, not a model event; request bytes and
-  upstream response events are forwarded unchanged. A session stops only the
-  relay process it started itself.
+- Local implementation (checked 2026-09-26): `ollama` defaults to
+  `qwen3.8-27b` on the MLX adapter, unless an actual Ollama-provider launch has
+  saved another model selection. `providers/ollama.sh` owns the current model
+  IDs and caps: Qwen uses 262,144 tokens, and the explicit DeepSeek V4 Flash
+  entries use the measured 373,760-token cap. Default Claude effort is `max`.
+  Other selected models use the port-11435 Ollama relay, which sends SSE
+  comments every 60 seconds. DeepSeek thinking fields are preserved; its
+  unsupported image content blocks are replaced with a text fallback. Upstream
+  response events are preserved, and each session stops only its own relay.
 - [OpenRouter's Nemotron 3 Ultra free model page](https://openrouter.ai/nvidia/nemotron-3-ultra-550b-a55b%3Afree)
   documents the exact `nvidia/nemotron-3-ultra-550b-a55b:free` ID and a 1M
   context. crouter pins that model rather than using the dynamic free-model

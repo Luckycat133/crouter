@@ -37,7 +37,11 @@ prepare_provider_assets() {
   [ -n "$_asset_profile" ] || return 0
   [ -n "${NODE_BIN:-}" ] || die "node not found; cannot render provider MCP profile '$_asset_profile'"
 
-  _asset_config=$(mktemp -t crouter-mcp.XXXXXX)
+  _asset_config=$(mktemp "${TMPDIR:-/tmp}/crouter-mcp.XXXXXX") || \
+    die "failed to create provider MCP profile '$_asset_profile'"
+  # Own the file before Node renders into it, so a signal during rendering
+  # lets the caller's prelaunch trap remove even a partial credentialed file.
+  PROVIDER_MCP_CONFIG=$_asset_config
   CR_PLAN_TOKEN="${_PLAN_FIRST_TOKEN:-}" CR_API_TOKEN="${_API_FIRST_TOKEN:-}" \
   CR_TENCENT_MCP_URL="${TENCENT_MCP_URL:-}" \
   CR_QINIU_MCP_URLS="${QINIU_MCP_URLS:-}" \
@@ -46,8 +50,6 @@ prepare_provider_assets() {
       die "failed to render provider MCP profile '$_asset_profile'"
     }
   chmod 600 "$_asset_config"
-
-  PROVIDER_MCP_CONFIG=$_asset_config
 
   case $_asset_profile in
     minimax)

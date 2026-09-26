@@ -22,6 +22,13 @@ assert_eq() {
   }
 }
 
+assert_word() {
+  case " $3 " in
+    *" $2 "*) ;;
+    *) die "$1: missing allowlisted $2" ;;
+  esac
+}
+
 load() { load_provider "$1"; }
 
 [ ! -e "$PROVIDERS_DIR/openai.sh" ] || die "OpenAI has no official Anthropic Messages endpoint; remove the invalid provider"
@@ -32,7 +39,8 @@ assert_eq anthropic.auth env "$AUTH_MODE"
 assert_eq anthropic.auth-env ANTHROPIC_API_KEY "$AUTH_REFERENCE"
 assert_eq anthropic.auth-header x-api-key "$_AUTH_SCHEME"
 assert_eq anthropic.context '' "$CONTEXT_TOKENS"
-assert_eq anthropic.extras claude-fable-5 "$MODEL_ALIASES"
+assert_eq anthropic.opus claude-opus-5-5 "$MODEL_OPUS"
+assert_eq anthropic.extras claude-fable-5-1 "$MODEL_ALIASES"
 
 load openrouter
 assert_eq openrouter.model nvidia/nemotron-3-ultra-550b-a55b:free "$MODEL"
@@ -58,19 +66,40 @@ assert_eq bedrock.base native://amazon-bedrock "$BASE_URL"
 assert_eq bedrock.auth native "$AUTH_MODE"
 assert_eq bedrock.backend bedrock "$NATIVE_BACKEND"
 assert_eq bedrock.model sonnet "$MODEL"
+for _name in CLAUDE_CONFIG_DIR AWS_SHARED_CREDENTIALS_FILE AWS_CONFIG_FILE ANTHROPIC_BEDROCK_BASE_URL ANTHROPIC_DEFAULT_OPUS_MODEL ANTHROPIC_DEFAULT_SONNET_MODEL ANTHROPIC_DEFAULT_HAIKU_MODEL; do
+  assert_word bedrock.passthrough "$_name" "$PASSTHROUGH_ENV"
+done
 
 load vertex
 assert_eq vertex.base native://google-vertex-ai "$BASE_URL"
 assert_eq vertex.auth native "$AUTH_MODE"
 assert_eq vertex.backend vertex "$NATIVE_BACKEND"
 assert_eq vertex.model sonnet "$MODEL"
+for _name in CLAUDE_CONFIG_DIR ANTHROPIC_VERTEX_BASE_URL ANTHROPIC_VERTEX_PROJECT_ID ANTHROPIC_DEFAULT_OPUS_MODEL ANTHROPIC_DEFAULT_SONNET_MODEL ANTHROPIC_DEFAULT_HAIKU_MODEL; do
+  assert_word vertex.passthrough "$_name" "$PASSTHROUGH_ENV"
+done
+
+load foundry
+assert_eq foundry.base native://microsoft-foundry "$BASE_URL"
+assert_eq foundry.auth native "$AUTH_MODE"
+assert_eq foundry.backend foundry "$NATIVE_BACKEND"
+assert_eq foundry.model sonnet "$MODEL"
+assert_eq foundry.opus opus "$MODEL_OPUS"
+assert_eq foundry.sonnet sonnet "$MODEL_SONNET"
+assert_eq foundry.haiku haiku "$MODEL_HAIKU"
+assert_eq foundry.extra CLAUDE_CODE_USE_FOUNDRY=1 "$EXTRA_ENV"
+for _name in CLAUDE_CONFIG_DIR ANTHROPIC_FOUNDRY_RESOURCE ANTHROPIC_FOUNDRY_BASE_URL ANTHROPIC_FOUNDRY_API_KEY ANTHROPIC_FOUNDRY_AUTH_TOKEN ANTHROPIC_DEFAULT_OPUS_MODEL ANTHROPIC_DEFAULT_SONNET_MODEL ANTHROPIC_DEFAULT_HAIKU_MODEL AZURE_CONFIG_DIR AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_CLIENT_SECRET; do
+  assert_word foundry.passthrough "$_name" "$PASSTHROUGH_ENV"
+done
 
 load minimax
 assert_eq minimax.auth surfaces "$AUTH_MODE"
 assert_eq minimax.model MiniMax-M3 "$MODEL"
-assert_eq minimax.context 1048576 "$CONTEXT_TOKENS"
-assert_eq minimax.plan.url https://api.minimaxi.com/anthropic "$PLAN_URL"
-assert_eq minimax.api.url https://api.minimaxi.com/anthropic "$API_URL"
+assert_eq minimax.base https://api.minimax.cn/anthropic "$BASE_URL"
+assert_eq minimax.context 1000000 "$CONTEXT_TOKENS"
+assert_eq minimax.auto-compact 1000000 "$AUTO_COMPACT_TOKENS"
+assert_eq minimax.plan.url https://api.minimax.cn/anthropic "$PLAN_URL"
+assert_eq minimax.api.url https://api.minimax.cn/anthropic "$API_URL"
 assert_eq minimax.plan.auth bearer "$PLAN_AUTH_TYPE"
 assert_eq minimax.api.auth bearer "$API_AUTH_TYPE"
 assert_eq minimax.assets minimax "$ASSET_PROFILE"
@@ -116,13 +145,16 @@ assert_eq deepseek.auth surfaces "$AUTH_MODE"
 assert_eq deepseek.model 'deepseek-v4-pro[1m]' "$MODEL"
 assert_eq deepseek.opus 'deepseek-v4-pro[1m]' "$MODEL_OPUS"
 assert_eq deepseek.sonnet 'deepseek-v4-pro[1m]' "$MODEL_SONNET"
-assert_eq deepseek.haiku deepseek-v4-flash "$MODEL_HAIKU"
-assert_eq deepseek.subagent deepseek-v4-flash "$MODEL_SUBAGENT"
+assert_eq deepseek.haiku deepseek-flash "$MODEL_HAIKU"
+assert_eq deepseek.subagent deepseek-flash "$MODEL_SUBAGENT"
+assert_eq deepseek.legacy-alias 'deepseek-v4-pro deepseek-v4-flash' "$MODEL_ALIASES"
 assert_eq deepseek.context 1000000 "$CONTEXT_TOKENS"
 assert_eq deepseek.auto-compact 786432 "$AUTO_COMPACT_TOKENS"
 assert_eq deepseek.api.url https://api.deepseek.com/anthropic "$API_URL"
 assert_eq deepseek.api.auth x-api-key "$API_AUTH_TYPE"
 assert_eq deepseek.api.model deepseek-v4-pro "$API_MODEL"
+assert_eq deepseek.api.haiku deepseek-flash "$API_MODEL_HAIKU"
+assert_eq deepseek.api.subagent deepseek-flash "$API_MODEL_SUBAGENT"
 
 load siliconflow
 assert_eq siliconflow.auth surfaces "$AUTH_MODE"
@@ -132,10 +164,94 @@ assert_eq siliconflow.api.url https://api.siliconflow.cn "$API_URL"
 assert_eq siliconflow.api.auth bearer "$API_AUTH_TYPE"
 assert_eq siliconflow.api.key-env SILICONFLOW_API_KEY "$API_KEY_ENV"
 
+load fireworks
+assert_eq fireworks.auth surfaces "$AUTH_MODE"
+assert_eq fireworks.model accounts/fireworks/models/glm-5p3-flash "$MODEL"
+assert_eq fireworks.context '' "$CONTEXT_TOKENS"
+assert_eq fireworks.api.url https://api.fireworks.ai/inference "$API_URL"
+assert_eq fireworks.api.auth bearer "$API_AUTH_TYPE"
+assert_eq fireworks.api.key-env FIREWORKS_API_KEY "$API_KEY_ENV"
+assert_eq fireworks.api.model accounts/fireworks/models/glm-5p3-flash "$API_MODEL"
+
+load vercel
+assert_eq vercel.auth surfaces "$AUTH_MODE"
+assert_eq vercel.model anthropic/claude-sonnet-5 "$MODEL"
+assert_eq vercel.opus anthropic/claude-opus-5.5 "$MODEL_OPUS"
+assert_eq vercel.haiku anthropic/claude-haiku-4.5 "$MODEL_HAIKU"
+assert_eq vercel.context '' "$CONTEXT_TOKENS"
+assert_eq vercel.api.url https://ai-gateway.vercel.sh "$API_URL"
+assert_eq vercel.api.auth bearer "$API_AUTH_TYPE"
+assert_eq vercel.api.key-env AI_GATEWAY_API_KEY "$API_KEY_ENV"
+assert_eq vercel.api.opus anthropic/claude-opus-5.5 "$API_MODEL_OPUS"
+assert_eq vercel.api.haiku anthropic/claude-haiku-4.5 "$API_MODEL_HAIKU"
+
+load longcat
+assert_eq longcat.auth surfaces "$AUTH_MODE"
+assert_eq longcat.model LongCat-2.5-Preview "$MODEL"
+assert_eq longcat.context 1000000 "$CONTEXT_TOKENS"
+assert_eq longcat.alias LongCat-2.0 "$MODEL_ALIASES"
+assert_eq longcat.api.url https://api.longcat.chat/anthropic "$API_URL"
+assert_eq longcat.api.auth bearer "$API_AUTH_TYPE"
+assert_eq longcat.api.key-env LONGCAT_API_KEY "$API_KEY_ENV"
+assert_eq longcat.api.model LongCat-2.5-Preview "$API_MODEL"
+
+load meta
+assert_eq meta.auth surfaces "$AUTH_MODE"
+assert_eq meta.base https://api.meta.ai "$BASE_URL"
+assert_eq meta.model muse-spark-1.3 "$MODEL"
+assert_eq meta.opus muse-spark-1.3 "$MODEL_OPUS"
+assert_eq meta.sonnet muse-spark-1.3 "$MODEL_SONNET"
+assert_eq meta.haiku muse-spark-1.3 "$MODEL_HAIKU"
+assert_eq meta.subagent muse-spark-1.3 "$MODEL_SUBAGENT"
+assert_eq meta.context 1048576 "$CONTEXT_TOKENS"
+assert_eq meta.api.url https://api.meta.ai "$API_URL"
+assert_eq meta.api.auth bearer "$API_AUTH_TYPE"
+assert_eq meta.api.key-env MODEL_API_KEY "$API_KEY_ENV"
+assert_eq meta.api.key-service meta-model-api-key "$API_KEYS"
+assert_eq meta.api.model muse-spark-1.3 "$API_MODEL"
+printf '%s\n' "$EXTRA_ENV" | grep -qx 'ENABLE_TOOL_SEARCH=true' || die "Meta Claude Code tool search is disabled"
+
+load requesty
+assert_eq requesty.auth surfaces "$AUTH_MODE"
+assert_eq requesty.base https://router.requesty.ai "$BASE_URL"
+assert_eq requesty.model anthropic/claude-sonnet-5 "$MODEL"
+assert_eq requesty.opus anthropic/claude-opus-5-5 "$MODEL_OPUS"
+assert_eq requesty.sonnet anthropic/claude-sonnet-5 "$MODEL_SONNET"
+assert_eq requesty.haiku anthropic/claude-haiku-4-5 "$MODEL_HAIKU"
+assert_eq requesty.subagent anthropic/claude-haiku-4-5 "$MODEL_SUBAGENT"
+assert_eq requesty.context '' "$CONTEXT_TOKENS"
+assert_eq requesty.api.url https://router.requesty.ai "$API_URL"
+assert_eq requesty.api.auth bearer "$API_AUTH_TYPE"
+assert_eq requesty.api.key-env REQUESTY_API_KEY "$API_KEY_ENV"
+assert_eq requesty.api.key-service requesty-api-key "$API_KEYS"
+assert_eq requesty.api.opus anthropic/claude-opus-5-5 "$API_MODEL_OPUS"
+assert_eq requesty.api.sonnet anthropic/claude-sonnet-5 "$API_MODEL_SONNET"
+assert_eq requesty.api.haiku anthropic/claude-haiku-4-5 "$API_MODEL_HAIKU"
+assert_eq requesty.api.subagent anthropic/claude-haiku-4-5 "$API_MODEL_SUBAGENT"
+
+load nagaai
+assert_eq nagaai.auth surfaces "$AUTH_MODE"
+assert_eq nagaai.base https://api.naga.ac "$BASE_URL"
+assert_eq nagaai.model claude-sonnet-4.5 "$MODEL"
+assert_eq nagaai.opus claude-opus-4.5 "$MODEL_OPUS"
+assert_eq nagaai.sonnet claude-sonnet-4.5 "$MODEL_SONNET"
+assert_eq nagaai.haiku claude-haiku-4.5 "$MODEL_HAIKU"
+assert_eq nagaai.subagent claude-haiku-4.5 "$MODEL_SUBAGENT"
+assert_eq nagaai.context '' "$CONTEXT_TOKENS"
+assert_eq nagaai.api.url https://api.naga.ac "$API_URL"
+assert_eq nagaai.api.auth bearer "$API_AUTH_TYPE"
+assert_eq nagaai.api.key-env NAGAAI_API_KEY "$API_KEY_ENV"
+assert_eq nagaai.api.key-service nagaai-api-key "$API_KEYS"
+assert_eq nagaai.api.opus claude-opus-4.5 "$API_MODEL_OPUS"
+assert_eq nagaai.api.sonnet claude-sonnet-4.5 "$API_MODEL_SONNET"
+assert_eq nagaai.api.haiku claude-haiku-4.5 "$API_MODEL_HAIKU"
+assert_eq nagaai.api.subagent claude-haiku-4.5 "$API_MODEL_SUBAGENT"
+printf '%s\n' "$EXTRA_ENV" | grep -qx 'ANTHROPIC_API_KEY=' || die "NagaAI requires blank Anthropic API key"
+
 load 302ai
 assert_eq 302ai.auth surfaces "$AUTH_MODE"
 assert_eq 302ai.model claude-sonnet-5 "$MODEL"
-assert_eq 302ai.opus claude-opus-5 "$MODEL_OPUS"
+assert_eq 302ai.opus claude-opus-5-5 "$MODEL_OPUS"
 assert_eq 302ai.sonnet claude-sonnet-5 "$MODEL_SONNET"
 assert_eq 302ai.haiku claude-haiku-4-5-20251001 "$MODEL_HAIKU"
 assert_eq 302ai.context 1000000 "$CONTEXT_TOKENS"
@@ -144,7 +260,7 @@ assert_eq 302ai.plan.url '' "$PLAN_URL"
 assert_eq 302ai.api.url https://api.302.ai "$API_URL"
 assert_eq 302ai.api.auth x-api-key "$API_AUTH_TYPE"
 assert_eq 302ai.api.key-env AI302_API_KEY "$API_KEY_ENV"
-assert_eq 302ai.api.opus claude-opus-5 "$API_MODEL_OPUS"
+assert_eq 302ai.api.opus claude-opus-5-5 "$API_MODEL_OPUS"
 assert_eq 302ai.api.sonnet claude-sonnet-5 "$API_MODEL_SONNET"
 assert_eq 302ai.api.haiku claude-haiku-4-5-20251001 "$API_MODEL_HAIKU"
 
@@ -192,6 +308,8 @@ assert_eq volcengine.auth surfaces "$AUTH_MODE"
 assert_eq volcengine.model doubao-seed-evolving "$MODEL"
 assert_eq volcengine.context 1000000 "$CONTEXT_TOKENS"
 assert_eq volcengine.plan.url https://ark.cn-beijing.volces.com/api/plan "$PLAN_URL"
+assert_eq volcengine.plan.key-env VOLCENGINE_PLAN_KEY "$PLAN_KEY_ENV"
+assert_eq volcengine.plan.key-services 'volcengine-agent-plan volcengine-plan' "$PLAN_KEYS"
 assert_eq volcengine.assets volcengine "$ASSET_PROFILE"
 
 load volcengine-coding
@@ -199,7 +317,54 @@ assert_eq volcengine-coding.auth surfaces "$AUTH_MODE"
 assert_eq volcengine-coding.model doubao-seed-evolving "$MODEL"
 assert_eq volcengine-coding.context 1000000 "$CONTEXT_TOKENS"
 assert_eq volcengine-coding.plan.url https://ark.cn-beijing.volces.com/api/coding "$PLAN_URL"
+assert_eq volcengine-coding.plan.key-env VOLCENGINE_CODING_PLAN_KEY "$PLAN_KEY_ENV"
+assert_eq volcengine-coding.plan.key-service volcengine-coding-plan "$PLAN_KEYS"
 assert_eq volcengine-coding.assets volcengine-coding "$ASSET_PROFILE"
+
+# Subscription keys must never be silently sent to the other plan endpoint.
+# Stub Keychain discovery so this test is independent of a developer's account.
+check_volcengine_credential_isolation() (
+  . "$ROOT_DIR/lib/auth.sh"
+  kc_get() { return 1; }
+  unset VOLCENGINE_PLAN_KEY VOLCENGINE_AGENT_PLAN_KEY VOLCENGINE_CODING_PLAN_KEY
+  unset VOLCANO_ENGINE_API_KEY ARK_API_KEY VOLCENGINE_API_KEY
+
+  VOLCENGINE_CODING_PLAN_KEY=coding-fixture
+  export VOLCENGINE_CODING_PLAN_KEY
+  load volcengine
+  resolve_surface_tokens 1
+  assert_eq agent.reject-coding-key 0 "$_SURFACE_COUNT"
+  unset VOLCENGINE_CODING_PLAN_KEY
+
+  VOLCANO_ENGINE_API_KEY=generic-fixture
+  ARK_API_KEY=generic-fixture
+  VOLCENGINE_API_KEY=generic-fixture
+  export VOLCANO_ENGINE_API_KEY ARK_API_KEY VOLCENGINE_API_KEY
+  load volcengine
+  resolve_surface_tokens 1
+  assert_eq agent.reject-generic-keys 0 "$_SURFACE_COUNT"
+  load volcengine-coding
+  resolve_surface_tokens 1
+  assert_eq coding.reject-generic-keys 0 "$_SURFACE_COUNT"
+  unset VOLCANO_ENGINE_API_KEY ARK_API_KEY VOLCENGINE_API_KEY
+
+  VOLCENGINE_AGENT_PLAN_KEY=agent-fixture
+  export VOLCENGINE_AGENT_PLAN_KEY
+  load volcengine
+  resolve_surface_tokens 1
+  assert_eq agent.accept-alias 1 "$_SURFACE_COUNT"
+  assert_eq agent.alias-token agent-fixture "$_PLAN_FIRST_TOKEN"
+  load volcengine-coding
+  resolve_surface_tokens 1
+  assert_eq coding.reject-agent-key 0 "$_SURFACE_COUNT"
+  unset VOLCENGINE_AGENT_PLAN_KEY VOLCENGINE_PLAN_KEY
+
+  kc_get() { [ "$1" = volcengine-coding-plan ] && printf 'coding-keychain-fixture'; }
+  load volcengine
+  resolve_surface_tokens 1
+  assert_eq agent.reject-coding-keychain 0 "$_SURFACE_COUNT"
+)
+check_volcengine_credential_isolation
 
 load tencent
 assert_eq tencent.auth surfaces "$AUTH_MODE"
@@ -249,19 +414,21 @@ assert_eq qiniu.assets qiniu "$ASSET_PROFILE"
 load huawei
 assert_eq huawei.auth surfaces "$AUTH_MODE"
 assert_eq huawei.model glm-5.1 "$MODEL"
+assert_eq huawei.aliases 'kimi-k2.6 deepseek-v4-flash' "$MODEL_ALIASES"
 assert_eq huawei.plan.url https://api.modelarts-maas.com/plan/anthropic "$PLAN_URL"
 assert_eq huawei.api.url https://api.modelarts-maas.com/anthropic "$API_URL"
 
 load xiaomi
 assert_eq xiaomi.auth surfaces "$AUTH_MODE"
-assert_eq xiaomi.model 'mimo-v2.5-pro[1m]' "$MODEL"
+assert_eq xiaomi.model 'mimo-v2.6-pro[1m]' "$MODEL"
 assert_eq xiaomi.context 1048576 "$CONTEXT_TOKENS"
-assert_eq xiaomi.plan.model mimo-v2.5-pro "$PLAN_MODEL"
-assert_eq xiaomi.api.model mimo-v2.5-pro "$API_MODEL"
+assert_eq xiaomi.plan.model mimo-v2.6-pro "$PLAN_MODEL"
+assert_eq xiaomi.api.model mimo-v2.6-pro "$API_MODEL"
+assert_eq xiaomi.legacy-aliases 'mimo-v2.5-pro mimo-v2.5' "$MODEL_ALIASES"
 assert_eq xiaomi.plan.url https://token-plan-cn.xiaomimimo.com/anthropic "$PLAN_URL"
 assert_eq xiaomi.api.url https://api.xiaomimimo.com/anthropic "$API_URL"
 
-for _provider in 302ai aihubmix infini minimax moonshot ppio z-ai dashscope dashscope-coding deepseek siliconflow stepfun volcengine volcengine-coding tencent tencent-coding qianfan qianfan-team qianfan-coding qiniu huawei xiaomi; do
+for _provider in 302ai aihubmix fireworks vercel longcat meta requesty nagaai infini minimax moonshot ppio z-ai dashscope dashscope-coding deepseek siliconflow stepfun volcengine volcengine-coding tencent tencent-coding qianfan qianfan-team qianfan-coding qiniu huawei xiaomi; do
   load "$_provider"
   case $BASE_URL in
     */v1/messages|*/v3/messages) die "$_provider BASE_URL must be a prefix; Claude Code appends /v1/messages" ;;

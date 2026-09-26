@@ -8,6 +8,25 @@
 # BASE_URL, POST_STOP,
 # and the standard shell vars (LANG, TERM, SHELL, PATH, USER, HOME, COLORTERM).
 
+# Claude Code's Vertex region overrides are version-specific. Admit only the
+# documented Claude family/version forms, not arbitrary VERTEX_REGION_* names.
+_vertex_region_name_ok() {
+  case $1 in
+    VERTEX_REGION_CLAUDE_*) _vr_suffix=${1#VERTEX_REGION_CLAUDE_} ;;
+    *) return 1 ;;
+  esac
+  case $_vr_suffix in
+    OPUS_*|SONNET_*|HAIKU_*|FABLE_*) _vr_version=${_vr_suffix#*_} ;;
+    *_OPUS|*_SONNET|*_HAIKU|*_FABLE) _vr_version=${_vr_suffix%_*} ;;
+    *) return 1 ;;
+  esac
+  case $_vr_version in
+    ''|_*|*_|*__*|*[!0-9_]*) return 1 ;;
+    [0-9]*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 launch_claude() {
   _main_model=$1; _bypass=$2; shift 2
 
@@ -103,18 +122,43 @@ launch_claude() {
     IFS=$_old_ifs
   fi
 
-  # Native cloud backends authenticate through their own SDK credential chain.
-  # Preserve only the provider-declared variables from the parent environment.
-  for _pass_name in ${PASSTHROUGH_ENV:-}; do
+  # Native cloud backends authenticate through their SDK credential chains.
+  # Export only provider-declared names in this launcher process so unexported
+  # config.sh assignments also reach the isolated child; env -i still drops
+  # every other variable. No indirect eval is needed.
+  _native_pass_names=${PASSTHROUGH_ENV:-}
+  if [ "${NATIVE_BACKEND:-}" = vertex ]; then
+    # POSIX sh has no variable-name iteration. `set` exposes shell variable
+    # names (including unexported config.sh values); only tightly validated
+    # Claude model region names may join the explicit provider allowlist.
+    _vertex_region_names=$(set | LC_ALL=C sed -n 's/^\(VERTEX_REGION_CLAUDE_[A-Z0-9_]*\)=.*/\1/p')
+    for _vertex_name in $_vertex_region_names; do
+      if _vertex_region_name_ok "$_vertex_name"; then
+        _native_pass_names="${_native_pass_names:+$_native_pass_names }$_vertex_name"
+      fi
+    done
+  fi
+  for _pass_name in $_native_pass_names; do
+    case $_pass_name in
+      ''|[0-9]*|*[!A-Za-z0-9_]*) continue ;;
+    esac
+    export "${_pass_name?}" 2>/dev/null || continue
     _pass_value=$(printenv "$_pass_name" 2>/dev/null || true)
     [ -n "$_pass_value" ] && set -- "$_pass_name=$_pass_value" "$@"
   done
 
-  # Model aliases; caller may override any of them per session.
-  set -- "CLAUDE_CODE_SUBAGENT_MODEL=$MODEL_SUBAGENT" "$@"
-  set -- "ANTHROPIC_DEFAULT_HAIKU_MODEL=$MODEL_HAIKU" "$@"
-  set -- "ANTHROPIC_DEFAULT_SONNET_MODEL=$MODEL_SONNET" "$@"
-  set -- "ANTHROPIC_DEFAULT_OPUS_MODEL=$MODEL_OPUS" "$@"
+  # Native cloud backends own their built-in alias resolver. Passing literal
+  # aliases or example deployment IDs as pins can target an unavailable model.
+  # Only explicit user pins were forwarded by the native allowlist above.
+  case ${NATIVE_BACKEND:-} in
+    bedrock|vertex|foundry) ;;
+    *)
+      set -- "CLAUDE_CODE_SUBAGENT_MODEL=$MODEL_SUBAGENT" "$@"
+      set -- "ANTHROPIC_DEFAULT_HAIKU_MODEL=$MODEL_HAIKU" "$@"
+      set -- "ANTHROPIC_DEFAULT_SONNET_MODEL=$MODEL_SONNET" "$@"
+      set -- "ANTHROPIC_DEFAULT_OPUS_MODEL=$MODEL_OPUS" "$@"
+      ;;
+  esac
   set -- "ANTHROPIC_MODEL=$_main_model" "$@"
   [ -n "$CONTEXT_TOKENS" ] && set -- "CLAUDE_CODE_MAX_CONTEXT_TOKENS=$CONTEXT_TOKENS" "$@"
   [ -n "${AUTO_COMPACT_TOKENS:-}" ] &&
@@ -192,8 +236,15 @@ launch_claude() {
   trap '_crouter_launch_signal 143' TERM
 
   [ "$_crouter_pending_signal" -eq 0 ] || exit "$_crouter_pending_signal"
-  env -i "$@" &
+  if [ "${PROVIDER_NAME:-}" = ollama ] && [ "$_bypass" -eq 0 ]; then
+    remember_last_selected_model ollama "$_main_model"
+  fi
+  # Save stdin before the asynchronous command: dash may replace fd 0 with
+  # /dev/null before applying the child's explicit redirections.
+  exec 3<&0
+  env -i "$@" <&3 3<&- &
   _cg_pid=$!
+  exec 3<&-
   if [ "$_crouter_pending_signal" -ne 0 ]; then
     _pending_signal=$_crouter_pending_signal
     _crouter_launch_cleanup

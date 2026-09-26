@@ -3,17 +3,6 @@
 PROVIDER_NAME="volcengine-coding"
 PROVIDER_DESC="Volcengine Ark Coding Plan"
 
-# Fallback to common Volcano Engine env vars if VOLCENGINE_CODING_PLAN_KEY is unset
-if [ -z "${VOLCENGINE_CODING_PLAN_KEY:-}" ]; then
-  if [ -n "${VOLCANO_ENGINE_API_KEY:-}" ]; then
-    export VOLCENGINE_CODING_PLAN_KEY="$VOLCANO_ENGINE_API_KEY"
-  elif [ -n "${VOLCENGINE_API_KEY:-}" ]; then
-    export VOLCENGINE_CODING_PLAN_KEY="$VOLCENGINE_API_KEY"
-  elif [ -n "${ARK_API_KEY:-}" ]; then
-    export VOLCENGINE_CODING_PLAN_KEY="$ARK_API_KEY"
-  fi
-fi
-
 BASE_URL="https://ark.cn-beijing.volces.com/api/coding"
 MODEL="doubao-seed-evolving"
 CONTEXT_TOKENS="1000000"
