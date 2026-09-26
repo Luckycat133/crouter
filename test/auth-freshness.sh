@@ -27,12 +27,16 @@ cat > "$FAKE_BIN/security" <<'EOF'
 printf 'called\n' >> "$KEYCHAIN_CALLS_FILE"
 [ "$(cat "$KEYCHAIN_STATE_FILE")" = present ]
 EOF
-chmod +x "$FAKE_BIN/security"
+cat > "$FAKE_BIN/claude" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+chmod +x "$FAKE_BIN/security" "$FAKE_BIN/claude"
 
 check_doctor() {
   _expected=$1
   _label=$2
-  if PATH="$FAKE_BIN:$PATH" USER=tester KEYCHAIN_STATE_FILE="$KEYCHAIN_STATE_FILE" \
+  if PATH="$FAKE_BIN:$PATH" CLAUDE_BIN="$FAKE_BIN/claude" USER=tester KEYCHAIN_STATE_FILE="$KEYCHAIN_STATE_FILE" \
     KEYCHAIN_CALLS_FILE="$KEYCHAIN_CALLS_FILE" "$FAKE_ROOT/bin/crouter" doctor demo \
     > "$TEST_DIR/doctor.out" 2> "$TEST_DIR/doctor.err"; then
     _status=ok
