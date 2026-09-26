@@ -3,7 +3,7 @@
 #
 # Git runs this before every push once it is enabled:
 #   git config core.hooksPath .githooks
-# Emergency bypass (CI still gates the branch, so use it sparingly):
+# Emergency bypass (CI still checks the push, so use it sparingly):
 #   git push --no-verify
 #
 # The suite is offline and hermetic: no Keychain entry, no credentials, and no

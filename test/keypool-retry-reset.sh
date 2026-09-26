@@ -61,7 +61,7 @@ _upstream_port=$(cat "$TMP_DIR/upstream.port")
 
 _candidates=$(printf '[{"url":"http://127.0.0.1:%s","type":"bearer","token":"plan-token","label":"plan"},{"url":"http://127.0.0.1:%s","type":"x-api-key","token":"api-token","label":"api"}]' "$_upstream_port" "$_upstream_port")
 KEYPOOL_CANDIDATES="$_candidates" KEYPOOL_PORT=0 KEYPOOL_MAX_RETRY=2 \
-  CROUTER_CANDIDATE_COOLDOWN_MS=200 \
+  CROUTER_CANDIDATE_COOLDOWN_MS=2000 \
   KEYPOOL_CLIENT_TOKEN="local-secret" \
   "$NODE_BIN" "$ROOT_DIR/bin/keypool-proxy" > "$TMP_DIR/pool.out" 2> "$TMP_DIR/pool.err" &
 POOL_PID=$!
@@ -92,7 +92,9 @@ _second=$(curl -sS -o "$TMP_DIR/second.body" -w '%{http_code}' \
   -X POST "http://127.0.0.1:$_pool_port/v1/messages" \
   -H 'authorization: Bearer local-secret' \
   -H 'content-type: application/json' -d '{"model":"logical-model","messages":[]}')
-sleep 0.25
+# Leave enough margin for loaded CI workers between the first two requests;
+# the exact 200 ms boundary is checked below with a controlled clock.
+sleep 2.2
 _third=$(curl -sS -o "$TMP_DIR/third.body" -w '%{http_code}' \
   -X POST "http://127.0.0.1:$_pool_port/v1/messages" \
   -H 'authorization: Bearer local-secret' \
@@ -114,6 +116,11 @@ const {createCandidateCooldown} = require(process.env.ROOT_DIR + '/lib/proxy-com
 let now = 10_000;
 Date.now = () => now;
 const cooldown = createCandidateCooldown(2, '200');
+cooldown.fail(0);
+now += 199;
+assert.deepStrictEqual(cooldown.order(), [1, 0]);
+now += 1;
+assert.deepStrictEqual(cooldown.order(), [0, 1]);
 cooldown.fail(0, {'retry-after': '1'});
 now += 500;
 assert.deepStrictEqual(cooldown.order(), [1, 0]);

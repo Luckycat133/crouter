@@ -4,6 +4,12 @@ All notable changes to this local setup are documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- Align the documented local validation with CI's `sh`/`dash`, ShellCheck,
+  Node syntax, and version checks. Document the maintainer's local daily
+  fast-forward sync and clarify the narrower optional pre-push hook.
+
 ### Added
 
 - Add Meta Model API, Requesty, and NagaAI Claude Code Messages routes with
@@ -34,6 +40,10 @@ All notable changes to this local setup are documented in this file.
   session assets without polluting `~/.claude.json`. Coding Plan isolates the public docs MCP.
 
 ### Fixed
+
+- Give the keypool cooldown integration test a wider timing window on loaded
+  runners; its exact 200 ms and `Retry-After` boundaries remain checked with a
+  controlled clock.
 
 - Reinstall now prunes retired `claude-*` shortcuts owned by the current
   checkout, and uninstall removes all owned shortcuts even after a provider is

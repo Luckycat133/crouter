@@ -19,7 +19,10 @@ Use focused offline tests for the affected behavior. Before release, run every `
 for test_file in test/*.sh; do sh "$test_file"; done
 for test_file in test/*.sh; do dash "$test_file"; done
 sh -n bin/crouter bin/crouter-compat install.sh lib/*.sh providers/*.sh test/*.sh
-shellcheck bin/crouter bin/crouter-compat install.sh test/smoke.sh providers/*.sh lib/*.sh
+shellcheck --severity=warning --exclude=SC1007,SC1090,SC1091,SC2034,SC2120 \
+  .githooks/pre-push bin/crouter bin/crouter-compat completions/crouter.bash \
+  config.example.sh install.sh lib/*.sh providers/*.sh test/*.sh
+for file in bin/gateway bin/keypool-proxy lib/*.js lib/*.mjs; do node --check "$file"; done
 ./bin/crouter --version
 git diff --check
 ```

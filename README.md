@@ -16,10 +16,11 @@ new routes and selected existing contracts were rechecked on 2026-09-26. See
 [docs/provider-audit.md](docs/provider-audit.md) for the source matrix and
 decisions.
 
-Release 0.5.3 is implementation-complete against the repository's offline
-contract suite under POSIX `sh` and `dash`. Live catalog access, remaining
-quota, and account entitlement still require the account owner's credentials
-and may incur provider charges.
+`VERSION` remains 0.5.3; subsequent changes on `main` are recorded under
+`Unreleased` in [CHANGELOG.md](CHANGELOG.md). The current checkout passes the
+offline contract suite under POSIX `sh` and `dash`. Live catalog access,
+remaining quota, and account entitlement still require the account owner's
+credentials and may incur provider charges.
 
 ## Table of contents
 
@@ -588,9 +589,15 @@ limits empty instead of guessing. Add an offline contract assertion to
 ## Development
 
 ```sh
-sh test/smoke.sh
-for test_file in test/*.sh; do sh "$test_file"; done
-sh -n bin/crouter lib/*.sh providers/*.sh test/*.sh
+for shell in sh dash; do
+  for test_file in test/*.sh; do "$shell" "$test_file"; done
+done
+sh -n bin/crouter bin/crouter-compat install.sh lib/*.sh providers/*.sh test/*.sh
+shellcheck --severity=warning --exclude=SC1007,SC1090,SC1091,SC2034,SC2120 \
+  .githooks/pre-push bin/crouter bin/crouter-compat completions/crouter.bash \
+  config.example.sh install.sh lib/*.sh providers/*.sh test/*.sh
+for file in bin/gateway bin/keypool-proxy lib/*.js lib/*.mjs; do node --check "$file"; done
+test "$(./bin/crouter --version)" = "crouter $(cat VERSION)"
 git diff --check
 ```
 
@@ -600,8 +607,9 @@ depth without loading `config.sh` or provider declarations.
 
 ### Push gate
 
-`.githooks/pre-push` runs the whole offline suite (about 30 seconds) and the
-Node syntax check before every push, and refuses the push while either is red.
+`.githooks/pre-push` runs every offline test under `sh` and checks Node syntax
+before a push. CI also runs the tests under `dash`, ShellCheck, and release
+metadata checks. Run the full local validation above before publishing changes.
 Enable it once per clone:
 
 ```sh
@@ -610,7 +618,17 @@ git config core.hooksPath .githooks
 
 The suite is offline and hermetic: no credentials, no Keychain entry, and no
 network access. Bypass a known-bad push with `git push --no-verify`; CI still
-gates the branch, so prefer fixing the failures.
+checks the push, so prefer fixing the failures.
+
+### Daily sync
+
+The maintainer's local Codex automation is scheduled for 23:00 Asia/Shanghai.
+It checks the current branch and remote, stages only reviewed public source,
+tests, and documentation, runs the repository checks, then commits and pushes
+to the same remote branch with a normal fast-forward push. It leaves local
+credentials, logs, state, ignored files, and unfinished changes alone. The
+schedule lives in the local Codex app, so cloning this repository does not
+install or enable it.
 
 ## Maintenance and license
 
