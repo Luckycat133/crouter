@@ -18,7 +18,20 @@ skills-lock.json
 TASKS-*.md
 REFACTOR-PROMPT.md
 
+# Local-only providers: personal/self-use providers never synced to GitHub
+providers/darkbloom.sh
+providers/*.local.sh
+
 # Session-scoped provider plugins are release assets, including their hidden
 # manifests and nested skill directories.
 !assets/
 !assets/**
+
+# Reviewed project hook sources; other Codex state remains local.
+!.codex/
+.codex/*
+!.codex/hooks.json
+!.codex/hooks/
+.codex/hooks/*
+!.codex/hooks/session_start.py
+!.codex/hooks/README.md
