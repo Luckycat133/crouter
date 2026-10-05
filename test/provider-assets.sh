@@ -18,6 +18,7 @@ render() {
 render minimax "$TMP_DIR/minimax.json"
 render zai "$TMP_DIR/zai.json"
 render dashscope "$TMP_DIR/dashscope.json"
+render dashscope-coding "$TMP_DIR/dashscope-coding.json"
 render volcengine "$TMP_DIR/volcengine.json"
 render volcengine-coding "$TMP_DIR/volcengine-coding.json"
 render stepfun "$TMP_DIR/stepfun.json"
@@ -26,6 +27,9 @@ render ppio "$TMP_DIR/ppio.json"
 CR_TENCENT_MCP_URL=https://mcp-api.tencent-cloud.com/sse/example \
   CR_PLAN_TOKEN=plan-secret CR_API_TOKEN=api-secret \
   "$NODE_BIN" "$ROOT_DIR/lib/provider-assets.js" render tencent "$TMP_DIR/tencent.json"
+CR_TENCENT_MCP_URL=https://mcp-api.tencent-cloud.com/sse/example \
+  CR_PLAN_TOKEN=plan-secret CR_API_TOKEN=api-secret \
+  "$NODE_BIN" "$ROOT_DIR/lib/provider-assets.js" render tencent-coding "$TMP_DIR/tencent-coding.json"
 CR_QINIU_MCP_URLS='https://api.qnaigc.com/v1/mcp/http-streamable/first
 https://api.qnaigc.com/v1/mcp/http-streamable/second' \
   CR_PLAN_TOKEN=plan-secret CR_API_TOKEN=api-secret \
@@ -63,6 +67,13 @@ assert.deepStrictEqual(dashscope['crouter-dashscope-web-search'], {
   type: 'http',
   url: 'https://dashscope.aliyuncs.com/api/v1/mcps/WebSearch/mcp',
   headers: {Authorization: 'Bearer api-secret'},
+});
+
+const dashscopeCoding = load('dashscope-coding').mcpServers;
+assert.deepStrictEqual(dashscopeCoding['crouter-dashscope-web-search'], {
+  type: 'http',
+  url: 'https://dashscope.aliyuncs.com/api/v1/mcps/WebSearch/mcp',
+  headers: {Authorization: 'Bearer plan-secret'},
 });
 
 const volcengine = load('volcengine').mcpServers;
@@ -123,6 +134,13 @@ assert.deepStrictEqual(tencent['crouter-tencent-web-search'], {
   url: 'https://mcp-api.tencent-cloud.com/sse/example',
 });
 
+const tencentCoding = load('tencent-coding').mcpServers;
+assert.deepStrictEqual(tencentCoding['crouter-tencent-web-search'], {
+  type: 'sse',
+  url: 'https://mcp-api.tencent-cloud.com/sse/example',
+});
+assert.deepStrictEqual(tencentCoding, tencent);
+
 const qiniu = load('qiniu').mcpServers;
 assert.deepStrictEqual(qiniu['crouter-qiniu-managed-1'], {
   type: 'http',
@@ -138,6 +156,10 @@ assert.deepStrictEqual(qiniu['crouter-qiniu-managed-2'], {
 const names = [minimax, zai, dashscope, volcengine, stepfun, aihubmix, ppio, tencent, qiniu]
   .flatMap((servers) => Object.keys(servers));
 assert.strictEqual(new Set(names).size, names.length, 'provider MCP names must never collide');
+
+const codingNames = [minimax, zai, dashscopeCoding, volcengineCoding, stepfun, aihubmix, ppio, tencentCoding, qiniu]
+  .flatMap((servers) => Object.keys(servers));
+assert.strictEqual(new Set(codingNames).size, codingNames.length, 'coding provider MCP names must never collide');
 NODE
 
 if CR_QINIU_MCP_URLS=https://attacker.example/v1/mcp/http-streamable/stolen \
@@ -145,6 +167,13 @@ if CR_QINIU_MCP_URLS=https://attacker.example/v1/mcp/http-streamable/stolen \
   "$NODE_BIN" "$ROOT_DIR/lib/provider-assets.js" render qiniu "$TMP_DIR/qiniu-invalid.json" \
   >/dev/null 2>&1; then
   printf 'FAIL  Qiniu MCP accepted an untrusted credential destination\n' >&2
+  exit 1
+fi
+
+if CR_TENCENT_MCP_URL=https://attacker.example/sse/stolen \
+  "$NODE_BIN" "$ROOT_DIR/lib/provider-assets.js" render tencent "$TMP_DIR/tencent-invalid.json" \
+  >/dev/null 2>&1; then
+  printf 'FAIL  Tencent MCP accepted an untrusted credential destination\n' >&2
   exit 1
 fi
 

@@ -570,6 +570,7 @@ cmd_provider_show() {
     [ -n "$POST_STOP" ]       && printf '  POST_STOP:        <configured>\n'
     [ -n "$HEALTH_CHECK_URL" ] && printf '  HEALTH_CHECK_URL: <configured>\n'
   fi
+  return 0
 }
 
 # cmd_config_path

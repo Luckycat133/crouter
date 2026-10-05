@@ -231,8 +231,8 @@ cmd_add_key() {
       esac
     done
 
-    _var=$(_surface_var "$_surface")
-    _surface=$(_canonical_surface "$_surface")
+    _var=$(_surface_var "$_surface") || return $?
+    _surface=$(_canonical_surface "$_surface") || return $?
     _file=$(provider_file "$_p")
 
     if [ "${AUTH_MODE:-}" = surfaces ]; then
@@ -337,8 +337,8 @@ cmd_remove_key() {
     [ -n "$_name" ] || die "remove: --name is required (the keychain service name to remove)"
     _validate_service_name "$_name"
 
-    _var=$(_surface_var "$_surface")
-    _surface=$(_canonical_surface "$_surface")
+    _var=$(_surface_var "$_surface") || return $?
+    _surface=$(_canonical_surface "$_surface") || return $?
     _file=$(provider_file "$_p")
 
     _existing=$(_key_var_value "$_var")
