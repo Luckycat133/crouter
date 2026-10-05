@@ -391,10 +391,10 @@ fi
 _openrouter_show=$("$GATEWAY" provider show openrouter 2>&1)
 _openrouter_show_rc=$?
 if [ "$_openrouter_show_rc" -eq 0 ] &&
-   printf '%s\n' "$_openrouter_show" | grep -q '^default:     nvidia/nemotron-3-ultra-550b-a55b:free$' &&
-   printf '%s\n' "$_openrouter_show" | grep -q '^context:     1000000 tokens$' &&
-   printf '%s\n' "$_openrouter_show" | grep -q '^effort:      high$'; then
-  ok "openrouter exposes the pinned Nemotron free model and context"
+   printf '%s\n' "$_openrouter_show" | grep -q '^default:     qwen/qwen3.8-27b:free$' &&
+   printf '%s\n' "$_openrouter_show" | grep -q '^context:     262144 tokens$' &&
+   printf '%s\n' "$_openrouter_show" | grep -q '^effort:      xhigh$'; then
+  ok "openrouter exposes the pinned Qwen free model, context and effort"
 else
   bad "openrouter provider display is stale"
 fi
@@ -402,13 +402,13 @@ fi
 _antigravity_show=$("$GATEWAY" provider show antigravity 2>&1)
 _antigravity_show_rc=$?
 if [ "$_antigravity_show_rc" -eq 0 ] &&
-   printf '%s\n' "$_antigravity_show" | grep -q '^default:     gemini-3\.7-flash$' &&
+   printf '%s\n' "$_antigravity_show" | grep -q '^default:     gemini-3\.8-flash$' &&
    printf '%s\n' "$_antigravity_show" | grep -q '^context:     1048576 tokens$' &&
-   printf '%s\n' "$_antigravity_show" | grep -q '^  opus:      gemini-3\.7-flash$' &&
-   printf '%s\n' "$_antigravity_show" | grep -q '^  sonnet:    gemini-3\.7-flash$' &&
-   printf '%s\n' "$_antigravity_show" | grep -q '^  haiku:     gemini-3\.7-flash$' &&
-   printf '%s\n' "$_antigravity_show" | grep -q '^  subagent:  gemini-3\.7-flash$' &&
-   printf '%s\n' "$_antigravity_show" | grep -q '^  extras:    gemini-3\.5-flash-medium gemini-3\.1-pro-low$'; then
+   printf '%s\n' "$_antigravity_show" | grep -q '^  opus:      gemini-3\.8-flash$' &&
+   printf '%s\n' "$_antigravity_show" | grep -q '^  sonnet:    gemini-3\.8-flash$' &&
+   printf '%s\n' "$_antigravity_show" | grep -q '^  haiku:     gemini-3\.8-flash$' &&
+   printf '%s\n' "$_antigravity_show" | grep -q '^  subagent:  gemini-3\.8-flash$' &&
+   printf '%s\n' "$_antigravity_show" | grep -q '^  extras:    gemini-3\.7-flash gemini-3\.5-flash-medium gemini-3\.1-pro-low$'; then
   ok "antigravity exposes the supported Gemini catalog and context"
 else
   bad "antigravity exposes an unsupported Gemini catalog or context"

@@ -3,14 +3,24 @@
 PROVIDER_NAME="dashscope"
 PROVIDER_DESC="Alibaba Model Studio Token Plan and pay-as-you-go API"
 
+# Fallback to common Alibaba / DashScope env vars
+if [ -z "${DASHSCOPE_TOKEN_PLAN_KEY:-}" ]; then
+  if [ -n "${DASHSCOPE_API_KEY:-}" ]; then
+    export DASHSCOPE_TOKEN_PLAN_KEY="$DASHSCOPE_API_KEY"
+  elif [ -n "${ALIBABA_API_KEY:-}" ]; then
+    export DASHSCOPE_TOKEN_PLAN_KEY="$ALIBABA_API_KEY"
+  fi
+fi
+
 BASE_URL="https://token-plan.cn-beijing.maas.aliyuncs.com/apps/anthropic"
 MODEL="qwen3.8-max"
 CONTEXT_TOKENS="983616"
+AUTO_COMPACT_TOKENS="983616"
 MODEL_OPUS="qwen3.8-max"
 MODEL_SONNET="qwen3.8-max"
 MODEL_HAIKU="qwen3.6-flash"
 MODEL_SUBAGENT="qwen3.7-max"
-MODEL_ALIASES="qwen3.7-plus glm-5.2 deepseek-v4-pro deepseek-v4-flash-0731"
+MODEL_ALIASES="qwen3.8-plus qwen3.7-plus glm-5.3 glm-5.2 deepseek-v4.1-flash deepseek-v4-pro deepseek-v4-flash-0731"
 EFFORT="xhigh"
 
 AUTH_MODE="surfaces"

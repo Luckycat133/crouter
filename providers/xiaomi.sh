@@ -3,9 +3,17 @@
 PROVIDER_NAME="xiaomi"
 PROVIDER_DESC="Xiaomi MiMo Token Plan and pay-as-you-go API"
 
+# Fallback to common Xiaomi MiMo env vars
+if [ -z "${XIAOMI_TOKEN_PLAN_KEY:-}" ]; then
+  if [ -n "${XIAOMI_API_KEY:-}" ]; then
+    export XIAOMI_TOKEN_PLAN_KEY="$XIAOMI_API_KEY"
+  fi
+fi
+
 BASE_URL="https://token-plan-cn.xiaomimimo.com/anthropic"
 MODEL="mimo-v2.6-pro[1m]"
 CONTEXT_TOKENS="1048576"
+AUTO_COMPACT_TOKENS="1048576"
 MODEL_OPUS="mimo-v2.6-pro[1m]"
 MODEL_SONNET="mimo-v2.6-pro[1m]"
 MODEL_HAIKU="mimo-v2.6-pro[1m]"

@@ -6,6 +6,12 @@ All notable changes to this local setup are documented in this file.
 
 ### Changed
 
+- Synchronize provider catalog defaults and alias pools with October 2026 releases:
+  DeepSeek to `deepseek-flash[1m]` (CED architecture V4.1-Flash), Z.AI to `glm-5.3[1m]`,
+  DashScope Coding Plan to `qwen3.8-plus`, StepFun to `step-5-preview` (1M context),
+  SiliconFlow to `Pro/moonshotai/Kimi-K2.7-Code`, Huawei MaaS to `glm-5.3`,
+  Qianfan Team Plan to `deepseek-v4-flash`, and Antigravity to `gemini-3.8-flash`. Added
+  modern aliases across Volcengine, Tencent, DashScope, and OpenRouter.
 - Align the documented local validation with CI's `sh`/`dash`, ShellCheck,
   Node syntax, and version checks. Document the maintainer's local daily
   fast-forward sync and clarify the narrower optional pre-push hook.

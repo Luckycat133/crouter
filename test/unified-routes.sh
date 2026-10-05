@@ -202,6 +202,7 @@ const body = JSON.parse(fs.readFileSync(process.env.CAPTURE_FILE, 'utf8'));
 const ids = body.data.map((entry) => entry.id);
 const expected = [
   'openrouter/nvidia/nemotron-3-ultra-550b-a55b:free',
+  'antigravity/gemini-3.8-flash',
   'antigravity/gemini-3.7-flash',
   'antigravity/gemini-3.5-flash-medium',
   'antigravity/gemini-3.1-pro-low',
@@ -230,7 +231,7 @@ if ROOT_DIR="$FAKE_ROOT" PROVIDERS_DIR="$FAKE_ROOT/providers" sh <<'EOF'
 die() { printf '%s\n' "$*" >&2; exit 1; }
 . "$ROOT_DIR/lib/provider.sh"
 load_provider antigravity
-[ "$MODEL_ALIASES" = 'gemini-3.5-flash-medium gemini-3.1-pro-low' ] || exit 1
+[ "$MODEL_ALIASES" = 'gemini-3.7-flash gemini-3.5-flash-medium gemini-3.1-pro-low' ] || exit 1
 load_provider zz-demo
 [ -z "${MODEL_ALIASES:-}" ]
 EOF

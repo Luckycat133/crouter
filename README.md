@@ -194,16 +194,16 @@ limit; the selected vendor model or native backend remains authoritative.
 | `302ai` | API | `claude-sonnet-5` | 1,000,000 | — |
 | `aihubmix` | API | `coding-glm-5.1-free` | — | API MCP |
 | `anthropic` | Console API key | `claude-sonnet-5` | — | — |
-| `antigravity` | local proxy | `gemini-3.7-flash` | 1,048,576 | — |
+| `antigravity` | local proxy | `gemini-3.8-flash` | 1,048,576 | — |
 | `antigravity-claude` | local proxy | `claude-opus-4-6-thinking` | 200,000 | — |
 | `bedrock` | native AWS credentials | `sonnet` alias | — | — |
 | `codex` | local ChatGPT subscription proxy | `gpt-5.6-sol` | 1,050,000 | — |
 | `dashscope` | Token Plan + API | `qwen3.8-max` | 983,616 | Plan media skill + API WebSearch MCP |
-| `dashscope-coding` | Coding Plan | `qwen3.7-plus` | — | — |
-| `deepseek` | API | `deepseek-v4-pro[1m]` | 1,000,000 | native web search |
+| `dashscope-coding` | Coding Plan | `qwen3.8-plus` | — | — |
+| `deepseek` | API | `deepseek-flash[1m]` | 1,000,000 | native web search |
 | `fireworks` | API | `accounts/fireworks/models/glm-5p3-flash` | — | — |
 | `foundry` | native Azure credentials, Bearer token, or Foundry API key | `sonnet` alias | — | — |
-| `huawei` | Token Plan + API | `glm-5.1` | — | — |
+| `huawei` | Token Plan + API | `glm-5.3` | — | — |
 | `infini` | GenStudio API | `glm-5.1` | — | — |
 | `longcat` | Token Pack + pay-as-you-go on one API key | `LongCat-2.5-Preview` | 1,000,000 | — |
 | `meta` | Model API key | `muse-spark-1.3` | 1,048,576 | — |
@@ -211,15 +211,15 @@ limit; the selected vendor model or native backend remains authoritative.
 | `moonshot` | Kimi Code membership | `k3-256k` | 262,144 | — |
 | `nagaai` | API | `claude-sonnet-4.5` | — | — |
 | `ollama` | local MLX/Ollama | `qwen3.8-27b` | 262,144 for Qwen; 373,760 for DeepSeek V4 Flash | 60s SSE heartbeat |
-| `openrouter` | API | `nvidia/nemotron-3-ultra-550b-a55b:free` | 1,000,000 | — |
+| `openrouter` | API | `qwen/qwen3.8-27b:free` | 262,144 | — |
 | `ppio` | API | `minimax/minimax-m3` | 1,000,000 | cloud OAuth MCP |
 | `qianfan` | personal Token Plan + API | `deepseek-v4-pro` | — | — |
-| `qianfan-team` | team Token Plan | `deepseek-v3.2` | — | — |
+| `qianfan-team` | team Token Plan | `deepseek-v4-flash` | — | — |
 | `qianfan-coding` | legacy Coding Plan | `qianfan-code-latest` | — | — |
 | `qiniu` | enterprise subscription + API | `deepseek/deepseek-v3.2-251201` | — | optional managed MCPs |
 | `requesty` | API | `anthropic/claude-sonnet-5` | — | — |
-| `siliconflow` | API | `Pro/moonshotai/Kimi-K2.6` | — | — |
-| `stepfun` | Step Plan + API | `step-3.7-flash` | 262,144 | StepSearch MCP + skill |
+| `siliconflow` | API | `Pro/moonshotai/Kimi-K2.7-Code` | — | — |
+| `stepfun` | Step Plan + API | `step-5-preview` | 1,000,000 | StepSearch MCP + skill |
 | `tencent` | personal Token Plan + TokenHub API | `tc-code-latest` | — | optional WebSearch MCP |
 | `tencent-coding` | Coding Plan | `tc-code-latest` | — | — |
 | `vercel` | AI Gateway API key | `anthropic/claude-sonnet-5` | — | — |
@@ -227,7 +227,7 @@ limit; the selected vendor model or native backend remains authoritative.
 | `volcengine` | Ark Agent Plan | `doubao-seed-evolving` | 1,000,000 | Ark Docs + Doubao Search + DataPro + OpenViking MCPs |
 | `volcengine-coding` | Ark Coding Plan | `doubao-seed-evolving` | 1,000,000 | Ark Docs MCP |
 | `xiaomi` | Token Plan + API | `mimo-v2.6-pro[1m]` | 1,048,576 | — |
-| `z-ai` | Coding Plan + API | `glm-5.2[1m]` | 1,000,000 | vision/search/reader/zread MCPs |
+| `z-ai` | Coding Plan + API | `glm-5.3[1m]` | 1,000,000 | vision/search/reader/zread MCPs |
 
 DeepSeek additionally follows its official 786,432-token automatic compaction
 threshold; this is kept separate from its 1M maximum context.

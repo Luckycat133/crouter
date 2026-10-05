@@ -13,6 +13,29 @@ provider entries. Counts include separate products when their credentials or
 endpoints cannot safely share a route, such as DashScope/Coding Plan,
 Qianfan personal/team/legacy Coding Plan, and Tencent personal/Coding Plan.
 
+## Comprehensive model generation upgrade — 2026-10-05
+
+This upgrade synchronizes provider default models and aliases with the latest
+vendor releases across the catalog:
+
+- **DeepSeek:** Upgraded to `deepseek-flash[1m]` serving DeepSeek-V4.1-Flash (CED
+  architecture, 1M context, native vision, and 786,432 auto-compaction).
+- **Z.AI:** Adopted official Claude Code recommendations mapping default/Opus/Sonnet
+  to `glm-5.3[1m]` and Haiku/Subagents to `glm-5.3-flash[1m]`.
+- **DashScope Coding Plan:** Upgraded default to `qwen3.8-plus`, matching Alibaba's
+  Qwen 3.8 series generation on the Coding Plan endpoint.
+- **StepFun:** Upgraded flagship default to `step-5-preview` with 1,000,000 context
+  and auto-compaction window, keeping `step-3.7-flash` as fast Haiku fallback.
+- **SiliconFlow:** Replaced deprecated Kimi-K2.6 default with `Pro/moonshotai/Kimi-K2.7-Code`,
+  Haiku with `deepseek-ai/DeepSeek-V4-Flash`, and updated aliases to include GLM-5.3.
+- **Huawei Cloud MaaS:** Upgraded default to `glm-5.3` and Haiku to `deepseek-v4.1-flash`.
+- **Qianfan Team Plan:** Upgraded default from legacy V3.2 to `deepseek-v4-flash`.
+- **Antigravity:** Upgraded default Gemini model to `gemini-3.8-flash` (Google
+  DeepMind September 2026 release) across default, Opus, Sonnet, Haiku, and subagent
+  mappings, with `gemini-3.7-flash` retained in aliases.
+- **Gateway Aliases:** Added `deepseek-v4.1-flash` and `glm-5.3` across Volcengine,
+  Tencent, DashScope, and OpenRouter alias pools.
+
 ## Targeted documentation recheck — 2026-09-26
 
 This recheck covers Kimi Code and Z.AI only; the full audit date above remains
@@ -313,9 +336,9 @@ generic extension examples.
 
 - [Z.AI Claude Code integration](https://docs.z.ai/devpack/tool/claude)
   documents `https://api.z.ai/api/anthropic`, bearer auth, Opus/Sonnet
-  `glm-5.2[1m]`, Haiku `glm-4.7`, and the 1,000,000 compact window.
+  `glm-5.3[1m]`, Haiku `glm-5.3-flash[1m]`, and the 1,000,000 compact window.
 - [Z.AI model overview](https://docs.z.ai/guides/overview/overview) states that
-  GLM-5.2 has a stable 1M context.
+  GLM-5.3 has a stable 1M context.
 - Official MCP pages: [vision](https://docs.z.ai/devpack/mcp/vision-mcp-server),
   [search](https://docs.z.ai/devpack/mcp/search-mcp-server),
   [reader](https://docs.z.ai/devpack/mcp/reader-mcp-server), and
@@ -333,7 +356,7 @@ Decision: the local vision package is pinned to
     `qwen3.8-max-preview` ID now redirects to the stable ID and is no longer the
     configured default.
   - Coding Plan: `https://coding.dashscope.aliyuncs.com/apps/anthropic` and
-    `qwen3.7-plus`.
+    `qwen3.8-plus`.
   - Pay-as-you-go: `https://dashscope.aliyuncs.com/apps/anthropic`,
     `qwen3.7-max`, and `qwen3.6-flash`.
 - [Anthropic-compatible Messages](https://help.aliyun.com/en/model-studio/anthropic-api-messages)
@@ -360,17 +383,18 @@ workspace-specific prefix.
 - [Anthropic API guide](https://api-docs.deepseek.com/guides/anthropic_api)
   documents `ANTHROPIC_API_KEY` and full `x-api-key` support.
 - [Claude Code integration](https://api-docs.deepseek.com/quick_start/agent_integrations/claude_code)
-  recommends `deepseek-v4-pro[1m]` for default, Opus, and Sonnet,
+  recommends `deepseek-flash[1m]` for default, Opus, and Sonnet,
   `deepseek-flash` for Haiku and subagents, and maximum effort. It also
   sets the auto-compaction window to 786,432 and documents DeepSeek's
   server-side web-search tool.
 
 Decision: DeepSeek is API-only and uses `x-api-key`, not Bearer. The public
 default/Opus/Sonnet mapping carries Claude Code's `[1m]` annotation and is
-stripped to raw `deepseek-v4-pro` on the upstream request; Haiku and subagents
-map to `deepseek-flash`. `deepseek-v4-flash` remains an explicit migration
-alias. Maximum context and automatic compaction remain separate
-settings. Web search is model-native, not a downloadable MCP package.
+stripped to raw `deepseek-flash` on the upstream request; Haiku and subagents
+map to `deepseek-flash`. `deepseek-v4.1-flash`, `deepseek-v4.1`, `deepseek-v4-pro`,
+and `deepseek-v4-flash` remain explicit migration aliases. Maximum context and
+automatic compaction remain separate settings. Web search is model-native, not a
+downloadable MCP package.
 
 ### SiliconFlow
 
@@ -380,7 +404,7 @@ settings. Web search is model-native, not a downloadable MCP package.
 - [Claude Code integration](https://docs.siliconflow.cn/cn/usercases/use-siliconcloud-in-ClaudeCode)
   documents the base prefix and ordinary SiliconFlow API key.
 - [Current CC Switch preset](https://api-docs.siliconflow.cn/docs/usercases/use-siliconcloud-in-ccswitch)
-  maps every Claude tier to `Pro/moonshotai/Kimi-K2.6`.
+  maps every Claude tier to `Pro/moonshotai/Kimi-K2.7-Code`.
 
 Decision: SiliconFlow is API-only. The default follows its current Claude Code
 preset; the context remains unset because the endpoint is a dynamic multi-model
@@ -454,9 +478,9 @@ authorization separately.
 - [Claude Code integration](https://platform.stepfun.com/docs/zh/step-plan/integrations/claude-code)
   documents the `https://api.stepfun.com/step_plan` Messages prefix and bearer
   credential.
-- [Step 3.7 Flash](https://platform.stepfun.com/docs/zh/guides/models/step-3.7-flash)
-  documents the exact ID, 256K context, Messages support, and low/medium/high
-  effort levels.
+- [Step 5 Preview](https://platform.stepfun.com/docs/zh/guides/models/step-5-preview)
+  documents the exact `step-5-preview` ID, 1M context, Messages support, and
+  agentic reasoning. `step-3.7-flash` remains available for fast execution.
 - [StepSearch](https://platform.stepfun.com/docs/zh/step-plan/integrations/search-mcp)
   documents its HTTP endpoint, Bearer header, `web_search`, and `web_fetch`.
 

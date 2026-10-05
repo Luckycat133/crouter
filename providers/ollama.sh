@@ -1,7 +1,7 @@
 #!/bin/sh
 # Provider: local MLX and Ollama models exposed to Claude Code.
 PROVIDER_NAME="ollama"
-PROVIDER_DESC="Local models: MLX Qwen3.8 and Ollama DeepSeek"
+PROVIDER_DESC="Local models: multimodal MLX Qwen3.8 and Ollama DeepSeek"
 
 BASE_URL="http://127.0.0.1:11435"
 # Preserve the user's last selection. The exact qwen3.8-27b ID is routed to
@@ -45,6 +45,7 @@ _OLLAMA_HEARTBEAT_PROXY_PID=
 _MLX_PROXY_PID=
 _local_selected_model=${_main_model:-$MODEL}
 if [ "$_local_selected_model" = qwen3.8-27b ]; then
+  ASSET_PLUGIN_DIRS="$ROOT_DIR/assets/plugins/qwen-local-multimodal"
   BASE_URL=http://127.0.0.1:11436
   HEALTH_CHECK_URL=$BASE_URL/health
   _mlx_upstream_host=${MLX_UPSTREAM_HOST:-10.211.55.2}
@@ -61,7 +62,7 @@ if [ "$_local_selected_model" = qwen3.8-27b ]; then
   [ "$_mlx_upstream_port" -le 65535 ] || die "MLX_UPSTREAM_PORT must be an integer from 1 to 65535"
   _mlx_upstream_url="http://$_mlx_upstream_host:$_mlx_upstream_port"
   _mlx_expected_upstream="\"upstream\":\"$_mlx_upstream_host:$_mlx_upstream_port\""
-  curl -fsS --max-time 3 "$_mlx_upstream_url/v1/models" >/dev/null 2>&1 || die "MLX not reachable at $_mlx_upstream_url"
+  curl -fsS --max-time 3 "$_mlx_upstream_url/v1/models" >/dev/null 2>&1 || die "MLX-VLM not reachable at $_mlx_upstream_url"
   _mlx_health=$(curl -fsS --max-time 1 "$HEALTH_CHECK_URL" 2>/dev/null || true)
   if printf "%s\n" "$_mlx_health" | grep -Fq "\"service\":\"crouter-mlx-anthropic-adapter\""; then
     printf "%s\n" "$_mlx_health" | grep -Fq "$_mlx_expected_upstream" || die "MLX adapter at $BASE_URL uses another upstream; stop it before changing MLX_UPSTREAM_HOST or MLX_UPSTREAM_PORT"
