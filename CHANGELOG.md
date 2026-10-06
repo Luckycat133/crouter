@@ -6,6 +6,11 @@ All notable changes to this local setup are documented in this file.
 
 ### Changed
 
+- Retarget the `openrouter` default to `nvidia/nemotron-3-ultra-550b-a55b:free`
+  (1,000,000 context, 786,432 auto-compaction, `max` effort) after the previous
+  `qwen/qwen3.8-27b:free` slug was retired upstream and began returning 404.
+  All tiers share the default model, and the `nemotron` shorthand is normalized
+  in `PRE_START`; the rest of the contract is untouched.
 - Synchronize provider catalog defaults and alias pools with October 2026 releases:
   DeepSeek to `deepseek-flash[1m]` (CED architecture V4.1-Flash), Z.AI to `glm-5.3[1m]`,
   DashScope Coding Plan to `qwen3.8-plus`, StepFun to `step-5-preview` (1M context),
@@ -15,6 +20,37 @@ All notable changes to this local setup are documented in this file.
 - Align the documented local validation with CI's `sh`/`dash`, ShellCheck,
   Node syntax, and version checks. Document the maintainer's local daily
   fast-forward sync and clarify the narrower optional pre-push hook.
+- Drop the unreferenced `google/gemma-4-26b-a4b-it:free` context override from
+  `openrouter`: no tier, alias, or self-route entry named that model, so the
+  entry could never match. No other declaration changed.
+- `crouter list` now answers the question the catalog exists for, "what can I
+  launch right now", instead of printing all 38 contracts. Each row carries a
+  status (`ready` for a present credential, `local` for a route that needs only
+  a local service, `native` for a Claude Code cloud backend, `no-key` for a
+  missing credential), the auth mode, the default model, and the endpoint. The
+  default view hides `no-key` rows and closes with how many are hidden;
+  `crouter list --all` (or `-a`) still shows the entire catalog, and
+  `crouter list <provider>` / `crouter list keys <provider>` are unchanged.
+  `--all` is purely additive: no existing invocation changes its output.
+- `crouter doctor` prints an `Environment` block and then a `Providers` block
+  whose header states the total and the problems (`38 total — 26 without a
+  credential, 4 with a failing health check`). Providers that need attention
+  come first, and the closing hint points at `crouter doctor <provider>`. The
+  row set, the per-provider format, and the overview's exit status are
+  unchanged: a missing optional credential still never fails the summary.
+  Nothing is hidden, so there is no `--all` counterpart here.
+- `crouter provider show` no longer prints `tokens` after `<unset>` for a
+  provider that declares no auto-compaction budget.
+- Remove two serial costs from the catalog scan. Provider names come from
+  parameter expansion instead of a `basename` child per provider, and the
+  per-provider status checks run concurrently rather than one at a time. On
+  the reference machine, median of five interleaved runs (before -> after):
+  `doctor` 4.43 s -> 2.69 s, `list` 1.43 s -> 1.67 s, `list --all` 1.65 s.
+  `list` is the one that grew, and only because the status column now resolves
+  a credential for all 38 contracts, which costs more than the removed forks
+  saved; the fork removal is what keeps it from landing near 2.4 s. There is no
+  before number for `list --all`: the old parser rejected the flag as a
+  provider name.
 
 ### Added
 
@@ -44,8 +80,45 @@ All notable changes to this local setup are documented in this file.
   (`mcp-server-askecho-search-infinity`), DataPro professional datasets, and
   OpenViking control-plane MCPs alongside public Ark documentation in temporary
   session assets without polluting `~/.claude.json`. Coding Plan isolates the public docs MCP.
+- `crouter add` with no provider opens an interactive picker instead of failing
+  on a missing argument. The menu lists the providers that still need a
+  credential, numbered, with the same status and auth columns as `crouter list`;
+  a number or a name selects one, and an empty answer cancels. A provider with
+  both surfaces asks which one to configure before prompting for the secret, and
+  the selection then reuses the existing key path unchanged, so `--name`,
+  `--stdin`, Keychain storage, and the keypool registry behave exactly as they
+  do for the explicit form. `crouter add --all` widens the menu to every
+  provider for adding or rotating a key.
+- Every command explains itself on `-h` / `--help`, including the two that are
+  dispatched before the shared helpers load (`app`, `use`) and the ones that
+  previously ran work instead of printing usage (`doctor`, `provider`, `remove`,
+  `config`, `logs`, `list keys`). `crouter <command> --help` never launches a
+  provider or starts a local service.
 
 ### Fixed
+
+- `crouter logs list` printed every path twice. The row reader took fields 6, 7,
+  and 8 of `ls -l`, but field 8 is the filename, which the row already printed
+  as its own column, so each line ended with a duplicate. It now reads size and
+  mtime only, prints a `SIZE / MODIFIED / FILE` header, and reports an empty or
+  missing log directory as a single line instead of an empty table.
+- `crouter config <typo>` and `crouter logs <typo>` silently ran `config show`
+  and `logs list` respectively, so a mistyped subcommand looked like it worked.
+  Both now fail with the accepted forms. Unknown extra arguments to the
+  argument-less forms (`config show`, `config path`, `logs list`, `app list`)
+  are rejected too.
+- Stop local Ollama sessions from wedging on reasoning effort. Ollama copies
+  `output_config.effort` into the model chat template (collapsing `xhigh` to
+  `high`) and answers HTTP 500 for a level the template rejects; the body never
+  names `output_config`, so Claude Code cannot apply its effort downgrade and
+  retries the same request with exponential backoff for up to half an hour.
+  `providers/ollama.sh` now declares `OLLAMA_EFFORT_MAX=medium` for the
+  `qwen3.8*` selections and the heartbeat relay clamps every request to that
+  cap, including ones that carry a caller-supplied `--effort`. The relay
+  advertises the cap in `/health`, and a session reuses a running relay only
+  when its cap matches the selected model. Requests at or below the cap, an
+  omitted `effort`, relays with no declared cap, and the DeepSeek V4
+  pass-through contract are unchanged.
 
 - Give the keypool cooldown integration test a wider timing window on loaded
   runners; its exact 200 ms and `Retry-After` boundaries remain checked with a

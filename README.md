@@ -72,10 +72,18 @@ and local Node providers. Native Bedrock, Vertex, and Foundry SDK credentials
 may be supplied through Claude settings or an external credential chain; doctor
 reports `UNVERIFIED` when it cannot establish their status offline. It checks
 credential discovery and configured health URLs, not live model entitlement,
-and does not start local services. `crouter doctor` keeps the overview behavior: unavailable optional
-providers appear in the output without failing the command on their own.
+and does not start local services. `crouter doctor` alone prints an
+`Environment` block and a `Providers` block whose header counts the problems
+(`38 total — 26 without a credential, 4 with a failing health check`), listing
+affected providers first. Nothing is hidden and a missing optional credential
+never fails the overview, so there is no `--all` counterpart here.
 Keychain availability is checked fresh for each invocation, so adding or
 removing an item outside crouter is reflected on the next diagnostic run.
+
+Every command answers `-h` / `--help` with its own usage, and a help request
+never launches a provider, starts a local service, or runs a diagnostic.
+Arguments a command does not understand are rejected rather than ignored, so a
+mistyped subcommand cannot silently do something else.
 
 `crouter config show` lists normalized effective switches and whether known path
 and binary settings are configured, without printing their values. It does not
@@ -86,7 +94,8 @@ editing and `crouter --version` to check the installed version.
 ## Usage
 
 ```sh
-crouter list
+crouter list                       # providers that can run on this machine
+crouter list --all                 # the whole catalog, including no-key routes
 crouter provider show dashscope
 crouter doctor minimax
 
@@ -108,6 +117,7 @@ crouter nagaai                     # NagaAI inference API key
 crouter dashscope qwen3.7-max
 crouter deepseek --model 'deepseek-v4-pro[1m]'
 
+crouter add                         # pick a provider from a menu
 crouter add minimax --surface plan
 crouter add minimax --surface api
 pass show minimax/plan | crouter add minimax --surface plan --stdin
@@ -118,10 +128,17 @@ crouter all --check               # redacted route proof, no launch/network
 crouter all
 ```
 
+`crouter list` prints only the providers that can run right now, with a `ready`,
+`local`, or `native` status, and ends by counting the ones that still need a
+credential. `crouter list --all` prints the full catalog, marking those rows
+`no-key`. `crouter add` with no argument offers the unconfigured providers as a
+numbered menu; `crouter add --all` widens that menu to every provider, for
+adding or rotating a key.
+
 For provider launches, the first bare argument before any flag is a
 primary-model override. Remaining arguments are forwarded to Claude Code.
 
-`crouter use <provider>` selects a provider from `crouter list`, while
+`crouter use <provider>` selects a provider from `crouter list --all`, while
 `crouter use app/<name>` selects a native CLI from `crouter app list`. The
 selection affects future bare `crouter` and `crouter run [args...]` launches;
 it does not change an already running client. Direct `crouter <provider>` and
@@ -211,7 +228,7 @@ limit; the selected vendor model or native backend remains authoritative.
 | `moonshot` | Kimi Code membership | `k3-256k` | 262,144 | — |
 | `nagaai` | API | `claude-sonnet-4.5` | — | — |
 | `ollama` | local MLX/Ollama | `qwen3.8-27b` | 262,144 for Qwen; 373,760 for DeepSeek V4 Flash | 60s SSE heartbeat |
-| `openrouter` | API | `qwen/qwen3.8-27b:free` | 262,144 | — |
+| `openrouter` | API | `nvidia/nemotron-3-ultra-550b-a55b:free` | 1,000,000 | — |
 | `ppio` | API | `minimax/minimax-m3` | 1,000,000 | cloud OAuth MCP |
 | `qianfan` | personal Token Plan + API | `deepseek-v4-pro` | — | — |
 | `qianfan-team` | team Token Plan | `deepseek-v4-flash` | — | — |
@@ -304,8 +321,13 @@ are never edited, so an upgrade cannot overwrite the user's pool. Use `--name`
 for a stable service name and `--stdin` with a password manager or CI.
 
 Interactive `crouter add` asks once for the provider API key with terminal echo
-disabled. crouter stores it without invoking the additional generic password
-and confirmation prompts from a bare `security -w`. The value is not written
+disabled. With no provider argument it first shows the providers whose
+credential is still missing and takes a number or a name; a provider with both
+surfaces asks which surface to configure before the key prompt. `crouter add
+--all` opens the same menu over the whole catalog, so a key can be added or
+rotated for an already-configured provider. crouter stores the secret without
+invoking the additional generic password and confirmation prompts from a bare
+`security -w`. The value is not written
 to shell history, repository files, or logs; it is supplied directly to the
 short-lived macOS Keychain command.
 

@@ -8,10 +8,73 @@ contracts. It is a configuration audit, not a promise that an account owns a
 particular plan or model. Vendor catalogs can vary by region, plan tier, and
 account entitlements.
 
-The catalog contains 37 provider contracts, including 22 mainland-China
+The catalog contains 38 provider contracts, including 22 mainland-China
 provider entries. Counts include separate products when their credentials or
 endpoints cannot safely share a route, such as DashScope/Coding Plan,
 Qianfan personal/team/legacy Coding Plan, and Tencent personal/Coding Plan.
+The published README catalog table documents 37 of them; the local experimental
+`bonsai` route is intentionally excluded from that table.
+
+## Local Ollama reasoning-effort contract — 2026-10-06
+
+Primary sources: the `qwen3.8-27b-heretic:q4` GGUF chat template as rendered by
+Ollama 0.12.x, a live effort sweep against `http://127.0.0.1:11434/v1/messages`,
+and the recorded Claude Code sessions under `~/.claude/projects/`.
+
+- Ollama copies Anthropic `output_config.effort` into the model chat template
+  almost verbatim, collapsing `xhigh` to `high`. The Qwen3.8 template raises
+  `Unexpected reasoning effort <level>` for `high` and `max`; only `low`,
+  `medium`, or an omitted field render. Measured mapping (live probe):
+  `low`→low ok, `medium`→medium ok, `high`→high rejected, `xhigh`→high rejected,
+  `max`→max rejected. Because the template default is `xhigh`, the effective
+  level set for this model is `{low, medium, default}`.
+- Ollama reports that rejection as HTTP 500 `chat template prompt error`. The
+  body never contains the string `output_config`, which is the only signal
+  Claude Code uses to auto-downgrade a rejected effort, so the client keeps
+  resending the same rejected request with exponential backoff. Observed on
+  2026-10-06 15:04:59–15:07:24 (+08:00): eight retries of a `qwen3.8-27b-heretic:q4`
+  turn, ending in the "Waiting for API response · will retry in 29m" state.
+- Fix: `providers/ollama.sh` declares `OLLAMA_EFFORT_MAX=medium` for the
+  `qwen3.8*` selections (the highest level the template accepts, since an
+  inbound `xhigh` would be collapsed and rejected). The heartbeat relay clamps
+  every matching request down to that cap, records
+  `{"type":"effort_clamp",...,"cap":"medium"}`, and reports the cap in `/health`
+  so a session reuses a relay only when it clamps to the level the selected
+  model needs. Levels at or below the cap, an omitted field, the DeepSeek V4
+  pass-through contract, and relays started without a declared cap are all
+  unchanged.
+- Verified 2026-10-06: `crouter ollama qwen3.8-27b-heretic:q4 --effort {xhigh,max,high} -p ...`
+  each returns `PONG` where the same three levels previously returned 500; the
+  last template rejection in `~/.ollama/logs/server.log` predates the fix.
+
+## OpenRouter free default recheck — 2026-10-06
+
+Primary sources: `GET https://openrouter.ai/api/v1/models` and
+`GET /api/v1/models/nvidia/nemotron-3-ultra-550b-a55b:free/endpoints`
+(retrieved 2026-10-06), plus a live Anthropic Messages probe.
+
+- The declared default `qwen/qwen3.8-27b:free` is **no longer served**.
+  `/api/v1/messages` returns `404 not_found_error`: "This model is unavailable
+  for free. The paid version is available now - use this slug instead:
+  qwen/qwen3.8-27b". The default and the main tiers no longer depend on it; the
+  remaining `qwen` shorthand and alias entries keep their previous values, so
+  they still fail against the retired free slug until that surface is
+  repointed by the owner.
+- Default is pinned to `nvidia/nemotron-3-ultra-550b-a55b:free` (550B MoE /
+  55B active, 1,000,000 context, 65,536 max output, tool calling). Every Claude
+  Code tier keeps that model, and the session compacts at 786,432 so the
+  summary and the next turn still fit inside the 1M window.
+- Unrelated declarations are unchanged, with one cleanup on 2026-10-06: the
+  unreferenced `google/gemma-4-26b-a4b-it:free=131072` context override was
+  removed because no tier, alias, or self-route entry named that model, so it
+  could never match. The surviving `google/gemma-4-31b-it:free` entry still
+  declares 131,072 while the live catalog reports 262,144; that value is left
+  for its owner to repoint.
+- Anthropic `thinking: {"type":"enabled"}` is rejected by the Ultra upstream
+  ("Upstream error from Nvidia: Internal server error"), while
+  `{"type":"disabled"}` and an omitted field both succeed. Reasoning output is
+  produced regardless. Claude Code does not negotiate a thinking budget for
+  this unrecognized model ID, so `EFFORT=xhigh` remains usable.
 
 ## Comprehensive model generation upgrade — 2026-10-05
 
@@ -624,7 +687,11 @@ Volcano Engine offers two distinct subscription plan interfaces:
   `qwen3.8-27b` on the MLX adapter, unless an actual Ollama-provider launch has
   saved another model selection. `providers/ollama.sh` owns the current model
   IDs and caps: Qwen uses 262,144 tokens, and the explicit DeepSeek V4 Flash
-  entries use the measured 373,760-token cap. Default Claude effort is `max`.
+  entries use the measured 373,760-token cap. Default Claude effort is `max`;
+  the `qwen3.8*` selections instead declare `medium` and the relay clamps every
+  request to that cap, because Ollama's chat template rejects higher levels with
+  an HTTP 500 that Claude Code cannot downgrade from. See "Local Ollama
+  reasoning-effort contract" above.
   Other selected models use the port-11435 Ollama relay, which sends SSE
   comments every 60 seconds. DeepSeek thinking fields are preserved; its
   unsupported image content blocks are replaced with a text fallback. Upstream
@@ -633,6 +700,11 @@ Volcano Engine offers two distinct subscription plan interfaces:
   documents the exact `nvidia/nemotron-3-ultra-550b-a55b:free` ID and a 1M
   context. crouter pins that model rather than using the dynamic free-model
   router, so its 1,000,000-token client limit is an exact-model contract.
+  Live probe 2026-10-06: the catalog reports a single Nvidia endpoint with
+  1,000,000 context and 65,536 max output, and `/api/v1/messages` returned
+  `thinking` + `text` + `tool_use` at cost 0. The same upstream rejects
+  Anthropic `thinking: {"type":"enabled"}` with an Nvidia 500, so the client
+  must not negotiate an extended-thinking budget for this model.
 - OpenRouter, Codex, and Antigravity keep their existing documented gateway or
   local-proxy contracts. Their catalogs are not presented as first-party model
   APIs.
