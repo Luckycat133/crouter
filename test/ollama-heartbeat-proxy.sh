@@ -32,36 +32,53 @@ const upstream = http.createServer((request, response) => {
   });
 });
 let child;
+let upstreamPort;
+const helperProxies = [];
+
+async function reservePort() {
+  const reservation = http.createServer();
+  reservation.listen(0, '127.0.0.1');
+  await once(reservation, 'listening');
+  const port = reservation.address().port;
+  await new Promise(resolve => reservation.close(resolve));
+  return port;
+}
+
+async function startProxy(extraEnv) {
+  const port = await reservePort();
+  const proc = spawn(process.execPath, [proxyPath], {
+    env: {
+      ...process.env,
+      OLLAMA_HEARTBEAT_PORT: String(port),
+      OLLAMA_UPSTREAM_PORT: String(upstreamPort),
+      OLLAMA_HEARTBEAT_INTERVAL_MS: '40',
+      ...extraEnv,
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let errorOutput = '';
+  let stdOutput = '';
+  proc.stderr.on('data', chunk => { errorOutput += chunk.toString(); });
+  proc.stdout.on('data', chunk => { stdOutput += chunk.toString(); });
+  await Promise.race([
+    once(proc.stdout, 'data'),
+    once(proc, 'exit').then(([code]) => { throw new Error(`proxy exited early (${code}): ${errorOutput}`); }),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('proxy startup timed out')), 2000)),
+  ]);
+  return { proc, port, output: () => stdOutput };
+}
+
 try {
 upstream.listen(0, '127.0.0.1');
 await once(upstream, 'listening');
-const upstreamPort = upstream.address().port;
+upstreamPort = upstream.address().port;
 
-const reservation = http.createServer();
-reservation.listen(0, '127.0.0.1');
-await once(reservation, 'listening');
-const proxyPort = reservation.address().port;
-await new Promise(resolve => reservation.close(resolve));
-
-child = spawn(process.execPath, [proxyPath], {
-  env: {
-    ...process.env,
-    OLLAMA_HEARTBEAT_PORT: String(proxyPort),
-    OLLAMA_UPSTREAM_PORT: String(upstreamPort),
-    OLLAMA_HEARTBEAT_INTERVAL_MS: '40',
-  },
-  stdio: ['ignore', 'pipe', 'pipe'],
-});
-
-let childError = '';
-let childOutput = '';
-child.stderr.on('data', chunk => { childError += chunk.toString(); });
-child.stdout.on('data', chunk => { childOutput += chunk.toString(); });
-await Promise.race([
-  once(child.stdout, 'data'),
-  once(child, 'exit').then(([code]) => { throw new Error(`proxy exited early (${code}): ${childError}`); }),
-  new Promise((_, reject) => setTimeout(() => reject(new Error('proxy startup timed out')), 2000)),
-]);
+// The provider declares the highest effort the selected local model accepts.
+// `medium` is what Qwen3.8 needs and is the shipped configuration.
+const primary = await startProxy({ OLLAMA_EFFORT_MAX: 'medium' });
+child = primary.proc;
+const proxyPort = primary.port;
+const childOutput = primary.output;
 
 const health = await new Promise((resolve, reject) => {
   http.get(`http://127.0.0.1:${proxyPort}/health`, response => {
@@ -73,13 +90,15 @@ const health = await new Promise((resolve, reject) => {
 assert.equal(health.service, 'crouter-ollama-heartbeat');
 assert.equal(health.heartbeat_ms, 40);
 assert.equal(health.effort_rewrite, 'deepseek-anthropic-pass-through-v2');
+assert.equal(health.effort_clamp, 'ollama-effort-clamp-v1');
+assert.equal(health.effort_cap, 'medium');
 assert.equal(health.image_fallback, 'deepseek-text-image-v1');
 
-async function send(body, chunked = false) {
+async function send(body, chunked = false, port = proxyPort) {
   return await new Promise((resolve, reject) => {
   const request = http.request({
     host: '127.0.0.1',
-    port: proxyPort,
+    port,
     path: '/v1/messages?beta=true',
     method: 'POST',
     headers: { 'content-type': 'application/json', ...(chunked
@@ -146,7 +165,56 @@ const otherModelBody = JSON.stringify({
   thinking: { type: 'enabled' }, output_config: { effort: 'max' }, messages: [],
 });
 await send(otherModelBody);
-assert.equal(receivedBodies[4], otherModelBody);
+// Local models carry the declared cap: `max` is rejected by the Qwen3.8 chat
+// template, and Ollama reports that as a bare HTTP 500 that Claude Code cannot
+// downgrade from, so the relay must clamp it before forwarding.
+const otherModelForwarded = JSON.parse(receivedBodies.at(-1));
+assert.equal(otherModelForwarded.output_config.effort, 'medium');
+assert.deepEqual(otherModelForwarded.thinking, { type: 'enabled' });
+
+// Every level above the cap, and any level the provider did not declare, is
+// clamped; levels at or below the cap travel untouched.
+for (const [effort, expected] of [['high', 'medium'], ['xhigh', 'medium'], ['max', 'medium'], ['ultra', 'medium'], ['low', 'low'], ['medium', 'medium']]) {
+  const body = JSON.stringify({ model: 'qwen3.8-27b-heretic:q4', stream: false, output_config: { effort, format: 'json' }, messages: [] });
+  await send(body);
+  const forwarded = JSON.parse(receivedBodies.at(-1));
+  assert.equal(forwarded.output_config.effort, expected, `${effort} must become ${expected}`);
+  assert.equal(forwarded.output_config.format, 'json', 'sibling output_config keys must survive the clamp');
+}
+
+// A request that carries no effort stays byte-identical.
+const noEffortBody = JSON.stringify({
+  model: 'qwen3.8-27b-heretic:q4', stream: false,
+  thinking: { type: 'adaptive', display: 'omitted' },
+  messages: [{ role: 'user', content: [{ type: 'text', text: 'hello' }] }],
+});
+await send(noEffortBody);
+assert.equal(receivedBodies.at(-1), noEffortBody);
+
+// DeepSeek V4 keeps its own pass-through contract even though the cap is set.
+const deepseekAboveCapBody = JSON.stringify({
+  model: 'deepseek-v4-flash:q8', stream: false, output_config: { effort: 'high' }, messages: [],
+});
+await send(deepseekAboveCapBody);
+assert.equal(receivedBodies.at(-1), deepseekAboveCapBody);
+
+// A relay started without a declared cap must stay byte-transparent for every
+// local model, so unrelated Ollama models keep the effort their caller chose.
+const uncapped = await startProxy({ OLLAMA_EFFORT_MAX: '' });
+helperProxies.push(uncapped.proc);
+const uncappedHealth = await new Promise((resolve, reject) => {
+  http.get(`http://127.0.0.1:${uncapped.port}/health`, response => {
+    const chunks = [];
+    response.on('data', chunk => chunks.push(chunk));
+    response.on('end', () => resolve(JSON.parse(Buffer.concat(chunks).toString('utf8'))));
+  }).on('error', reject);
+});
+assert.equal(uncappedHealth.effort_cap, '');
+const uncappedBody = JSON.stringify({
+  model: 'qwen3.8-27b-heretic:q4', stream: false, output_config: { effort: 'max' }, messages: [],
+});
+await send(uncappedBody, false, uncapped.port);
+assert.equal(receivedBodies.at(-1), uncappedBody);
 
 const imageBody = JSON.stringify({
   model: 'deepseek-v4-flash:q8', stream: false,
@@ -163,19 +231,19 @@ const imageBody = JSON.stringify({
   }],
 });
 await send(imageBody);
-const imageForwarded = JSON.parse(receivedBodies[5]);
+const imageForwarded = JSON.parse(receivedBodies.at(-1));
 const downgradedContent = imageForwarded.messages[0].content[0].content;
 assert.equal(downgradedContent[0].text, 'before');
 assert.equal(downgradedContent[1].type, 'text');
 assert.match(downgradedContent[1].text, /local DeepSeek model is text-only/);
-assert.doesNotMatch(receivedBodies[5], /secret-image-bytes/);
+assert.doesNotMatch(receivedBodies.at(-1), /secret-image-bytes/);
 
 const otherModelImageBody = JSON.stringify({
   model: 'llava', stream: false,
   messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', data: 'keep-me' } }] }],
 });
 await send(otherModelImageBody);
-assert.equal(receivedBodies[6], otherModelImageBody);
+assert.equal(receivedBodies.at(-1), otherModelImageBody);
 
 // Buffering a chunked request must replace its framing, including when a
 // DeepSeek image fallback changes the byte length and SSE starts early.
@@ -235,12 +303,47 @@ assert.deepEqual(toolResult.content[0], scopedImages.messages[1].content[1].cont
 assert.equal(toolResult.content[1].type, 'text');
 assert.doesNotMatch(receivedBodies.at(-1), /direct-image|nested-image/);
 
-assert.match(childOutput, /"requested_effort":"max","effective_effort":"ollama_think_enabled","rewritten":false/);
-assert.match(childOutput, /"requested_effort":"xhigh","effective_effort":"ollama_think_enabled","rewritten":false/);
-assert.match(childOutput, /"effective_effort":"disabled","rewritten":false/);
-assert.match(childOutput, /"type":"image_fallback".*"images_downgraded":1/);
+// Claude Code emits its environment block as a system-role message after the
+// first user turn, while Ollama places the top-level `system` field ahead of
+// `messages`; folding that turn into the field is the only shape the Qwen3.8
+// template accepts.
+const foldBody = JSON.stringify({
+  model: 'qwen3.8-27b-heretic:q4', stream: false,
+  system: [{ type: 'text', text: 'declared system' }],
+  messages: [
+    { role: 'user', content: [{ type: 'text', text: 'hello' }] },
+    { role: 'system', content: [{ type: 'text', text: '# Environment' }] },
+  ],
+});
+await send(foldBody);
+const folded = JSON.parse(receivedBodies.at(-1));
+assert.deepEqual(folded.system, [
+  { type: 'text', text: 'declared system' },
+  { type: 'text', text: '# Environment' },
+]);
+assert.deepEqual(folded.messages, [{ role: 'user', content: [{ type: 'text', text: 'hello' }] }]);
+
+// A request without a system turn stays byte-identical for other models.
+const noFoldBody = JSON.stringify({
+  model: 'qwen3.8-27b-heretic:q4', stream: false,
+  messages: [{ role: 'user', content: [{ type: 'text', text: 'hello' }] }],
+});
+await send(noFoldBody);
+assert.equal(receivedBodies.at(-1), noFoldBody);
+
+assert.match(childOutput(), /"type":"system_fold".*"system_msgs_folded":1/);
+assert.match(childOutput(), /"requested_effort":"max","effective_effort":"ollama_think_enabled","rewritten":false/);
+assert.match(childOutput(), /"requested_effort":"xhigh","effective_effort":"ollama_think_enabled","rewritten":false/);
+assert.match(childOutput(), /"effective_effort":"disabled","rewritten":false/);
+assert.match(childOutput(), /"type":"image_fallback".*"images_downgraded":1/);
+assert.match(childOutput(), /"type":"effort_clamp","version":"ollama-effort-clamp-v1","requested_effort":"high","effective_effort":"medium","cap":"medium"/);
+assert.match(childOutput(), /"type":"effort_clamp","version":"ollama-effort-clamp-v1","requested_effort":"ultra","effective_effort":"medium","cap":"medium"/);
+assert.doesNotMatch(childOutput(), /"type":"effort_clamp".*"requested_effort":"(?:low|medium)"/);
 
 } finally {
+  for (const proc of helperProxies) {
+    if (proc.exitCode === null && proc.signalCode === null) proc.kill('SIGKILL');
+  }
   if (child && child.exitCode === null && child.signalCode === null) {
     const exited = once(child, 'exit');
     child.kill('SIGTERM');
@@ -251,7 +354,7 @@ assert.match(childOutput, /"type":"image_fallback".*"images_downgraded":1/);
   upstream.closeAllConnections();
   await new Promise(resolve => upstream.close(resolve));
 }
-console.log('ok    Ollama heartbeat proxy preserves bytes and DeepSeek thinking requests, emits SSE comments, and downgrades unsupported images');
+console.log('ok    Ollama heartbeat proxy preserves bytes and DeepSeek thinking requests, emits SSE comments, downgrades unsupported images, and clamps local reasoning effort');
 NODE
 
 # The provider hook may reap only the relay PID recorded by its own PRE_START.

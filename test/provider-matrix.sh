@@ -43,15 +43,17 @@ assert_eq anthropic.opus claude-opus-5-5 "$MODEL_OPUS"
 assert_eq anthropic.extras claude-fable-5-1 "$MODEL_ALIASES"
 
 load openrouter
-assert_eq openrouter.model qwen/qwen3.8-27b:free "$MODEL"
-assert_eq openrouter.context 262144 "$CONTEXT_TOKENS"
+assert_eq openrouter.model nvidia/nemotron-3-ultra-550b-a55b:free "$MODEL"
+assert_eq openrouter.context 1000000 "$CONTEXT_TOKENS"
+assert_eq openrouter.auto-compact 786432 "$AUTO_COMPACT_TOKENS"
+assert_eq openrouter.effort max "$EFFORT"
 
 load ollama
 assert_eq ollama.base http://127.0.0.1:11435 "$BASE_URL"
 assert_eq ollama.model qwen3.8-27b "$MODEL"
 assert_eq ollama.context-fallback 65536 "$CONTEXT_TOKENS"
-assert_eq ollama.context-override "deepseek-v4-flash:q8=373760 deepseek-v4-flash=373760 qwen3.8-27b=262144" "$MODEL_CONTEXT_OVERRIDES"
-assert_eq ollama.self-route "deepseek-v4-flash:q8 deepseek-v4-flash qwen3.8-27b" "$MODEL_SELF_ROUTE_MODELS"
+assert_eq ollama.context-override "deepseek-v4-flash:q8=373760 deepseek-v4-flash=373760 qwen3.8-27b=262144 qwen3.8-27b-heretic:q4=262144 qwen3.8-27b-heretic:q4-dflash=262144 qwen3.8-27b-heretic=262144" "$MODEL_CONTEXT_OVERRIDES"
+assert_eq ollama.self-route "deepseek-v4-flash:q8 deepseek-v4-flash qwen3.8-27b qwen3.8-27b-heretic:q4 qwen3.8-27b-heretic:q4-dflash qwen3.8-27b-heretic" "$MODEL_SELF_ROUTE_MODELS"
 assert_eq ollama.effort max "$EFFORT"
 printf '%s\n' "$EXTRA_ENV" | grep -q '^ANTHROPIC_AUTH_TOKEN=ollama$' || die "ollama auth token mismatch"
 printf '%s\n' "$EXTRA_ENV" | grep -q '^ANTHROPIC_API_KEY=$' || die "ollama API key must be blank"

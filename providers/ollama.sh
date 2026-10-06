@@ -16,8 +16,8 @@ CONTEXT_TOKENS="65536"
 # DeepSeek keeps its validated practical cap. Only the canonical Qwen ID gets
 # the MLX model's native 262K context; legacy Qwen aliases are intentionally
 # unsupported.
-MODEL_CONTEXT_OVERRIDES="deepseek-v4-flash:q8=373760 deepseek-v4-flash=373760 qwen3.8-27b=262144"
-MODEL_SELF_ROUTE_MODELS="deepseek-v4-flash:q8 deepseek-v4-flash qwen3.8-27b"
+MODEL_CONTEXT_OVERRIDES="deepseek-v4-flash:q8=373760 deepseek-v4-flash=373760 qwen3.8-27b=262144 qwen3.8-27b-heretic:q4=262144 qwen3.8-27b-heretic:q4-dflash=262144 qwen3.8-27b-heretic=262144"
+MODEL_SELF_ROUTE_MODELS="deepseek-v4-flash:q8 deepseek-v4-flash qwen3.8-27b qwen3.8-27b-heretic:q4 qwen3.8-27b-heretic:q4-dflash qwen3.8-27b-heretic"
 EFFORT="max"
 
 # DeepSeek V4 receives Claude Code's max effort through output_config. The
@@ -80,9 +80,33 @@ if [ "$_local_selected_model" = qwen3.8-27b ]; then
 else
   BASE_URL=http://127.0.0.1:11435
   HEALTH_CHECK_URL=$BASE_URL/health
+  # Ollama copies `output_config.effort` into the model chat template
+  # (collapsing xhigh to high) and answers HTTP 500 for a level the template
+  # rejects; Claude Code cannot downgrade on that body, so the session retries
+  # for up to half an hour. The Qwen3.8 template accepts xhigh, medium, and low,
+  # but Ollama turns an incoming xhigh into the rejected `high`, leaving `medium`
+  # as the highest usable level. The heartbeat proxy clamps every request to the
+  # level declared here so a caller-supplied --effort cannot wedge the session.
+  _ollama_effort_cap=""
+  case $_local_selected_model in
+    qwen3.8*) EFFORT="medium"; _ollama_effort_cap="medium" ;;
+  esac
   curl -fsS --max-time 3 http://127.0.0.1:11434 >/dev/null 2>&1 || die "Ollama not reachable at http://127.0.0.1:11434 — start it (ollama serve) and pull the selected model first"
-  if ! curl -fsS --max-time 1 "$HEALTH_CHECK_URL" 2>/dev/null | grep -q crouter-ollama-heartbeat; then
-    OLLAMA_HEARTBEAT_INTERVAL_MS=60000 nohup node "$ROOT_DIR/lib/ollama-heartbeat-proxy.mjs" >>/tmp/crouter-ollama-heartbeat-proxy.log 2>&1 &
+  _ollama_health=$(curl -fsS --max-time 1 "$HEALTH_CHECK_URL" 2>/dev/null || true)
+  if printf "%s\n" "$_ollama_health" | grep -q crouter-ollama-heartbeat; then
+    # Reuse the running relay only when it clamps to the level this model needs.
+    printf "%s\n" "$_ollama_health" | grep -Fq "\"effort_cap\":\"$_ollama_effort_cap\"" || {
+      _stale_pid=$(lsof -nP -iTCP:11435 -sTCP:LISTEN -t 2>/dev/null | head -1)
+      [ -n "$_stale_pid" ] && kill "$_stale_pid" 2>/dev/null || true
+      for _ollama_proxy_try in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+        curl -fsS --max-time 1 "$HEALTH_CHECK_URL" >/dev/null 2>&1 || break
+        sleep 0.2
+      done
+      _ollama_health=
+    }
+  fi
+  if ! printf "%s\n" "$_ollama_health" | grep -q crouter-ollama-heartbeat; then
+    OLLAMA_EFFORT_MAX=$_ollama_effort_cap OLLAMA_HEARTBEAT_INTERVAL_MS=60000 nohup node "$ROOT_DIR/lib/ollama-heartbeat-proxy.mjs" >>/tmp/crouter-ollama-heartbeat-proxy.log 2>&1 &
     _OLLAMA_HEARTBEAT_PROXY_PID=$!
     for _ollama_proxy_try in 1 2 3 4 5 6 7 8 9 10; do
       curl -fsS --max-time 1 "$HEALTH_CHECK_URL" 2>/dev/null | grep -q crouter-ollama-heartbeat && break
@@ -91,7 +115,7 @@ else
   fi
   curl -fsS --max-time 1 "$HEALTH_CHECK_URL" 2>/dev/null | grep -q crouter-ollama-heartbeat || die "Ollama heartbeat proxy failed to start at $BASE_URL"
 fi
-unset _local_selected_model _mlx_upstream_host _mlx_upstream_port _mlx_upstream_url _mlx_expected_upstream _mlx_health
+unset _local_selected_model _ollama_effort_cap _ollama_health _stale_pid _mlx_upstream_host _mlx_upstream_port _mlx_upstream_url _mlx_expected_upstream _mlx_health
 '
 
 POST_STOP='if [ -n "${_OLLAMA_HEARTBEAT_PROXY_PID:-}" ]; then kill "$_OLLAMA_HEARTBEAT_PROXY_PID" 2>/dev/null || true; wait "$_OLLAMA_HEARTBEAT_PROXY_PID" 2>/dev/null || true; _OLLAMA_HEARTBEAT_PROXY_PID=; fi; if [ -n "${_MLX_PROXY_PID:-}" ]; then kill "$_MLX_PROXY_PID" 2>/dev/null || true; wait "$_MLX_PROXY_PID" 2>/dev/null || true; _MLX_PROXY_PID=; fi'
