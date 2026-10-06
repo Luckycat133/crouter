@@ -54,11 +54,11 @@ _crouter_complete() {
         fi ;;
       add)
         if [ "$COMP_CWORD" -eq 2 ]; then
-          candidates="$providers"
+          candidates="--all -a $providers"
         elif [ "${COMP_WORDS[COMP_CWORD-1]:-}" = --surface ]; then
           candidates="plan api"
         else
-          candidates="--surface --name --stdin"
+          candidates="--all --surface --name --stdin"
         fi ;;
       provider)
         if [ "$COMP_CWORD" -eq 2 ]; then
@@ -76,7 +76,7 @@ _crouter_complete() {
         fi ;;
       list)
         if [ "$COMP_CWORD" -eq 2 ]; then
-          candidates="keys $providers"
+          candidates="--all -a keys $providers"
         elif [ "$COMP_CWORD" -eq 3 ] && [ "${COMP_WORDS[2]:-}" = keys ]; then
           candidates="$providers"
         fi ;;

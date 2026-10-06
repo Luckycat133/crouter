@@ -12,11 +12,13 @@
 #   crouter <provider> [<model>] [claude args...]   Launch (optional positional model)
 #   crouter all                           Unified gateway: one URL, switch providers via /model
 #   crouter all --check                   Print the redacted configured route graph; do not launch
-#   crouter list                          List available providers
-#   crouter doctor [provider]             Run environment diagnostics
-#   crouter add <provider>                Add a key to a provider's keychain keypool
-#   crouter remove <provider>             Remove a key from the keypool (and Keychain)
+#   crouter list [--all]                  List providers that can run (--all: the full catalog)
 #   crouter list keys <provider>          List keys registered for a provider
+#   crouter doctor [provider]             Run environment diagnostics
+#   crouter add [<provider>]              Add a key (no provider: pick from a menu)
+#   crouter add <provider> --surface plan|api --name <service> --stdin
+#   crouter remove <provider> --name <service> [--surface plan|api]
+#                                         Remove a key from the keypool (and Keychain)
 #   crouter provider show <provider>      Show full provider config (secrets redacted)
 #   crouter config show                   Show effective configuration
 #   crouter config path                   Show path to config.sh
@@ -24,6 +26,7 @@
 #   crouter logs tail <provider>          tail -f the provider's log file
 #   crouter uninstall [-y]                Remove symlinks from $INSTALL_DIR
 #   crouter help                          Show this help
+#   crouter <command> -h|--help           Show usage for one command
 #   crouter --version                     Show version
 #
 # Providers live in providers/<name>.sh and only declare "how to connect".
@@ -103,6 +106,52 @@ info() { printf '%s\n' "$*"; }
 
 usage() {
   sed -n '/^# Usage:/,/^#$/p' "$SELF" | sed 's/^# \{0,1\}//'
+}
+
+# Per-command usage. Every command that takes arguments answers -h/--help here,
+# so a help request can never fall through to a provider launch or a diagnostic
+# run. Keep these in step with the Usage block above.
+usage_list() {
+  info "usage: crouter list [--all]"
+  info "       crouter list keys <provider>"
+  info "       crouter list <provider>"
+}
+usage_list_keys() {
+  info "usage: crouter list keys <provider>"
+  info "       crouter list <provider>"
+}
+usage_doctor() {
+  info "usage: crouter doctor [<provider>]"
+  info ""
+  info "With no provider, crouter checks the local environment and reports every"
+  info "provider, listing the ones that need attention first. With a provider, it"
+  info "reports that provider only and prints the next check to make."
+}
+usage_add() {
+  info "usage: crouter add [<provider> [--surface plan|api] [--name <service>] [--stdin]]"
+  info "       crouter add [--all] [--stdin]"
+  info ""
+  info "With no provider, crouter lists the providers that still need a key and"
+  info "asks which one to configure. --all widens the menu to every provider, for"
+  info "adding or rotating a key. --stdin reads the secret from stdin instead of"
+  info "the terminal, for password managers and CI."
+}
+usage_remove() {
+  info "usage: crouter remove <provider> --name <service> [--surface plan|api] [-y]"
+  info ""
+  info "Deletes the Keychain item and, for a pooled key, its registry entry."
+}
+usage_provider() {
+  info "usage: crouter provider show <provider>"
+  info "       crouter provider <provider>"
+}
+usage_config() {
+  info "usage: crouter config show"
+  info "       crouter config path"
+}
+usage_logs() {
+  info "usage: crouter logs list"
+  info "       crouter logs tail <provider>"
 }
 
 # ---------------------------------------------------------------------------
@@ -271,27 +320,103 @@ cmd_run() {
   launch_claude "$_main_model" "$_bypass_auth" "$@"
 }
 
-cmd_list() {
-  printf '%-22s %-26s %-11s %s\n' 'PROVIDER' 'DEFAULT MODEL' 'AUTH' 'ENDPOINT'
-  for _n in $(provider_names); do
+# The Auth column keeps reporting how a route authenticates (api/plan/none/...),
+# so it is computed the same way for every provider before status is applied.
+provider_auth_mode() {
+  if is_dual_source; then
+    if [ -n "${DEFAULT_TOKEN_ENV:-}" ]; then printf 'dual'; else printf 'apikey'; fi
+  elif is_surface_provider; then
+    if [ -n "${PLAN_URL:-}" ] && [ -n "${API_URL:-}" ]; then
+      printf 'plan+api'
+    elif [ -n "${PLAN_URL:-}" ]; then
+      printf 'plan'
+    else
+      printf 'api'
+    fi
+  else
+    printf '%s' "$AUTH_MODE"
+  fi
+}
+
+# STATUS answers "can I launch this right now", which is the question the
+# catalog list exists to answer:
+#   ready  - a credential is present (env, Keychain, or key pool)
+#   local  - the route needs no credential, only a local service on this Mac
+#   native - Claude Code's own cloud backend owns the login
+#   no-key - a credential is missing, so the route cannot run yet
+provider_status() {
+  case ${NATIVE_BACKEND:-} in
+    ?*) printf 'native'; return 0 ;;
+  esac
+  case ${AUTH_MODE:-} in
+    static|none) printf 'local'; return 0 ;;
+  esac
+  if check_auth; then printf 'ready'; else printf 'no-key'; fi
+}
+
+# provider_scan <outdir> <list|doctor>
+#   Report every provider into one file per provider, concurrently. A status
+#   costs a `security find-generic-password` per credential reference, and that
+#   process is ~80 ms, so a serial pass over the catalog takes seconds where the
+#   parallel pass takes one. Callers read the files back in `provider_names`
+#   order, which keeps the output deterministic regardless of finish order.
+provider_scan() {
+  _ps_dir=$1
+  _ps_kind=$2
+  for _ps_n in $(provider_names); do
     (
-      load_provider "$_n"
-      if is_dual_source; then
-        if [ -n "${DEFAULT_TOKEN_ENV:-}" ]; then _am="dual"; else _am="apikey"; fi
-      elif is_surface_provider; then
-        if [ -n "${PLAN_URL:-}" ] && [ -n "${API_URL:-}" ]; then
-          _am="plan+api"
-        elif [ -n "${PLAN_URL:-}" ]; then
-          _am="plan"
-        else
-          _am="api"
-        fi
-      else
-        _am="$AUTH_MODE"
-      fi
-      printf '%-22s %-26s %-11s %s\n' "$_n" "$MODEL" "$_am" "$BASE_URL"
-    )
+      load_provider "$_ps_n" || exit 0
+      case $_ps_kind in
+        list)
+          printf '%s\t%s\t%s\t%s\t%s\n' \
+            "$_ps_n" "$(provider_status)" "$(provider_auth_mode)" "$MODEL" "$BASE_URL" \
+            > "$_ps_dir/$_ps_n" ;;
+        doctor)
+          status_one "$_ps_n" > "$_ps_dir/$_ps_n" ;;
+      esac
+    ) &
   done
+  wait
+}
+
+# crouter list [--all]
+#   Default output is the set of providers that can run right now; --all adds
+#   the ones that still need a credential.
+cmd_list() {
+  _all=0
+  for _arg in "$@"; do
+    case $_arg in
+      --all|-a) _all=1 ;;
+      -h|--help) usage_list; return 0 ;;
+      *) die "list: unknown argument '$_arg' (try: crouter list [--all])" ;;
+    esac
+  done
+
+  _rows=$(mktemp -d "${TMPDIR:-/tmp}/crouter-list.XXXXXX") || die "list: cannot create a temporary directory"
+  provider_scan "$_rows" list
+
+  printf '%-22s %-7s %-11s %-30s %s\n' 'PROVIDER' 'STATUS' 'AUTH' 'DEFAULT MODEL' 'ENDPOINT'
+  _shown=0
+  _total=0
+  for _n in $(provider_names); do
+    [ -f "$_rows/$_n" ] || continue
+    _total=$((_total + 1))
+    IFS='	' read -r _n _st _mode _model _url < "$_rows/$_n" || continue
+    [ -n "${_st:-}" ] || continue
+    if [ "$_all" -eq 0 ] && [ "$_st" = no-key ]; then continue; fi
+    printf '%-22s %-7s %-11s %-30s %s\n' "$_n" "$_st" "$_mode" "$_model" "$_url"
+    _shown=$((_shown + 1))
+  done
+  rm -rf "$_rows"
+  _rows=
+
+  if [ "$_shown" -eq 0 ]; then
+    info ""
+    info "no provider is configured yet — run 'crouter add' to set one up, or 'crouter list --all' to see the full catalog"
+  elif [ "$_all" -eq 0 ]; then
+    info ""
+    info "$((_total - _shown)) of $_total providers have no credential yet — 'crouter list --all' to show them all, 'crouter add <provider>' to configure one"
+  fi
 }
 
 status_one() {
@@ -405,8 +530,16 @@ status_one() {
 }
 
 cmd_doctor() {
+  case ${1:-} in
+    -h|--help) usage_doctor; return 0 ;;
+  esac
+  case ${1:-} in
+    -*) die "doctor: unknown argument '$1' (try: crouter doctor [<provider>])" ;;
+  esac
+
   _fail=0
 
+  info "Environment"
   if [ -n "$CLAUDE_BIN" ] && [ -x "$CLAUDE_BIN" ]; then
     info "ok    claude binary: $CLAUDE_BIN"
   else
@@ -434,9 +567,66 @@ cmd_doctor() {
   if [ -n "${1:-}" ]; then
     status_one "$1" 1 || _fail=1
   else
-    for _n in $(provider_names); do status_one "$_n" || :; done
+    cmd_doctor_overview
   fi
   return $_fail
+}
+
+# cmd_doctor_overview
+#   Every provider, with the ones that need attention first. A missing optional
+#   credential is expected, so it never decides the command's exit status: the
+#   overview is a map, not a verdict. `crouter doctor <provider>` is the
+#   precise, exit-code-bearing form.
+cmd_doctor_overview() {
+  _dr=$(mktemp -d "${TMPDIR:-/tmp}/crouter-doctor.XXXXXX") || {
+    info "note  cannot create a temporary directory; printing providers unsorted"
+    for _n in $(provider_names); do status_one "$_n" || :; done
+    return 0
+  }
+  provider_scan "$_dr" doctor
+
+  _pending=$(mktemp "${TMPDIR:-/tmp}/crouter-doctor-rows.XXXXXX") || {
+    for _n in $(provider_names); do
+      [ -f "$_dr/$_n" ] || continue
+      IFS= read -r _line < "$_dr/$_n" || continue
+      [ -n "$_line" ] && info "$_line"
+    done
+    rm -rf "$_dr"
+    return 0
+  }
+  _total=0
+  _missing=0
+  _down=0
+  for _n in $(provider_names); do
+    [ -f "$_dr/$_n" ] || continue
+    IFS= read -r _line < "$_dr/$_n" || continue
+    [ -n "$_line" ] || continue
+    _total=$((_total + 1))
+    case $_line in
+      *auth:MISSING*)               _key=0; _missing=$((_missing + 1)) ;;
+      *health:DOWN*)                _key=1; _down=$((_down + 1)) ;;
+      *)                            _key=2 ;;
+    esac
+    printf '%s\t%s\n' "$_key" "$_line" >> "$_pending"
+  done
+  rm -rf "$_dr"
+  _dr=
+
+  _summary="$_total total"
+  [ "$_missing" -eq 0 ] || _summary="$_summary — $_missing without a credential"
+  [ "$_down" -eq 0 ]    || _summary="$_summary, $_down with a failing health check"
+  info "Providers ($_summary)"
+  sort -k1,1n -k2,2 "$_pending" | cut -f2-
+  rm -f "$_pending"
+  _pending=
+
+  if [ "$_missing" -gt 0 ] || [ "$_down" -gt 0 ]; then
+    info ""
+    info "next: 'crouter doctor <provider>' explains one in detail"
+    if [ "$_down" -gt 0 ]; then
+      info "      'crouter <provider>' runs the startup hook that health checks do not start"
+    fi
+  fi
 }
 
 
@@ -448,6 +638,10 @@ cmd=$1; shift
 # cmd_provider_show <provider>
 #   Print the full provider configuration with secrets redacted.
 cmd_provider_show() {
+  case ${1:-} in
+    -h|--help) usage_provider; return 0 ;;
+    '')        die "provider: name a provider (try: crouter list)" ;;
+  esac
   _p=$1
   load_provider "$_p"
   apply_model_context_override "$MODEL"
@@ -460,7 +654,11 @@ cmd_provider_show() {
   printf 'endpoint:    %s\n' "$BASE_URL"
   printf 'default:     %s\n' "$MODEL"
   printf 'context:     %s tokens\n' "${CONTEXT_TOKENS:-<unset>}"
-  printf 'auto compact: %s tokens\n' "${AUTO_COMPACT_TOKENS:-<unset>}"
+  if [ -n "${AUTO_COMPACT_TOKENS:-}" ]; then
+    printf 'auto compact: %s tokens\n' "$AUTO_COMPACT_TOKENS"
+  else
+    printf 'auto compact: <unset>\n'
+  fi
   printf 'effort:      %s\n' "${EFFORT:-<unset>}"
   printf '\n'
   printf 'aliases:\n'
@@ -629,17 +827,36 @@ cmd_logs_list() {
   for _f in "$_ld"/*; do
     [ -e "$_f" ] || continue
     _any=1
-    printf '%10s  %s  %s\n' \
-      "$(ls -l "$_f" | awk '{print $5}')" \
-      "$(ls -l "$_f" | awk '{print $6, $7, $8}')" \
-      "$_f"
+    break
   done
-  if [ "$_any" -eq 0 ]; then info "(no logs yet)"; fi
+  if [ "$_any" -eq 0 ]; then info "(no logs yet)"; return 0; fi
+
+  printf '%10s  %-16s  %s\n' 'SIZE' 'MODIFIED' 'FILE'
+  for _f in "$_ld"/*; do
+    [ -e "$_f" ] || continue
+    # Fields 5/6/7 of ls -l are size and mtime; field 8 is the filename, which
+    # is printed separately below, so reading field 8 here duplicated the path
+    # at the end of every line.
+    _meta=$(ls -l "$_f" 2>/dev/null | awk 'NR==1{print $5, $6, $7}')
+    if [ -n "$_meta" ]; then
+      _size=${_meta%% *}
+      _when=${_meta#* }
+    else
+      _size='?'
+      _when='unknown'
+    fi
+    printf '%10s  %-16s  %s\n' "$_size" "$_when" "$_f"
+  done
 }
 
 # cmd_logs_tail <provider>
 #   tail -f the most likely log file for that provider.
 cmd_logs_tail() {
+  case ${1:-} in
+    -h|--help) usage_logs; return 0 ;;
+    '')        die "logs: name a provider (try: crouter logs list)" ;;
+    -*)        die "logs: unknown argument '$1' (try: crouter logs tail <provider>)" ;;
+  esac
   _p=$1
   _ld=${LOG_DIR:-$ROOT_DIR/logs}
   _found=
@@ -895,35 +1112,72 @@ case $cmd in
   version|-V|--version) info "crouter $VERSION"; exit 0 ;;
   list)
     case "${1:-}" in
+      ""|--all|-a|-h|--help) cmd_list "$@" ;;
       keys)  # back-compat: crouter list keys <provider>
-        [ $# -ge 2 ] || die "usage: crouter list [keys] <provider>"
-        cmd_list_keys "$2" ;;
-      "")     cmd_list ;;
+        case "${2:-}" in
+          -h|--help) usage_list_keys ;;
+          -*) die "list keys: unknown argument '$2' (try: crouter list keys <provider>)" ;;
+          *)  [ $# -ge 2 ] || die "usage: crouter list keys <provider>"
+              cmd_list_keys "$2" ;;
+        esac ;;
+      -*) die "list: unknown argument '${1}' (try: crouter list [--all])" ;;
       *)      cmd_list_keys "$1" ;;
     esac
     ;;
   doctor)         cmd_doctor "${1:-}" ;;
-  add)            [ $# -ge 1 ] || die "usage: crouter add <provider> [--surface plan|api] [--name <service>] [--stdin]"; cmd_add_key "$@" ;;
-  remove)         [ $# -ge 1 ] || die "usage: crouter remove <provider> --name <service> [--surface plan|api]"; cmd_remove_key "$@" ;;
+  add)
+    case "${1:-}" in
+      "")       cmd_add_interactive ;;
+      -h|--help) usage_add ;;
+      -*)       cmd_add_interactive "$@" ;;
+      *)        cmd_add_key "$@" ;;
+    esac
+    ;;
+  remove)         cmd_remove_key "$@" ;;
   provider)
     # Accept both `crouter provider <name>` and the documented
     # `crouter provider show <name>`.
+    case "${1:-}" in
+      -h|--help) usage_provider ;;
+      "")        die "provider: name a provider (try: crouter list)" ;;
+    esac
     [ "${1:-}" = show ] && shift
-    [ $# -ge 1 ] || die "usage: crouter provider show <provider>"
+    case "${1:-}" in
+      -h|--help) usage_provider ;;
+      "")        die "provider: name a provider (try: crouter list)" ;;
+    esac
     cmd_provider_show "$1" ;;
   config)
-    if [ "${1:-}" = path ]; then
-      cmd_config_path
-    else
-      cmd_config_show
-    fi ;;
+    case "${1:-}" in
+      ""|show)
+        case "${2:-}" in
+          -h|--help) usage_config ;;
+          "")        cmd_config_show ;;
+          *) die "config: unexpected argument '${2}' (try: crouter config show|path)" ;;
+        esac ;;
+      path)
+        case "${2:-}" in
+          -h|--help) usage_config ;;
+          "")        cmd_config_path ;;
+          *) die "config: unexpected argument '${2}' (try: crouter config show|path)" ;;
+        esac ;;
+      -h|--help) usage_config ;;
+      *) die "config: unknown argument '$1' (try: crouter config show|path)" ;;
+    esac ;;
   logs)
-    if [ "${1:-}" = tail ]; then
-      [ $# -ge 2 ] || die "usage: crouter logs tail <provider>"
-      cmd_logs_tail "$2"
-    else
-      cmd_logs_list
-    fi ;;
+    case "${1:-}" in
+      ""|list)
+        case "${2:-}" in
+          -h|--help) usage_logs ;;
+          "")        cmd_logs_list ;;
+          *) die "logs: unexpected argument '${2}' (try: crouter logs list|tail)" ;;
+        esac ;;
+      tail)
+        [ $# -ge 2 ] || die "usage: crouter logs tail <provider>"
+        cmd_logs_tail "$2" ;;
+      -h|--help) usage_logs ;;
+      *) die "logs: unknown argument '$1' (try: crouter logs list|tail)" ;;
+    esac ;;
   uninstall)       cmd_uninstall "$@" ;;
   claude)          cmd_claude "$@" ;;
   all)            cmd_all "$@" ;;

@@ -165,6 +165,11 @@ selection_dispatch() {
     1)
       case $1 in
         --clear) selection_clear ;;
+        -h|--help)
+          # Runs before the main usage helpers are defined, so keep this local.
+          printf 'usage: crouter use [<provider>|app/<name>|--clear]\n'
+          printf '\n'
+          printf 'With no argument, prints the current selection (none if nothing is set).\n' ;;
         *) selection_write "$1" ;;
       esac ;;
     *) printf 'crouter: usage: crouter use [<provider>|app/<name>|--clear]\n' >&2; return 2 ;;

@@ -68,11 +68,24 @@ native_app_run() {
 native_app_dispatch() {
   case ${1:-} in
     list)
+      case ${2:-} in
+        -h|--help)
+          printf 'usage: crouter app list\n'
+          printf '       crouter app <name> [args...]\n'
+          return 0 ;;
+      esac
       [ "$#" -eq 1 ] || {
         printf 'crouter: usage: crouter app list\n' >&2
         return 2
       }
       native_app_list ;;
+    -h|--help)
+      # Runs before the main usage helpers are defined, so keep this local.
+      printf 'usage: crouter app list\n'
+      printf '       crouter app <name> [args...]\n'
+      printf '\n'
+      printf 'Native CLIs keep their own login and environment; crouter only locates\n'
+      printf 'the executable and forwards arguments.\n' ;;
     '')
       printf 'crouter: usage: crouter app <name> [args...] (or crouter app list)\n' >&2
       return 2 ;;

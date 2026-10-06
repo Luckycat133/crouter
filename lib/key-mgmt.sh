@@ -204,6 +204,122 @@ _read_managed_secret() {
   fi
 }
 
+# cmd_add_interactive [--all] [--stdin]
+#   `crouter add` with no provider: show the providers that still have no
+#   credential, take a number or a name, then hand off to cmd_add_key so one
+#   code path reads, stores, and registers the secret. --all widens the menu to
+#   every provider, which is how a second key is pooled or rotated. The menu
+#   reads stdin so a piped session can drive it; the secret prompt keeps its own
+#   /dev/tty contract, and --stdin continues to read the secret from stdin.
+cmd_add_interactive() {
+  _cai_stdin=0
+  _cai_all=0
+  for _cai_arg in "$@"; do
+    case $_cai_arg in
+      --stdin|--from-stdin) _cai_stdin=1 ;;
+      --all|-a) _cai_all=1 ;;
+      -h|--help)
+        usage_add
+        return 0 ;;
+      *) die "add: unknown argument '$_cai_arg'" ;;
+    esac
+  done
+
+  _cai_full=$(mktemp "${TMPDIR:-/tmp}/crouter-add.XXXXXX") || die "add: cannot create a temporary file"
+  for _cai_name in $(provider_names); do
+    (
+      load_provider "$_cai_name"
+      printf '%s\t%s\t%s\t%s\n' "$_cai_name" "$(provider_status)" "$(provider_auth_mode)" "$MODEL" >> "$_cai_full"
+    )
+  done
+
+  _cai_file=$(mktemp "${TMPDIR:-/tmp}/crouter-add.XXXXXX") || {
+    rm -f "$_cai_full"
+    die "add: cannot create a temporary file"
+  }
+  _cai_total=0
+  _cai_missing=0
+  while IFS='	' read -r _cai_name _cai_st _cai_mode _cai_model; do
+    _cai_total=$((_cai_total + 1))
+    if [ "$_cai_st" = no-key ]; then _cai_missing=$((_cai_missing + 1)); fi
+    if [ "$_cai_all" -eq 0 ] && [ "$_cai_st" != no-key ]; then continue; fi
+    printf '%s\t%s\t%s\t%s\n' "$_cai_name" "$_cai_st" "$_cai_mode" "$_cai_model" >> "$_cai_file"
+  done < "$_cai_full"
+  rm -f "$_cai_full"
+  _cai_full=
+
+  if [ ! -s "$_cai_file" ]; then
+    rm -f "$_cai_file"
+    info "every one of the $_cai_total providers already has a credential"
+    info "note  'crouter add --all' picks any provider, to add or rotate a key"
+    return 0
+  fi
+
+  if [ "$_cai_all" -eq 1 ]; then
+    info "Providers ($_cai_missing of $_cai_total still need a key):"
+  else
+    info "Providers that still need a key:"
+  fi
+  _cai_i=0
+  while IFS='	' read -r _cai_name _cai_st _cai_mode _cai_model; do
+    _cai_i=$((_cai_i + 1))
+    printf '  %2d) %-8s %-22s %-11s %s\n' "$_cai_i" "$_cai_st" "$_cai_name" "$_cai_mode" "$_cai_model"
+  done < "$_cai_file"
+  _cai_shown=$_cai_i
+
+  printf 'Select a provider by number or name (empty cancels): '
+  IFS= read -r _cai_choice || _cai_choice=
+  case $_cai_choice in
+    ''|q|Q|quit|exit)
+      rm -f "$_cai_file"
+      info "cancelled"
+      return 0 ;;
+  esac
+
+  _cai_pick=
+  case $_cai_choice in
+    *[!0-9]*) _cai_pick=$_cai_choice ;;
+    *)
+      _cai_i=0
+      while IFS='	' read -r _cai_name _cai_st _cai_mode _cai_model; do
+        _cai_i=$((_cai_i + 1))
+        [ "$_cai_i" -eq "$_cai_choice" ] && _cai_pick=$_cai_name
+      done < "$_cai_file"
+      ;;
+  esac
+  rm -f "$_cai_file"
+  [ -n "$_cai_pick" ] || die "add: '$_cai_choice' is not one of the $_cai_shown listed providers"
+
+  load_provider "$_cai_pick"
+
+  _cai_surface=
+  if is_surface_provider && [ -n "${PLAN_URL:-}" ] && [ -n "${API_URL:-}" ]; then
+    printf 'Which surface? [1] plan (subscription)  [2] api (pay-as-you-go) [1]: '
+    IFS= read -r _cai_surface_choice || _cai_surface_choice=
+    case $_cai_surface_choice in
+      2|api|api-key) _cai_surface=api ;;
+      *) _cai_surface=plan ;;
+    esac
+  fi
+
+  if [ -n "$_cai_surface" ]; then
+    if [ "$_cai_stdin" -eq 1 ]; then
+      cmd_add_key "$_cai_pick" --surface="$_cai_surface" --stdin
+    else
+      cmd_add_key "$_cai_pick" --surface="$_cai_surface"
+    fi
+  elif [ "$_cai_stdin" -eq 1 ]; then
+    cmd_add_key "$_cai_pick" --stdin
+  else
+    cmd_add_key "$_cai_pick"
+  fi
+
+  # Report the resulting state with the same diagnostic `crouter doctor` uses,
+  # so an interactive setup ends with the answer to "did it take".
+  info ""
+  status_one "$_cai_pick"
+}
+
 cmd_add_key() {
   _p=$1; shift
   load_provider "$_p"
@@ -310,6 +426,10 @@ cmd_add_key() {
 }
 
 cmd_remove_key() {
+  case ${1:-} in
+    -h|--help) usage_remove; return 0 ;;
+    '')        die "remove: name a provider (try: crouter remove <provider> --name <service>)" ;;
+  esac
   _p=$1; shift
   load_provider "$_p"
 
@@ -398,6 +518,9 @@ cmd_remove_key() {
 
 # cmd_list_keys [provider]   ->  list registered keys. No provider = all.
 cmd_list_keys() {
+  case ${1:-} in
+    -h|--help) usage_list_keys; return 0 ;;
+  esac
   if [ -z "${1:-}" ]; then
     for _n in $(provider_names); do
       cmd_list_keys_one "$_n"

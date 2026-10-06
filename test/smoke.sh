@@ -337,8 +337,12 @@ fi
 # ---------------------------------------------------------------------------
 # Providers with explicit auth-surface assertions.
 # ---------------------------------------------------------------------------
+# The catalog assertions read one `list --all` capture: the default view
+# intentionally hides providers that still have no credential, and re-running
+# the whole catalog once per provider multiplies the slowest step in the suite.
+CATALOG=$("$GATEWAY" list --all 2>/dev/null)
 for _dp in anthropic openrouter codex 302ai aihubmix infini minimax dashscope moonshot ppio z-ai siliconflow stepfun volcengine volcengine-coding tencent qianfan qianfan-team qianfan-coding qiniu huawei xiaomi; do
-  if "$GATEWAY" list 2>/dev/null | grep -q "^$_dp "; then
+  if printf '%s\n' "$CATALOG" | grep -q "^$_dp "; then
     ok "$_dp provider is listed"
   else
     bad "$_dp provider is missing from list"
@@ -346,7 +350,7 @@ for _dp in anthropic openrouter codex 302ai aihubmix infini minimax dashscope mo
 done
 
 for _removed in openai baichuan; do
-  if "$GATEWAY" list 2>/dev/null | grep -q "^$_removed "; then
+  if printf '%s\n' "$CATALOG" | grep -q "^$_removed "; then
     bad "invalid $_removed provider is still listed"
   else
     ok "$_removed is omitted without an official Anthropic Messages endpoint"
@@ -355,23 +359,24 @@ done
 
 # Anthropic API keys and native Claude account login are separate, documented
 # entry points; domestic providers use explicit plan/API surface labels.
-if "$GATEWAY" list 2>/dev/null | awk '$1=="anthropic"{print $(NF-1)}' | grep -q '^env$'; then
+# Column order is PROVIDER STATUS AUTH DEFAULT MODEL ENDPOINT.
+if printf '%s\n' "$CATALOG" | awk '$1=="anthropic"{print $3}' | grep -q '^env$'; then
   ok "anthropic reports official API-key auth"
 else
   bad "anthropic did not report official API-key auth"
 fi
 # openrouter has a single API surface (env var, then Keychain fallback) -> never "dual".
-if "$GATEWAY" list 2>/dev/null | awk '$1=="openrouter"{print $(NF-1)}' | grep -q '^env$'; then
+if printf '%s\n' "$CATALOG" | awk '$1=="openrouter"{print $3}' | grep -q '^env$'; then
   ok "openrouter reports single-surface auth"
 else
   bad "openrouter did not report single-surface auth"
 fi
-if "$GATEWAY" list 2>/dev/null | awk '$1=="minimax"{print $(NF-1)}' | grep -q '^plan+api$'; then
+if printf '%s\n' "$CATALOG" | awk '$1=="minimax"{print $3}' | grep -q '^plan+api$'; then
   ok "minimax reports separate plan and API surfaces"
 else
   bad "minimax did not report plan+api auth"
 fi
-if "$GATEWAY" list 2>/dev/null | awk '$1=="moonshot"{print $(NF-1)}' | grep -q '^plan$'; then
+if printf '%s\n' "$CATALOG" | awk '$1=="moonshot"{print $3}' | grep -q '^plan$'; then
   ok "Kimi Code reports its membership-plan-only surface"
 else
   bad "Kimi Code did not report plan-only auth"
@@ -391,10 +396,10 @@ fi
 _openrouter_show=$("$GATEWAY" provider show openrouter 2>&1)
 _openrouter_show_rc=$?
 if [ "$_openrouter_show_rc" -eq 0 ] &&
-   printf '%s\n' "$_openrouter_show" | grep -q '^default:     qwen/qwen3.8-27b:free$' &&
-   printf '%s\n' "$_openrouter_show" | grep -q '^context:     262144 tokens$' &&
-   printf '%s\n' "$_openrouter_show" | grep -q '^effort:      xhigh$'; then
-  ok "openrouter exposes the pinned Qwen free model, context and effort"
+   printf '%s\n' "$_openrouter_show" | grep -q '^default:     nvidia/nemotron-3-ultra-550b-a55b:free$' &&
+   printf '%s\n' "$_openrouter_show" | grep -q '^context:     1000000 tokens$' &&
+   printf '%s\n' "$_openrouter_show" | grep -q '^effort:      max$'; then
+  ok "openrouter exposes the pinned Nemotron 3 Ultra free model, context and effort"
 else
   bad "openrouter provider display is stale"
 fi
@@ -444,8 +449,11 @@ else
   bad "codex exposes incorrect configured model tiers or context"
 fi
 # codex uses icebear's proxy auth -> AUTH_MODE=none, never "dual".
-if "$GATEWAY" list 2>/dev/null | awk '$1=="codex"{print $(NF-1)}' | grep -q '^none$'; then
-  ok "codex reports none auth"
+# `none` is a local route, so the default view keeps it; check both views.
+if "$GATEWAY" list 2>/dev/null | awk '$1=="codex"{print $3}' | grep -q '^none$' &&
+   "$GATEWAY" list 2>/dev/null | awk '$1=="codex"{print $2}' | grep -q '^local$' &&
+   printf '%s\n' "$CATALOG" | awk '$1=="codex"{print $3}' | grep -q '^none$'; then
+  ok "codex reports none auth and a local status"
 else
   bad "codex did not report none auth"
 fi

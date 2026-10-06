@@ -40,7 +40,11 @@ if command -v bash >/dev/null 2>&1; then
     complete_at crouter list keys ""
     contains demo
     complete_at crouter list ""
-    contains keys && contains demo
+    contains keys && contains --all && contains demo
+    complete_at crouter add ""
+    contains --all && contains demo
+    complete_at crouter add demo ""
+    contains --all && contains --surface
     complete_at crouter add demo --surface ""
     contains plan && contains api && excludes demo
     complete_at crouter remove demo --surface ""
@@ -87,7 +91,11 @@ if command -v zsh >/dev/null 2>&1; then
     complete_at crouter list keys ""
     contains demo
     complete_at crouter list ""
-    contains keys && contains demo
+    contains keys && contains --all && contains demo
+    complete_at crouter add ""
+    contains --all && contains demo
+    complete_at crouter add demo ""
+    contains --all && contains --surface
     complete_at crouter add demo --surface ""
     contains plan && contains api && excludes demo
     complete_at crouter remove demo --surface ""

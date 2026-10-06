@@ -63,9 +63,12 @@ _load_provider_registry() {
 }
 
 provider_names() {
+  # Pure-shell name extraction: the catalog is walked on every `list`/`doctor`,
+  # and a `basename` child per provider costs more than the walk itself.
   for f in "$PROVIDERS_DIR"/*.sh; do
     [ -f "$f" ] || continue
-    basename "$f" .sh
+    f=${f##*/}
+    printf '%s\n' "${f%.sh}"
   done
 }
 

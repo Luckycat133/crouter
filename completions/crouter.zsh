@@ -47,11 +47,11 @@ _crouter_complete() {
       fi ;;
     add)
       if (( CURRENT == 3 )); then
-        candidates=($providers)
+        candidates=(--all -a $providers)
       elif [[ "${words[CURRENT-1]}" == --surface ]]; then
         candidates=(plan api)
       else
-        candidates=(--surface --name --stdin)
+        candidates=(--all --surface --name --stdin)
       fi ;;
     provider)
       if (( CURRENT == 3 )); then
@@ -69,7 +69,7 @@ _crouter_complete() {
       fi ;;
     list)
       if (( CURRENT == 3 )); then
-        candidates=(keys $providers)
+        candidates=(--all -a keys $providers)
       elif (( CURRENT == 4 )) && [[ "$words[3]" == keys ]]; then
         candidates=($providers)
       fi ;;
