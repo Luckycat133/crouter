@@ -41,3 +41,13 @@ git diff --check
 
 维护：只同步此标记块；各工具专用正文保留，不强求整份入口相同。项目若明确规定完整镜像，仍保持完整镜像。仅在规则更新或交付涉及规则时检查入口/副本一致性。
 <!-- agent-workflow:v1:end -->
+
+## 项目技能入口
+
+按当前任务从 `.agents/SKILLS.md` 选择技能；`.claude/skills` 仅提供发现入口，正文维护在项目现有真源。不要一次加载全部技能。
+
+## 当前任务接续提醒（2026-10-06）
+
+按 CLAUDE.md 与 .agents/SKILLS.md 路由；认证/路由/生命周期先读 docs/agent-architecture.md，供应商事实核对 docs/provider-audit.md 及官方资料。凭据与 endpoint/header/tier 绑定，保留 session 隔离，不读写用户凭据来做离线验证。路由或运行时代码变更后，跑受影响离线测试；现有 .githooks/pre-push 保持原样。配置保存、离线契约与真实端到端请求成功分别报告。
+
+此处承载静态上下文；不另设只重复文本的 Claude SessionStart 钩子。

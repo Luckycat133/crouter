@@ -1,0 +1,5 @@
+{
+  "name": "crouter-qwen-local-multimodal",
+  "version": "1.1.0",
+  "description": "Session-scoped native image and video inspection workflow for local Qwen3.8 MLX-VLM"
+}
