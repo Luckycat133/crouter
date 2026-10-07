@@ -47,6 +47,9 @@ assert_eq openrouter.model nvidia/nemotron-3-ultra-550b-a55b:free "$MODEL"
 assert_eq openrouter.context 1000000 "$CONTEXT_TOKENS"
 assert_eq openrouter.auto-compact 786432 "$AUTO_COMPACT_TOKENS"
 assert_eq openrouter.effort max "$EFFORT"
+_main_model="qwen3.8-27b"
+eval "$PRE_START"
+assert_eq openrouter.qwen-rewrite qwen/qwen3.8-27b "$_main_model"
 
 load ollama
 assert_eq ollama.base http://127.0.0.1:11435 "$BASE_URL"
@@ -116,6 +119,7 @@ load moonshot
 assert_eq kimi.auth surfaces "$AUTH_MODE"
 assert_eq kimi.model k3-256k "$MODEL"
 assert_eq kimi.context 262144 "$CONTEXT_TOKENS"
+assert_eq kimi.context-override 'k3[1m]=1000000' "$MODEL_CONTEXT_OVERRIDES"
 assert_eq kimi.plan.url https://api.kimi.com/coding/ "$PLAN_URL"
 assert_eq kimi.plan.auth x-api-key "$PLAN_AUTH_TYPE"
 assert_eq kimi.plan.key-env KIMI_CODE_KEY "$PLAN_KEY_ENV"
@@ -187,6 +191,7 @@ assert_eq siliconflow.context '' "$CONTEXT_TOKENS"
 assert_eq siliconflow.api.url https://api.siliconflow.cn "$API_URL"
 assert_eq siliconflow.api.auth bearer "$API_AUTH_TYPE"
 assert_eq siliconflow.api.key-env SILICONFLOW_API_KEY "$API_KEY_ENV"
+assert_eq siliconflow.api.haiku deepseek-ai/DeepSeek-V4-Flash "$API_MODEL_HAIKU"
 
 load fireworks
 assert_eq fireworks.auth surfaces "$AUTH_MODE"
@@ -325,6 +330,8 @@ assert_eq stepfun.model step-5-preview "$MODEL"
 assert_eq stepfun.context 1000000 "$CONTEXT_TOKENS"
 assert_eq stepfun.plan.url https://api.stepfun.com/step_plan "$PLAN_URL"
 assert_eq stepfun.api.url https://api.stepfun.com "$API_URL"
+assert_eq stepfun.api.haiku step-3.7-flash "$API_MODEL_HAIKU"
+assert_eq stepfun.api.subagent step-3.7-flash "$API_MODEL_SUBAGENT"
 assert_eq stepfun.assets stepfun "$ASSET_PROFILE"
 
 load volcengine
@@ -456,6 +463,7 @@ assert_eq huawei.context 262144 "$CONTEXT_TOKENS"
 assert_eq huawei.aliases 'deepseek-v4.1-flash deepseek-v4-flash glm-5.1 kimi-k2.6' "$MODEL_ALIASES"
 assert_eq huawei.plan.url https://api.modelarts-maas.com/plan/anthropic "$PLAN_URL"
 assert_eq huawei.api.url https://api.modelarts-maas.com/anthropic "$API_URL"
+assert_eq huawei.api.haiku deepseek-v4.1-flash "$API_MODEL_HAIKU"
 
 load xiaomi
 assert_eq xiaomi.auth surfaces "$AUTH_MODE"
@@ -466,6 +474,11 @@ assert_eq xiaomi.api.model mimo-v2.6-pro "$API_MODEL"
 assert_eq xiaomi.legacy-aliases 'mimo-v2.5-pro mimo-v2.5' "$MODEL_ALIASES"
 assert_eq xiaomi.plan.url https://token-plan-cn.xiaomimimo.com/anthropic "$PLAN_URL"
 assert_eq xiaomi.api.url https://api.xiaomimimo.com/anthropic "$API_URL"
+
+load antigravity
+assert_eq antigravity.model gemini-3.8-flash "$MODEL"
+assert_eq antigravity.context 1048576 "$CONTEXT_TOKENS"
+assert_eq antigravity.aliases 'gemini-3.8-flash-tiered gemini-3.7-flash gemini-3.7-flash-tiered gemini-3.5-flash-medium gemini-3.1-pro-low' "$MODEL_ALIASES"
 
 for _provider in 302ai aihubmix fireworks vercel longcat meta requesty nagaai infini minimax moonshot ppio z-ai dashscope dashscope-coding deepseek siliconflow stepfun volcengine volcengine-coding tencent tencent-coding qianfan qianfan-team qianfan-coding qiniu huawei xiaomi; do
   load "$_provider"

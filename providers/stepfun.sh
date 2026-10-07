@@ -37,6 +37,8 @@ API_AUTH_TYPE="bearer"
 API_KEY_ENV="STEPFUN_API_KEY"
 API_KEYS="stepfun-api-key"
 API_MODEL="step-5-preview"
+API_MODEL_HAIKU="step-3.7-flash"
+API_MODEL_SUBAGENT="step-3.7-flash"
 
 ASSET_PROFILE="stepfun"
 ASSET_PLAN_PLUGIN_DIRS="$ROOT_DIR/assets/plugins/stepfun-plan"

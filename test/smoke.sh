@@ -413,7 +413,7 @@ if [ "$_antigravity_show_rc" -eq 0 ] &&
    printf '%s\n' "$_antigravity_show" | grep -q '^  sonnet:    gemini-3\.8-flash$' &&
    printf '%s\n' "$_antigravity_show" | grep -q '^  haiku:     gemini-3\.8-flash$' &&
    printf '%s\n' "$_antigravity_show" | grep -q '^  subagent:  gemini-3\.8-flash$' &&
-   printf '%s\n' "$_antigravity_show" | grep -q '^  extras:    gemini-3\.7-flash gemini-3\.5-flash-medium gemini-3\.1-pro-low$'; then
+   printf '%s\n' "$_antigravity_show" | grep -q '^  extras:    gemini-3\.8-flash-tiered gemini-3\.7-flash gemini-3\.7-flash-tiered gemini-3\.5-flash-medium gemini-3\.1-pro-low$'; then
   ok "antigravity exposes the supported Gemini catalog and context"
 else
   bad "antigravity exposes an unsupported Gemini catalog or context"

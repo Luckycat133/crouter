@@ -38,7 +38,7 @@ case "${_main_model:-$MODEL}" in
     MODEL_OPUS="$_main_model"; MODEL_SONNET="$_main_model"; MODEL_HAIKU="$_main_model"; MODEL_SUBAGENT="$_main_model"
     ;;
   qwen3.8-27b|qwen/qwen3.8-27b|qwen3.8-27b:free|qwen/qwen3.8-27b:free|"qwen3.8 27b"|"qwen3.8 27b:free"|qwen|qwen3.8|*qwen3.8*27b*)
-    _main_model="qwen/qwen3.8-27b:free"
+    _main_model="qwen/qwen3.8-27b"
     CONTEXT_TOKENS="262144"
     EFFORT="xhigh"
     MODEL_OPUS="$_main_model"; MODEL_SONNET="$_main_model"; MODEL_HAIKU="$_main_model"; MODEL_SUBAGENT="$_main_model"

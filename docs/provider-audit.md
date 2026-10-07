@@ -574,7 +574,7 @@ an account-specific identifier that crouter cannot infer.
   prefix, a plan-only key, and `deepseek-v4-pro` for every Claude tier.
 - [Team Token Plan Claude Code](https://cloud.baidu.com/doc/qianfan/s/Ymq98210m)
   documents the separate `https://qianfan.baidubce.com/anthropic/tokenplan/team`
-  prefix, team key, and `deepseek-v3.2` for every Claude tier.
+  prefix, team key, and `deepseek-v4-flash` for every Claude tier (with `deepseek-v3.2` alias).
 - [Anthropic compatibility](https://cloud.baidu.com/doc/qianfan-docs/s/6mh3e6gjp)
   documents the ordinary `https://qianfan.baidubce.com/anthropic` prefix and
   recommends `deepseek-v3.2` for Claude Code.
@@ -588,9 +588,8 @@ an account-specific identifier that crouter cannot infer.
 Decision: `qianfan` binds the current personal Token Plan and ordinary API as
 separate candidates; `qianfan-team` isolates the enterprise/team credential;
 `qianfan-coding` preserves old subscriptions without treating the retired
-product as current. No context is injected because the official integration
-pages do not state a single authoritative context limit for these routed
-catalogs.
+product as current. Standard 262,144 context tokens are declared across the
+Qianfan suite.
 
 ### Qiniu AI
 
@@ -624,8 +623,8 @@ MCP URLs are host/path validated and activated only in the Qiniu session.
   documents the regional pay-as-you-go Anthropic prefix and
   `ANTHROPIC_AUTH_TOKEN`.
 
-Decision: the China default prefixes are kept separate. Context is left unset
-because it depends on the selected MaaS model.
+Decision: the China default prefixes are kept separate. Standard 262,144 context
+tokens are declared for the default GLM-5.3 catalog.
 
 ### Xiaomi MiMo
 

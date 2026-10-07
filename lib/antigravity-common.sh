@@ -31,6 +31,17 @@ antigravity_ensure_gateway() {
   }
   command -v npm >/dev/null 2>&1 || { echo "npm not found; cannot start Antigravity gateway." >&2; return 1; }
 
+  # Ensure proxy patch is applied when GPT-OSS or patchable models are configured.
+  case "${_main_model:-} ${MODEL:-} ${MODEL_ALIASES:-}" in
+    *gpt-oss*)
+      if [ -x "$ROOT_DIR/bin/antigravity-proxy-patch" ]; then
+        if ! grep -qF "gpt-oss" "$_proxy_dir/src/constants.js" 2>/dev/null; then
+          "$ROOT_DIR/bin/antigravity-proxy-patch" --proxy-dir "$_proxy_dir" >/dev/null 2>&1 || true
+        fi
+      fi
+      ;;
+  esac
+
   _log_dir=${LOG_DIR:-$ROOT_DIR/logs}
   mkdir -p "$_log_dir"
   echo "Starting Antigravity gateway on 127.0.0.1:$(antigravity_port) ..."

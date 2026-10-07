@@ -19,6 +19,7 @@ API_AUTH_TYPE="bearer"
 API_KEY_ENV="SILICONFLOW_API_KEY"
 API_KEYS="siliconflow-api-key"
 API_MODEL="Pro/moonshotai/Kimi-K2.7-Code"
+API_MODEL_HAIKU="deepseek-ai/DeepSeek-V4-Flash"
 
 EXTRA_ENV="CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1"
 PRE_START=""

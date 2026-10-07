@@ -216,11 +216,11 @@ limit; the selected vendor model or native backend remains authoritative.
 | `bedrock` | native AWS credentials | `sonnet` alias | — | — |
 | `codex` | local ChatGPT subscription proxy | `gpt-5.6-sol` | 1,050,000 | — |
 | `dashscope` | Token Plan + API | `qwen3.8-max` | 983,616 | Plan media skill + API WebSearch MCP |
-| `dashscope-coding` | Coding Plan | `qwen3.8-plus` | — | — |
+| `dashscope-coding` | Coding Plan | `qwen3.8-plus` | 983,616 | — |
 | `deepseek` | API | `deepseek-flash[1m]` | 1,000,000 | native web search |
 | `fireworks` | API | `accounts/fireworks/models/glm-5p3-flash` | — | — |
 | `foundry` | native Azure credentials, Bearer token, or Foundry API key | `sonnet` alias | — | — |
-| `huawei` | Token Plan + API | `glm-5.3` | — | — |
+| `huawei` | Token Plan + API | `glm-5.3` | 262,144 | — |
 | `infini` | GenStudio API | `glm-5.1` | — | — |
 | `longcat` | Token Pack + pay-as-you-go on one API key | `LongCat-2.5-Preview` | 1,000,000 | — |
 | `meta` | Model API key | `muse-spark-1.3` | 1,048,576 | — |
@@ -230,15 +230,15 @@ limit; the selected vendor model or native backend remains authoritative.
 | `ollama` | local MLX/Ollama | `qwen3.8-27b` | 262,144 for Qwen; 373,760 for DeepSeek V4 Flash | 60s SSE heartbeat |
 | `openrouter` | API | `nvidia/nemotron-3-ultra-550b-a55b:free` | 1,000,000 | — |
 | `ppio` | API | `minimax/minimax-m3` | 1,000,000 | cloud OAuth MCP |
-| `qianfan` | personal Token Plan + API | `deepseek-v4-pro` | — | — |
-| `qianfan-team` | team Token Plan | `deepseek-v4-flash` | — | — |
-| `qianfan-coding` | legacy Coding Plan | `qianfan-code-latest` | — | — |
+| `qianfan` | personal Token Plan + API | `deepseek-v4-pro` | 262,144 | — |
+| `qianfan-team` | team Token Plan | `deepseek-v4-flash` | 262,144 | — |
+| `qianfan-coding` | legacy Coding Plan | `qianfan-code-latest` | 262,144 | — |
 | `qiniu` | enterprise subscription + API | `deepseek/deepseek-v3.2-251201` | — | optional managed MCPs |
 | `requesty` | API | `anthropic/claude-sonnet-5` | — | — |
 | `siliconflow` | API | `Pro/moonshotai/Kimi-K2.7-Code` | — | — |
 | `stepfun` | Step Plan + API | `step-5-preview` | 1,000,000 | StepSearch MCP + skill |
-| `tencent` | personal Token Plan + TokenHub API | `tc-code-latest` | — | optional WebSearch MCP |
-| `tencent-coding` | Coding Plan | `tc-code-latest` | — | — |
+| `tencent` | personal Token Plan + TokenHub API | `tc-code-latest` | 262,144 | optional WebSearch MCP |
+| `tencent-coding` | Coding Plan | `tc-code-latest` | 262,144 | — |
 | `vercel` | AI Gateway API key | `anthropic/claude-sonnet-5` | — | — |
 | `vertex` | native Google ADC | `sonnet` alias | — | — |
 | `volcengine` | Ark Agent Plan | `doubao-seed-evolving` | 1,000,000 | Ark Docs + Doubao Search + DataPro + OpenViking MCPs |

@@ -19,7 +19,7 @@ MODEL_SUBAGENT="gemini-3.8-flash"
 # Extra Antigravity Gemini models that aren't tier-mapped. Select explicitly
 # with `crouter antigravity --model <name>` — Claude Code's --model flag picks
 # them up directly. Discovered by `crouter provider show antigravity`.
-MODEL_ALIASES="gemini-3.7-flash gemini-3.5-flash-medium gemini-3.1-pro-low"
+MODEL_ALIASES="gemini-3.8-flash-tiered gemini-3.7-flash gemini-3.7-flash-tiered gemini-3.5-flash-medium gemini-3.1-pro-low"
 
 # Gemini effort is handled internally by the Antigravity proxy, so leave
 # Claude Code's --effort unset to avoid double control.

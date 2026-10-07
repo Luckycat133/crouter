@@ -2,6 +2,7 @@
 # Exact model caps must not leak to IDs that merely share their prefix.
 set -eu
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+PROVIDERS_DIR="$ROOT_DIR/providers"
 . "$ROOT_DIR/lib/provider.sh"
 MODEL_CONTEXT_OVERRIDES='qwen3.8-27b=262144 foo:=8192'
 fail=0
@@ -19,5 +20,15 @@ check qwen3.8-27b:custom 65536
 check foo:tag 8192
 check foo-other:tag 65536
 check foo 65536
+
+# Moonshot provider context override verification
+load_provider moonshot
+CONTEXT_TOKENS=262144
+apply_model_context_override "k3[1m]"
+if [ "$CONTEXT_TOKENS" != "1000000" ]; then
+  printf 'FAIL  moonshot k3[1m] got context %s, expected 1000000\n' "$CONTEXT_TOKENS"
+  fail=1
+fi
+
 [ "$fail" -eq 0 ] || exit 1
 printf 'ok    exact model caps and explicit tag-family caps stay scoped\n'

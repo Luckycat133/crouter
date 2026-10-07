@@ -18,6 +18,7 @@ MODEL_SONNET="k3-256k"
 MODEL_HAIKU="k3-256k"
 MODEL_SUBAGENT="k3-256k"
 MODEL_ALIASES="k3[1m] kimi-for-coding kimi-for-coding-highspeed"
+MODEL_CONTEXT_OVERRIDES="k3[1m]=1000000"
 EFFORT="high"
 
 AUTH_MODE="surfaces"
