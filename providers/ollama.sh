@@ -92,8 +92,40 @@ else
     qwen3.8*) EFFORT="medium"; _ollama_effort_cap="medium" ;;
   esac
   curl -fsS --max-time 3 http://127.0.0.1:11434 >/dev/null 2>&1 || die "Ollama not reachable at http://127.0.0.1:11434 — start it (ollama serve) and pull the selected model first"
+  # A model-specific Jinja compatibility patch can preserve late system turns
+  # and the preceding cached conversation. Never enable this for an unpatched
+  # template, which would reject the same request before generation.
+  _ollama_system_order_models=""
+  case $_local_selected_model in
+    qwen3.8-27b-heretic:q4)
+      _ollama_template_info=$(curl -fsS --max-time 3 http://127.0.0.1:11434/api/show \
+        -H "Content-Type: application/json" \
+        -d "{\"model\":\"$_local_selected_model\"}") || die "Cannot inspect selected Ollama model template"
+      _ollama_template_mode=$(printf "%s" "$_ollama_template_info" | node -e '\''
+        let input = "";
+        process.stdin.setEncoding("utf8");
+        process.stdin.on("data", chunk => input += chunk);
+        process.stdin.on("end", () => {
+          try {
+            const template = JSON.parse(input).template;
+            if (typeof template !== "string") process.exit(1);
+            process.stdout.write(template.startsWith("{#CROUTER_QWEN_SYSTEM_ORDER_V1 ") ? "preserve" : "fold");
+          } catch { process.exit(1); }
+        });
+      '\'') || die "Invalid Ollama model template response"
+      if [ "$_ollama_template_mode" = preserve ]; then
+        _ollama_system_order_models=$_local_selected_model
+      fi
+      ;;
+  esac
   _ollama_health=$(curl -fsS --max-time 1 "$HEALTH_CHECK_URL" 2>/dev/null || true)
   if printf "%s\n" "$_ollama_health" | grep -q crouter-ollama-heartbeat; then
+    if [ -n "$_ollama_system_order_models" ]; then
+      printf "%s\n" "$_ollama_health" | grep -Fq "\"system_order_models\":\"$_ollama_system_order_models\"" || \
+        die "Ollama relay predates the selected model template; restart the relay after its current task finishes"
+    elif printf "%s\n" "$_ollama_health" | grep -Eq "\"system_order_models\":\"[^\"]+\""; then
+      die "Ollama relay uses another model template profile; restart it after its current task finishes"
+    fi
     # Reuse the running relay only when it clamps to the level this model needs.
     printf "%s\n" "$_ollama_health" | grep -Fq "\"effort_cap\":\"$_ollama_effort_cap\"" || {
       _stale_pid=$(lsof -nP -iTCP:11435 -sTCP:LISTEN -t 2>/dev/null | head -1)
@@ -106,7 +138,7 @@ else
     }
   fi
   if ! printf "%s\n" "$_ollama_health" | grep -q crouter-ollama-heartbeat; then
-    OLLAMA_EFFORT_MAX=$_ollama_effort_cap OLLAMA_HEARTBEAT_INTERVAL_MS=60000 nohup node "$ROOT_DIR/lib/ollama-heartbeat-proxy.mjs" >>/tmp/crouter-ollama-heartbeat-proxy.log 2>&1 &
+    OLLAMA_SYSTEM_ORDER_MODELS=$_ollama_system_order_models OLLAMA_EFFORT_MAX=$_ollama_effort_cap OLLAMA_HEARTBEAT_INTERVAL_MS=60000 nohup node "$ROOT_DIR/lib/ollama-heartbeat-proxy.mjs" >>/tmp/crouter-ollama-heartbeat-proxy.log 2>&1 &
     _OLLAMA_HEARTBEAT_PROXY_PID=$!
     for _ollama_proxy_try in 1 2 3 4 5 6 7 8 9 10; do
       curl -fsS --max-time 1 "$HEALTH_CHECK_URL" 2>/dev/null | grep -q crouter-ollama-heartbeat && break
@@ -115,7 +147,7 @@ else
   fi
   curl -fsS --max-time 1 "$HEALTH_CHECK_URL" 2>/dev/null | grep -q crouter-ollama-heartbeat || die "Ollama heartbeat proxy failed to start at $BASE_URL"
 fi
-unset _local_selected_model _ollama_effort_cap _ollama_health _stale_pid _mlx_upstream_host _mlx_upstream_port _mlx_upstream_url _mlx_expected_upstream _mlx_health
+unset _local_selected_model _ollama_effort_cap _ollama_system_order_models _ollama_template_info _ollama_template_mode _ollama_health _stale_pid _mlx_upstream_host _mlx_upstream_port _mlx_upstream_url _mlx_expected_upstream _mlx_health
 '
 
 POST_STOP='if [ -n "${_OLLAMA_HEARTBEAT_PROXY_PID:-}" ]; then kill "$_OLLAMA_HEARTBEAT_PROXY_PID" 2>/dev/null || true; wait "$_OLLAMA_HEARTBEAT_PROXY_PID" 2>/dev/null || true; _OLLAMA_HEARTBEAT_PROXY_PID=; fi; if [ -n "${_MLX_PROXY_PID:-}" ]; then kill "$_MLX_PROXY_PID" 2>/dev/null || true; wait "$_MLX_PROXY_PID" 2>/dev/null || true; _MLX_PROXY_PID=; fi'

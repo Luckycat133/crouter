@@ -340,6 +340,39 @@ assert.match(childOutput(), /"type":"effort_clamp","version":"ollama-effort-clam
 assert.match(childOutput(), /"type":"effort_clamp","version":"ollama-effort-clamp-v1","requested_effort":"ultra","effective_effort":"medium","cap":"medium"/);
 assert.doesNotMatch(childOutput(), /"type":"effort_clamp".*"requested_effort":"(?:low|medium)"/);
 
+// A verified model template accepts late system turns. Appending one must not
+// rewrite the top-level system or any earlier message (which destroys KV reuse).
+const ordered = await startProxy({
+  OLLAMA_EFFORT_MAX: 'medium',
+  OLLAMA_SYSTEM_ORDER_MODELS: 'qwen3.8-27b-heretic:q4',
+});
+helperProxies.push(ordered.proc);
+const orderedBase = {
+  model: 'qwen3.8-27b-heretic:q4', stream: false,
+  system: [{ type: 'text', text: 'Original system', cache_control: { type: 'ephemeral' } }],
+  messages: [
+    { role: 'user', content: 'Question' },
+    { role: 'assistant', content: 'Answer' },
+  ],
+};
+const orderedNext = structuredClone(orderedBase);
+orderedNext.messages.push(
+  { role: 'system', content: [{ type: 'text', text: 'New instruction' }] },
+  { role: 'user', content: 'Follow up' },
+);
+await send(JSON.stringify(orderedNext), false, ordered.port);
+assert.deepEqual(JSON.parse(receivedBodies.at(-1)), orderedNext,
+  'patched model must preserve roles, content blocks, and chronological order');
+await send(JSON.stringify(orderedNext));
+const legacyFolded = JSON.parse(receivedBodies.at(-1));
+assert.equal(legacyFolded.messages.some(m => m.role === 'system'), false,
+  'an unpatched template must retain the compatibility fallback');
+assert.match(JSON.stringify(legacyFolded.system), /New instruction/);
+const unrelatedSystem = { ...orderedNext, model: 'another-model' };
+await send(JSON.stringify(unrelatedSystem), false, ordered.port);
+assert.equal(JSON.parse(receivedBodies.at(-1)).messages.some(m => m.role === 'system'), false,
+  'template opt-in must not leak to another model');
+
 } finally {
   for (const proc of helperProxies) {
     if (proc.exitCode === null && proc.signalCode === null) proc.kill('SIGKILL');

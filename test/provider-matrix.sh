@@ -55,6 +55,7 @@ load ollama
 assert_eq ollama.base http://127.0.0.1:11435 "$BASE_URL"
 assert_eq ollama.model qwen3.8-27b "$MODEL"
 assert_eq ollama.context-fallback 65536 "$CONTEXT_TOKENS"
+assert_eq ollama.auto-compact-default '' "$AUTO_COMPACT_TOKENS"
 assert_eq ollama.context-override "deepseek-v4-flash:q8=373760 deepseek-v4-flash=373760 qwen3.8-27b=262144 qwen3.8-27b-heretic:q4=262144 qwen3.8-27b-heretic:q4-dflash=262144 qwen3.8-27b-heretic=262144" "$MODEL_CONTEXT_OVERRIDES"
 assert_eq ollama.self-route "deepseek-v4-flash:q8 deepseek-v4-flash qwen3.8-27b qwen3.8-27b-heretic:q4 qwen3.8-27b-heretic:q4-dflash qwen3.8-27b-heretic" "$MODEL_SELF_ROUTE_MODELS"
 assert_eq ollama.effort max "$EFFORT"
