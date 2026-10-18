@@ -4,6 +4,16 @@ All notable changes to this local setup are documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- `crouter migrate export <file>` / `import <file>` move configuration, custom
+  providers, registered API keys, selected target, remembered models and provider
+  environment overrides in a passphrase-encrypted AES-256-GCM/scrypt package.
+  Import authenticates and validates before writing, backs up conflicts, rolls
+  back failures and never executes imported source. macOS uses Keychain; other
+  hosts use a private local credential fallback. Machine-path rebasing is limited
+  to explicit path settings; native login/SDK/helper dependencies are reported.
+
 ### Changed
 
 - Retarget the `openrouter` default to `nvidia/nemotron-3-ultra-550b-a55b:free`

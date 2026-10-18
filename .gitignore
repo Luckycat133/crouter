@@ -35,3 +35,6 @@ providers/*.local.sh
 .codex/hooks/*
 !.codex/hooks/session_start.py
 !.codex/hooks/README.md
+
+# Encrypted device migration archives and rollback packages contain credentials.
+*.crm

@@ -20,6 +20,7 @@
 #   crouter remove <provider> --name <service> [--surface plan|api]
 #                                         Remove a key from the keypool (and Keychain)
 #   crouter provider show <provider>      Show full provider config (secrets redacted)
+#   crouter migrate export|import <file>  Move configuration and credentials (encrypted)
 #   crouter config show                   Show effective configuration
 #   crouter config path                   Show path to config.sh
 #   crouter logs list                     List files under the log directory
@@ -50,6 +51,14 @@ BIN_DIR=$(CDPATH= cd -- "$(dirname -- "$SELF")" && pwd)
 ROOT_DIR=$(CDPATH= cd -- "$BIN_DIR/.." && pwd)
 PROVIDERS_DIR=$ROOT_DIR/providers
 LIB_DIR=$ROOT_DIR/lib
+
+# Migration reads configuration as bytes, before any user shell source runs.
+if [ "${1:-}" = migrate ]; then
+    shift
+    _migration_node=${NODE_BIN:-$(command -v node 2>/dev/null || true)}
+    [ -n "$_migration_node" ] || { printf 'crouter: migration requires Node.js\n' >&2; exit 1; }
+    exec "$_migration_node" "$LIB_DIR/device-migration.js" "$ROOT_DIR" "$@"
+fi
 
 # Native coding agents own their login and environment. Handle this path before
 # sourcing config.sh or any provider helper so local configuration cannot add
@@ -93,6 +102,9 @@ VERSION=$(cat "$ROOT_DIR/VERSION" 2>/dev/null || printf 'unknown')
 CLAUDE_BIN=${CLAUDE_BIN:-}
 LOG_DIR=${LOG_DIR:-$ROOT_DIR/logs}
 STATE_DIR=${STATE_DIR:-$ROOT_DIR/.state}
+if [ -f "$ROOT_DIR/.state/migration-env.sh" ]; then
+  . "$ROOT_DIR/.state/migration-env.sh"
+fi
 if [ -f "$ROOT_DIR/config.sh" ]; then
   . "$ROOT_DIR/config.sh"
 fi

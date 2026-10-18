@@ -9,7 +9,24 @@
 # ---------------------------------------------------------------------------
 # Read a secret out of the macOS login Keychain. Prints nothing (rc 1) when the
 # item does not exist, so callers can treat "missing" as "empty".
-kc_get() { security find-generic-password -a "$USER" -s "$1" -w 2>/dev/null; }
+kc_get() {
+  # A fallback entry is an explicitly imported credential, including multiline
+  # values that cannot pass through security(1)'s line-oriented password prompt.
+  if [ -f "$ROOT_DIR/.state/migration-credentials.json" ] &&
+     "$NODE_BIN" "$LIB_DIR/device-migration.js" "$ROOT_DIR" _get "$1" 2>/dev/null; then
+    return 0
+  fi
+  security find-generic-password -a "$USER" -s "$1" -w 2>/dev/null
+}
+
+# Presence checks retain metadata-only Keychain access (no ACL secret prompt).
+kc_has() {
+  if [ -f "$ROOT_DIR/.state/migration-credentials.json" ] &&
+     "$NODE_BIN" "$LIB_DIR/device-migration.js" "$ROOT_DIR" _has "$1" 2>/dev/null; then
+    return 0
+  fi
+  security find-generic-password -a "$USER" -s "$1" >/dev/null 2>&1
+}
 
 _new_local_proxy_token() {
   "$NODE_BIN" -e "process.stdout.write(require('crypto').randomBytes(32).toString('hex'))"
@@ -153,7 +170,7 @@ _surface_available() {
     return 0
   fi
   for _ref in $_refs; do
-    if security find-generic-password -a "$USER" -s "$_ref" >/dev/null 2>&1; then
+    if kc_has "$_ref" >/dev/null 2>&1; then
       return 0
     fi
   done
@@ -353,7 +370,7 @@ dual_source_state() {
   fi
   if [ -n "${API_KEY_ENV:-}" ] && [ -n "$(printenv "$API_KEY_ENV" 2>/dev/null)" ]; then
     _s="${_s:+$_s+}api"
-  elif [ -n "${API_KEY_REF:-}" ] && security find-generic-password -a "$USER" -s "$API_KEY_REF" >/dev/null 2>&1; then
+  elif [ -n "${API_KEY_REF:-}" ] && kc_has "$API_KEY_REF" >/dev/null 2>&1; then
     _s="${_s:+$_s+}api"
   fi
   printf '%s' "$_s"
@@ -372,14 +389,14 @@ check_auth() {
   fi
   case $AUTH_MODE in
     keychain)
-      security find-generic-password -a "$USER" -s "$AUTH_REFERENCE" >/dev/null 2>&1
+      kc_has "$AUTH_REFERENCE" >/dev/null 2>&1
       ;;
     env)
       _v=$(printenv "$AUTH_REFERENCE" 2>/dev/null)
       if [ -n "$_v" ]; then
         true
       elif [ -n "${AUTH_KEYCHAIN_FALLBACK:-}" ]; then
-        security find-generic-password -a "$USER" -s "$AUTH_KEYCHAIN_FALLBACK" >/dev/null 2>&1
+        kc_has "$AUTH_KEYCHAIN_FALLBACK" >/dev/null 2>&1
       else
         false
       fi ;;
@@ -390,7 +407,7 @@ check_auth() {
     keypool)
       _ok=0
       for _ref in ${AUTH_KEYS:-}; do
-        if security find-generic-password -a "$USER" -s "$_ref" >/dev/null 2>&1; then _ok=1; break; fi
+        if kc_has "$_ref" >/dev/null 2>&1; then _ok=1; break; fi
       done
       [ "$_ok" -eq 1 ] ;;
     *)

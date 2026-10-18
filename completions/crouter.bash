@@ -25,7 +25,7 @@ _crouter_complete() {
   local cur cmds providers native_apps candidates app
   COMPREPLY=()
   cur="${COMP_WORDS[COMP_CWORD]:-}"
-  cmds="run use claude app all list doctor add remove provider config logs uninstall help --version"
+  cmds="run use claude app all list doctor add remove provider config migrate logs uninstall help --version"
   providers="$(_crouter_providers)"
   native_apps="claude codex gemini opencode copilot cursor kiro qoder kimi qwen amp vibe muse kilo"
   candidates=""
@@ -65,6 +65,13 @@ _crouter_complete() {
           candidates="show $providers"
         elif [ "$COMP_CWORD" -eq 3 ] && [ "${COMP_WORDS[2]:-}" = show ]; then
           candidates="$providers"
+        fi ;;
+      migrate)
+        if [ "$COMP_CWORD" -eq 2 ]; then
+          candidates="export import"
+        elif [ "$COMP_CWORD" -ge 4 ]; then
+          candidates="--password-stdin --state-dir"
+          [ "${COMP_WORDS[2]:-}" != import ] || candidates="$candidates --yes"
         fi ;;
       config)
         [ "$COMP_CWORD" -ne 2 ] || candidates="show path" ;;

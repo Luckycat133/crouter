@@ -26,6 +26,7 @@ credentials and may incur provider charges.
 
 - [Install](#install)
 - [Usage](#usage)
+- [Move to another computer](#move-to-another-computer)
 - [Native coding-agent CLIs](#native-coding-agent-clis)
 - [Provider catalog](#provider-catalog)
 - [Token Plan and API key isolation](#token-plan-and-api-key-isolation)
@@ -61,6 +62,77 @@ Requirements:
 
 `config.sh` is optional and gitignored. Copy `config.example.sh` when local
 overrides are needed.
+
+## Move to another computer
+
+On the old computer:
+
+```sh
+crouter migrate export ~/crouter.crm
+```
+
+Install/clone the same or a newer crouter on the new computer, copy the file,
+then run:
+
+```sh
+crouter migrate import ~/crouter.crm
+```
+
+Both commands request the same passphrase without terminal echo; use at least
+12 characters. The mode-600 package uses AES-256-GCM with scrypt and includes
+API keys. Keep the passphrase separately from the package. Existing conflicting
+files/keys require one replacement confirmation; an encrypted backup is written
+first and a failed import rolls back the files and Keychain items it touched.
+No migration command sources `config.sh`, executes provider code/hooks, starts
+services, or contacts model providers.
+
+The package contains `config.sh`, every provider declaration (including ignored
+custom providers), registered key-pool metadata, the persistent selected target,
+remembered models, precisely declared/registered Keychain services, and available
+provider-referenced environment values (including endpoint overrides and key
+aliases). Credentials remain bound to the original provider, surface, endpoint,
+header and model declarations. Missing registered keys or a selected provider
+without any available key fail export; unused, unconfigured catalog slots do not.
+A locked or denied Keychain read fails rather than silently dropping that key.
+
+On macOS, import restores API keys through the existing Keychain helper; it
+requires `security` and `expect`. Other hosts retain keys in the ignored,
+mode-600 `.state/migration-credentials.json`, used by normal crouter auth and
+presence checks. Multiline keys also use this fallback because the macOS
+password prompt accepts lines. `crouter remove` removes imported fallback keys;
+a successful normal `crouter add` replaces a fallback with its new Keychain key.
+Imported environment values are private, shell-quoted data under `.state/`;
+values already exported in the current shell keep precedence.
+
+Configuration/provider source is preserved in the encrypted package. Import
+rebases only literal known machine-path settings such as `STATE_DIR`,
+`CLAUDE_BIN`, and `ANTIGRAVITY_PROXY_DIR`; arbitrary text, credentials, models
+and URLs stay unchanged. Source permission switches (including
+`BYPASS_PERMISSIONS=1`) are preserved and reported, never silently activated by
+migration itself. Before a normal launch, review external paths, custom helper
+files, local services, provider hooks and permission settings on the new host.
+Dynamic shell assignments cannot be evaluated during capture; unresolved auth
+references are listed. For a dynamic/custom state location, pass
+`--state-dir /absolute/path` on export or import.
+
+Native CLI/OAuth/browser logins, SDK credential files for AWS/Google/Azure,
+password-manager/auth-command outputs, external plugin/helper directories and
+installed local models need their own login, installation or transfer. Declared
+credential environment values already present in the exporting process are
+included; migration never dumps an entire system Keychain or shell profile.
+
+For an agent or password manager, feed the passphrase through stdin (one trailing
+line ending is removed):
+
+```sh
+password-manager-command | crouter migrate export ~/crouter.crm --password-stdin
+password-manager-command | crouter migrate import ~/crouter.crm --password-stdin --yes
+```
+
+`--yes` accepts replacement conflicts after authenticated validation and backup;
+it does not start the imported configuration. Passphrases and API keys never
+appear in command-line arguments or migration summaries. Migration archives and
+their encrypted rollback backups contain secrets: keep them out of Git.
 
 ## Diagnostics
 

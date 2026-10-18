@@ -94,7 +94,7 @@ _contains_word() {
 
 _first_missing_service() {
   for _fms_service in $1; do
-    if ! security find-generic-password -a "$USER" -s "$_fms_service" >/dev/null 2>&1; then
+    if ! kc_has "$_fms_service" >/dev/null 2>&1; then
       printf '%s' "$_fms_service"
       return 0
     fi
@@ -170,7 +170,15 @@ expect eof
 catch wait result
 exit [lindex $result 3]
 EOF
+  if [ "$_kcp_rc" -eq 0 ] && [ "${CROUTER_MIGRATING:-0}" != 1 ]; then
+    _forget_migrated_key "$1" || return 1
+  fi
   return "$_kcp_rc"
+}
+
+_forget_migrated_key() {
+  [ -f "$ROOT_DIR/.state/migration-credentials.json" ] || return 0
+  "$NODE_BIN" "$LIB_DIR/device-migration.js" "$ROOT_DIR" _forget "$1"
 }
 
 # _keychain_delete <service>   ->  delete a generic password; missing is okay.
@@ -178,7 +186,7 @@ _keychain_delete() {
   security delete-generic-password -a "$USER" -s "$1" >/dev/null 2>&1
   _kd_rc=$?
   case $_kd_rc in
-    0|44) return 0 ;;
+    0|44|127) _forget_migrated_key "$1"; return $? ;;
     *) return "$_kd_rc" ;;
   esac
 }
@@ -189,7 +197,7 @@ _next_key_name() {
   _existing_names=${2:-}
   _n=2
   while _contains_word "$_existing_names" "${_base}-${_n}" ||
-        security find-generic-password -a "$USER" -s "${_base}-${_n}" >/dev/null 2>&1; do
+        kc_has "${_base}-${_n}" >/dev/null 2>&1; do
     _n=$((_n + 1))
   done
   printf '%s-%d' "$_base" "$_n"
@@ -554,7 +562,7 @@ cmd_list_keys_one() {
       else printf '  - api key: env:%s unset\n' "$API_KEY_ENV"; fi
     fi
     if [ -n "${API_KEY_REF:-}" ]; then
-      if security find-generic-password -a "$USER" -s "$API_KEY_REF" >/dev/null 2>&1; then
+      if kc_has "$API_KEY_REF" >/dev/null 2>&1; then
         printf '  - api key: keychain:%s in Keychain\n' "$API_KEY_REF"
       else
         printf '  - api key: keychain:%s MISSING\n' "$API_KEY_REF"
@@ -572,7 +580,7 @@ cmd_list_keys_one() {
         [ -z "$_existing" ] && continue
         printf '%-8s surface (%s):\n' "$_surface" "$_var"
         for _w in $_existing; do
-          if security find-generic-password -a "$USER" -s "$_w" >/dev/null 2>&1; then
+          if kc_has "$_w" >/dev/null 2>&1; then
             _st='in Keychain'
           else
             _st='MISSING from Keychain'
@@ -589,7 +597,7 @@ cmd_list_keys_one() {
       ;;
     keychain)
       _ref=${AUTH_REFERENCE:-}
-      if [ -n "$_ref" ] && security find-generic-password -a "$USER" -s "$_ref" >/dev/null 2>&1; then
+      if [ -n "$_ref" ] && kc_has "$_ref" >/dev/null 2>&1; then
         printf '  - %-40s in Keychain\n' "$_ref"
       else
         printf '  - %-40s MISSING\n' "${_ref:-<AUTH_REFERENCE unset>}"
@@ -604,7 +612,7 @@ cmd_list_keys_one() {
       fi
       _svc=${AUTH_KEYCHAIN_FALLBACK:-}
       if [ -n "$_svc" ]; then
-        if security find-generic-password -a "$USER" -s "$_svc" >/dev/null 2>&1; then
+        if kc_has "$_svc" >/dev/null 2>&1; then
           printf '  - keychain:%s in Keychain\n' "$_svc"
         else
           printf '  - keychain:%s MISSING\n' "$_svc"

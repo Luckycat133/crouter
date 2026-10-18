@@ -18,7 +18,7 @@ _crouter_providers() {
 _crouter_complete() {
   local -a cmds providers native_apps candidates
   local app
-  cmds=(run use claude app all list doctor add remove provider config logs uninstall help --version)
+  cmds=(run use claude app all list doctor add remove provider config migrate logs uninstall help --version)
   providers=(${(f)"$(_crouter_providers)"})
   native_apps=(claude codex gemini opencode copilot cursor kiro qoder kimi qwen amp vibe muse kilo)
   if (( CURRENT == 2 )); then
@@ -58,6 +58,13 @@ _crouter_complete() {
         candidates=(show $providers)
       elif (( CURRENT == 4 )) && [[ "$words[3]" == show ]]; then
         candidates=($providers)
+      fi ;;
+    migrate)
+      if (( CURRENT == 3 )); then
+        candidates=(export import)
+      elif (( CURRENT >= 5 )); then
+        candidates=(--password-stdin --state-dir)
+        [[ "$words[3]" != import ]] || candidates+=(--yes)
       fi ;;
     config)
       (( CURRENT != 3 )) || candidates=(show path) ;;
