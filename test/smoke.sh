@@ -68,11 +68,12 @@ else
   bad "-V did not print a semver"
 fi
 
-# list shows the known providers
-if "$GATEWAY" list 2>/dev/null | grep -q 'minimax'; then
-  ok "list shows minimax provider"
+# The full catalog includes unconfigured providers; default list only shows
+# ready/local/native entries and must not depend on credentials in this test.
+if "$GATEWAY" list --all 2>/dev/null | grep -q 'minimax'; then
+  ok "list --all shows minimax provider"
 else
-  bad "list missing minimax provider"
+  bad "list --all missing minimax provider"
 fi
 
 # help exits 0

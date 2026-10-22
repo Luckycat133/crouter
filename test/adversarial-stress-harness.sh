@@ -19,80 +19,31 @@ fail() {
   fail_count=$((fail_count + 1))
 }
 
-echo "=== STRESS TEST 1: Antigravity Tiered and Aliased Model Resolution ==="
+# Test the contracts owned by this repository. The optional, gitignored
+# Antigravity proxy is installed separately; importing it would make this
+# offline suite depend on a personal checkout and may contact its upstream.
+TEST_SHELL=${TEST_SHELL:-sh}
+export ROOT_DIR
 
-"$NODE_BIN" - <<'NODE_ANTIGRAV'
-const assert = require('assert');
-const fs = require('fs');
-const path = require('path');
-
-// 1. Verify config.example.json modelMapping
-const configPath = path.join(process.cwd(), 'antigravity-claude-proxy/config.example.json');
-const configJson = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-assert(configJson.modelMapping, 'config.example.json must have modelMapping');
-assert.strictEqual(configJson.modelMapping['gemini-3.8-flash']?.mapping, 'gemini-3.8-flash-tiered');
-assert.strictEqual(configJson.modelMapping['gemini-3.7-flash']?.mapping, 'gemini-3.7-flash-tiered');
-
-// 2. Verify constants.MODEL_FALLBACK_MAP and getModelFamily
-const constantsPath = path.join(process.cwd(), 'antigravity-claude-proxy/src/constants.js');
-const constantsContent = fs.readFileSync(constantsPath, 'utf8');
-
-// Dynamic import of ES modules
-async function testConstants() {
-  const { MODEL_FALLBACK_MAP, getModelFamily, isThinkingModel } = await import('file://' + constantsPath);
-  
-  const targetModels = [
-    'gemini-3.8-flash',
-    'gemini-3.8-flash-tiered',
-    'gemini-3.7-flash',
-    'gemini-3.7-flash-tiered',
-  ];
-
-  for (const model of targetModels) {
-    // Check family
-    assert.strictEqual(getModelFamily(model), 'gemini', `Family of ${model} must be gemini`);
-    // Check thinking detection (gemini-3+)
-    assert.strictEqual(isThinkingModel(model), true, `${model} must be recognized as thinking model`);
-    // Check fallback mapping
-    assert(MODEL_FALLBACK_MAP[model], `MODEL_FALLBACK_MAP must define fallback for ${model}`);
-    assert.strictEqual(MODEL_FALLBACK_MAP[model], 'gemini-3.5-flash-low', `Fallback for ${model} must be gemini-3.5-flash-low`);
-  }
-
-  // 3. Test mapping simulation matching server.js lines 726-747
-  const modelMapping = configJson.modelMapping;
-  for (const model of targetModels) {
-    let requested = model;
-    if (modelMapping[requested] && modelMapping[requested].mapping) {
-      requested = modelMapping[requested].mapping;
-    }
-    // Verify mapped result
-    if (model.includes('-tiered')) {
-      assert.strictEqual(requested, model, `${model} should pass through unchanged`);
-    } else {
-      assert.strictEqual(requested, `${model}-tiered`, `${model} should map to -tiered`);
-    }
-    assert.strictEqual(getModelFamily(requested), 'gemini');
-  }
-
-  // 4. Test isValidModel logic with simulated model cache
-  const { isValidModel } = await import('file://' + path.join(process.cwd(), 'antigravity-claude-proxy/src/cloudcode/model-api.js'));
-  // Under empty cache / failed fetch, isValidModel fails open (returns true)
-  const openResult = await isValidModel('gemini-3.8-flash-tiered', 'dummy-token', null);
-  assert.strictEqual(openResult, true, 'isValidModel must fail open safely without throwing');
-}
-
-testConstants().then(() => {
-  process.exit(0);
-}).catch(err => {
-  console.error(err);
-  process.exit(1);
-});
-NODE_ANTIGRAV
-if [ $? -eq 0 ]; then
-  pass "Antigravity tiered/aliased models resolve and fallback cleanly without 400"
-else
-  fail "Antigravity tiered/aliased models resolution failed"
-fi
+echo "=== STRESS TEST 1: Antigravity Provider Model Contract ==="
+"$TEST_SHELL" -eu <<'SH_ANTIGRAV'
+. "$ROOT_DIR/lib/provider.sh"
+PROVIDERS_DIR="$ROOT_DIR/providers"
+load_provider antigravity
+[ "$MODEL" = gemini-3.8-flash ]
+for model in "$MODEL_OPUS" "$MODEL_SONNET" "$MODEL_HAIKU" "$MODEL_SUBAGENT"; do
+  [ "$model" = "$MODEL" ]
+done
+for alias in gemini-3.8-flash-tiered gemini-3.7-flash gemini-3.7-flash-tiered; do
+  case " $MODEL_ALIASES " in
+    *" $alias "*) : ;;
+    *) printf 'FAIL  missing Antigravity alias: %s\n' "$alias" >&2; exit 1 ;;
+  esac
+done
+[ "$AUTH_MODE" = static ]
+[ "$AUTH_REFERENCE" = local-antigravity-proxy ]
+SH_ANTIGRAV
+pass "Antigravity exposes canonical tier models and explicit aliases"
 
 echo "=== STRESS TEST 2: Candidate Model Translation in Gateway & Keypool-Proxy ==="
 
@@ -153,75 +104,8 @@ while [ "$i" -lt 50 ]; do
 done
 [ -n "$UPSTREAM_PORT" ] || { printf 'FAIL  upstream failed to start\n' >&2; exit 1; }
 
-# 2.1 Test Gateway model translation logic under edge cases & adversarial inputs
-"$NODE_BIN" - <<NODE_GW_TEST
-const assert = require('assert');
-
-// Replicate candidateModel from bin/gateway
-function candidateModel(cand, requested) {
-  if (
-    cand.model_map &&
-    typeof cand.model_map === 'object' &&
-    Object.prototype.hasOwnProperty.call(cand.model_map, requested)
-  ) {
-    return cand.model_map[requested];
-  }
-  return cand.model || requested;
-}
-
-const candWithMap = {
-  model_map: {
-    'gemini-3.8-flash': 'gemini-3.8-flash-tiered',
-    'gemini-3.7-flash': 'gemini-3.7-flash-tiered',
-    'normal-model': 'upstream-normal',
-  },
-  model: 'upstream-fallback'
-};
-
-const candWithoutMap = {
-  model: 'upstream-fallback-only'
-};
-
-const candMinimal = {};
-
-// Test 1: exact matches in model_map
-assert.strictEqual(candidateModel(candWithMap, 'gemini-3.8-flash'), 'gemini-3.8-flash-tiered');
-assert.strictEqual(candidateModel(candWithMap, 'gemini-3.7-flash'), 'gemini-3.7-flash-tiered');
-assert.strictEqual(candidateModel(candWithMap, 'normal-model'), 'upstream-normal');
-
-// Test 2: unmapped unexpected model with cand.model defined -> fallback to cand.model
-assert.strictEqual(candidateModel(candWithMap, 'unexpected-model'), 'upstream-fallback');
-assert.strictEqual(candidateModel(candWithMap, ''), 'upstream-fallback');
-assert.strictEqual(candidateModel(candWithMap, 'unknown/nested/model'), 'upstream-fallback');
-
-// Test 3: prototype pollution attack vectors -> MUST NOT return Object.prototype
-assert.strictEqual(candidateModel(candWithMap, '__proto__'), 'upstream-fallback');
-assert.strictEqual(candidateModel(candWithMap, 'constructor'), 'upstream-fallback');
-assert.strictEqual(candidateModel(candWithMap, 'toString'), 'upstream-fallback');
-assert.strictEqual(candidateModel(candWithMap, 'valueOf'), 'upstream-fallback');
-assert.strictEqual(candidateModel(candWithMap, 'hasOwnProperty'), 'upstream-fallback');
-
-// Test 4: candidate without map falls back to cand.model or requested
-assert.strictEqual(candidateModel(candWithoutMap, 'gemini-3.8-flash'), 'upstream-fallback-only');
-assert.strictEqual(candidateModel(candWithoutMap, 'anything'), 'upstream-fallback-only');
-
-// Test 5: candidate with neither model_map nor model gracefully passes through requested model
-assert.strictEqual(candidateModel(candMinimal, 'gemini-3.8-flash'), 'gemini-3.8-flash');
-assert.strictEqual(candidateModel(candMinimal, 'custom-model'), 'custom-model');
-
-// Test 6: corrupted candidate objects
-assert.strictEqual(candidateModel({ model_map: null }, 'foo'), 'foo');
-assert.strictEqual(candidateModel({ model_map: 'not-an-object' }, 'foo'), 'foo');
-assert.strictEqual(candidateModel({ model_map: [1, 2, 3] }, 'foo'), 'foo');
-
-process.exit(0);
-NODE_GW_TEST
-if [ $? -eq 0 ]; then
-  pass "Gateway candidateModel logic passes all edge-case and prototype tests"
-else
-  fail "Gateway candidateModel logic failed edge-case tests"
-fi
-
+# Exercise the actual gateway and keypool binaries below, not a copied
+# candidateModel implementation that could drift from production.
 # 2.2 Live Gateway instance stress test
 cat > "$TMP_DIR/routes.json" <<EOF
 [
@@ -257,26 +141,30 @@ while [ "$i" -lt 50 ]; do
   i=$((i + 1))
 done
 
+grep -q '^CROUTER_GATEWAY_LISTENING_PORT=' "$TMP_DIR/gateway.out" || {
+  printf 'FAIL  gateway failed to start\n' >&2; exit 1;
+}
+
 # Test mapped model: testprov/gemini-3.8-flash
-CODE1=$(curl -s -o "$TMP_DIR/res1.json" -w '%{http_code}' -X POST "http://127.0.0.1:$GW_PORT/v1/messages" \
+CODE1=$(curl --max-time 5 -sS -o "$TMP_DIR/res1.json" -w '%{http_code}' -X POST "http://127.0.0.1:$GW_PORT/v1/messages" \
   -H 'authorization: Bearer gw-secret' \
   -H 'content-type: application/json' \
   -d '{"model":"testprov/gemini-3.8-flash","messages":[]}')
 
 # Test unmapped unexpected model: testprov/unknown-random-model -> should gracefully fall back to default-fallback-model
-CODE2=$(curl -s -o "$TMP_DIR/res2.json" -w '%{http_code}' -X POST "http://127.0.0.1:$GW_PORT/v1/messages" \
+CODE2=$(curl --max-time 5 -sS -o "$TMP_DIR/res2.json" -w '%{http_code}' -X POST "http://127.0.0.1:$GW_PORT/v1/messages" \
   -H 'authorization: Bearer gw-secret' \
   -H 'content-type: application/json' \
   -d '{"model":"testprov/unknown-random-model","messages":[]}')
 
 # Test malformed JSON body -> should return 400 invalid_request
-CODE3=$(curl -s -o "$TMP_DIR/res3.json" -w '%{http_code}' -X POST "http://127.0.0.1:$GW_PORT/v1/messages" \
+CODE3=$(curl --max-time 5 -sS -o "$TMP_DIR/res3.json" -w '%{http_code}' -X POST "http://127.0.0.1:$GW_PORT/v1/messages" \
   -H 'authorization: Bearer gw-secret' \
   -H 'content-type: application/json' \
   -d '{"model": bad json')
 
 # Test model without prefix -> should return 400 unknown_model
-CODE4=$(curl -s -o "$TMP_DIR/res4.json" -w '%{http_code}' -X POST "http://127.0.0.1:$GW_PORT/v1/messages" \
+CODE4=$(curl --max-time 5 -sS -o "$TMP_DIR/res4.json" -w '%{http_code}' -X POST "http://127.0.0.1:$GW_PORT/v1/messages" \
   -H 'authorization: Bearer gw-secret' \
   -H 'content-type: application/json' \
   -d '{"model":"no-prefix-model","messages":[]}')
@@ -302,22 +190,24 @@ while [ "$i" -lt 50 ]; do
   i=$((i + 1))
 done
 
-KP_CODE1=$(curl -s -o "$TMP_DIR/kp_res1.json" -w '%{http_code}' -X POST "http://127.0.0.1:$POOL_PORT/v1/messages" \
+[ -n "$POOL_PORT" ] || { cat "$TMP_DIR/pool.err" >&2; exit 1; }
+
+KP_CODE1=$(curl --max-time 5 -sS -o "$TMP_DIR/kp_res1.json" -w '%{http_code}' -X POST "http://127.0.0.1:$POOL_PORT/v1/messages" \
   -H 'anthropic-auth-token: local-token' \
   -H 'content-type: application/json' \
   -d '{"model":"gemini-3.8-flash","messages":[]}')
 
-KP_CODE2=$(curl -s -o "$TMP_DIR/kp_res2.json" -w '%{http_code}' -X POST "http://127.0.0.1:$POOL_PORT/v1/messages" \
+KP_CODE2=$(curl --max-time 5 -sS -o "$TMP_DIR/kp_res2.json" -w '%{http_code}' -X POST "http://127.0.0.1:$POOL_PORT/v1/messages" \
   -H 'anthropic-auth-token: local-token' \
   -H 'content-type: application/json' \
   -d '{"model":"unexpected-edge-case-model","messages":[]}')
 
-KP_CODE3=$(curl -s -o "$TMP_DIR/kp_res3.json" -w '%{http_code}' -X POST "http://127.0.0.1:$POOL_PORT/v1/messages" \
+KP_CODE3=$(curl --max-time 5 -sS -o "$TMP_DIR/kp_res3.json" -w '%{http_code}' -X POST "http://127.0.0.1:$POOL_PORT/v1/messages" \
   -H 'anthropic-auth-token: local-token' \
   -H 'content-type: application/json' \
   -d '{"model":"__proto__","messages":[]}')
 
-KP_CODE4=$(curl -s -o "$TMP_DIR/kp_res4.json" -w '%{http_code}' -X POST "http://127.0.0.1:$POOL_PORT/v1/messages" \
+KP_CODE4=$(curl --max-time 5 -sS -o "$TMP_DIR/kp_res4.json" -w '%{http_code}' -X POST "http://127.0.0.1:$POOL_PORT/v1/messages" \
   -H 'anthropic-auth-token: local-token' \
   -H 'content-type: application/json' \
   -d 'invalid body')
@@ -327,6 +217,38 @@ if [ "$KP_CODE1" = "200" ] && [ "$KP_CODE2" = "200" ] && [ "$KP_CODE3" = "200" ]
 else
   fail "Live Keypool-proxy failed: KP_CODE1=$KP_CODE1 KP_CODE2=$KP_CODE2 KP_CODE3=$KP_CODE3 KP_CODE4=$KP_CODE4"
 fi
+
+# Verify forwarded bodies and credential binding, not merely HTTP status.
+"$NODE_BIN" - "$REQUEST_LOG" <<'NODE_SEEN'
+const assert = require('assert');
+const fs = require('fs');
+const seen = fs.readFileSync(process.argv[2], 'utf8').trim().split('\n').map(JSON.parse);
+assert.deepStrictEqual(seen.map(entry => entry.model), [
+  'gemini-3.8-flash-tiered', 'default-fallback-model',
+  'gemini-3.8-flash-tiered', 'pool-default-fallback', 'pool-default-fallback',
+]);
+for (const [index, entry] of seen.entries()) {
+  assert.strictEqual(entry.path, '/v1/messages');
+  assert.strictEqual(entry.headers.authorization, index < 2 ? 'Bearer test-token' : 'Bearer pool-token');
+  assert.strictEqual(entry.headers['anthropic-auth-token'], undefined);
+}
+NODE_SEEN
+pass "Actual proxies preserve model mapping, fallback and upstream credential binding"
+
+# Prototype-property names must hit the actual gateway fallback path too.
+for model in __proto__ constructor toString valueOf hasOwnProperty; do
+  code=$(curl --max-time 5 -sS -o "$TMP_DIR/prototype.json" -w '%{http_code}' \
+    "http://127.0.0.1:$GW_PORT/v1/messages" \
+    -H 'authorization: Bearer gw-secret' -H 'content-type: application/json' \
+    -d "{\"model\":\"testprov/$model\",\"messages\":[]}")
+  [ "$code" = 200 ] || { fail "Gateway prototype model $model returned $code"; continue; }
+  "$NODE_BIN" - "$TMP_DIR/prototype.json" <<'NODE_PROTO'
+const assert = require('assert');
+const fs = require('fs');
+assert.strictEqual(JSON.parse(fs.readFileSync(process.argv[2], 'utf8')).receivedModel, 'default-fallback-model');
+NODE_PROTO
+done
+pass "Gateway prototype-property models use the candidate fallback"
 
 echo "=== STRESS TEST 3: Moonshot Context Override Logic ==="
 
@@ -338,7 +260,7 @@ else
 fi
 
 # Adversarial context override verification in subshell
-sh -c '
+"$TEST_SHELL" -c '
 set -eu
 ROOT_DIR="'"$ROOT_DIR"'"
 . "$ROOT_DIR/lib/provider.sh"
@@ -385,7 +307,7 @@ fi
 
 echo "=== STRESS TEST 4: OpenRouter Model Resolution and Slug Audit ==="
 
-sh -c '
+"$TEST_SHELL" -c '
 set -eu
 ROOT_DIR="'"$ROOT_DIR"'"
 . "$ROOT_DIR/lib/provider.sh"
