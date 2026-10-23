@@ -61,10 +61,11 @@ _crouter_complete() {
       fi ;;
     migrate)
       if (( CURRENT == 3 )); then
-        candidates=(export import)
+        candidates=(export import verify)
       elif (( CURRENT >= 5 )); then
         candidates=(--password-stdin --state-dir)
         [[ "$words[3]" != import ]] || candidates+=(--yes)
+        [[ "$words[3]" == export ]] || candidates+=(--portable)
       fi ;;
     config)
       (( CURRENT != 3 )) || candidates=(show path) ;;

@@ -20,7 +20,7 @@
 #   crouter remove <provider> --name <service> [--surface plan|api]
 #                                         Remove a key from the keypool (and Keychain)
 #   crouter provider show <provider>      Show full provider config (secrets redacted)
-#   crouter migrate export|import <file>  Move configuration and credentials (encrypted)
+#   crouter migrate export|import|verify <file>  Move/check encrypted configuration and keys
 #   crouter config show                   Show effective configuration
 #   crouter config path                   Show path to config.sh
 #   crouter logs list                     List files under the log directory

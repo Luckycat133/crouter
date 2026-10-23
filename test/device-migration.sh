@@ -27,15 +27,16 @@ put(path.join(tools,'security'),`#!/usr/bin/env node
 const fs=require('fs'),path=require('path');const args=process.argv.slice(2),service=args[args.indexOf('-s')+1];
 fs.appendFileSync(process.env.ARGV_LOG,JSON.stringify(args)+'\\n');
 const file=path.join(process.env.FAKE_KEYS,service);
-if(args[0]==='find-generic-password'){if(!fs.existsSync(file))process.exit(44);if(args.includes('-w'))process.stdout.write(fs.readFileSync(file));}
+if(args[0]==='find-generic-password'){if(!fs.existsSync(file)||(!args.includes('-w')&&process.env.METADATA_FAIL_SERVICE===service))process.exit(44);if(args.includes('-w'))process.stdout.write(fs.readFileSync(file));}
 else if(args[0]==='delete-generic-password'){if(fs.existsSync(file))fs.unlinkSync(file);else process.exit(44);}
 else process.exit(2);
 `);
 put(path.join(tools,'expect'),`#!/usr/bin/env node
 const fs=require('fs'),path=require('path');
 const s=process.env.CR_KEYCHAIN_SERVICE,v=process.env.CR_KEYCHAIN_SECRET;
+if(process.env.DROP_SERVICE===s)process.exit(0);
 if(process.env.FAIL_SERVICE===s&&!fs.existsSync(process.env.FAIL_ONCE)){fs.writeFileSync(process.env.FAIL_ONCE,'failed');process.exit(1);}
-fs.writeFileSync(path.join(process.env.FAKE_KEYS,s),v,{mode:0o600});
+fs.writeFileSync(path.join(process.env.FAKE_KEYS,s),process.env.WRONG_SERVICE===s?'wrong-persisted-key':v,{mode:0o600});
 `);
 fs.chmodSync(path.join(tools,'security'),0o700); fs.chmodSync(path.join(tools,'expect'),0o700);
 function env(f, extra={}) { return {...process.env, HOME:f.home, XDG_STATE_HOME:path.join(f.home,'state'), STATE_DIR:'', PATH:tools+path.delimiter+process.env.PATH, USER:'migration-test', FAKE_KEYS:f.keys, ARGV_LOG:path.join(tmp,'argv.log'), FAIL_ONCE:path.join(tmp,'fail-once'), ...extra}; }
@@ -89,6 +90,48 @@ try {
     assert(restoredMetadata.CUSTOM_ENDPOINT==='https://custom.example.invalid'&&restoredMetadata.ALIAS_API_KEY==='alias-only','endpoint/alias environment lost');
     assert(restoredEnv.stdout==='env-quote-\'"-\\-\nline','quoted/multiline env changed');
     assert((fs.statSync(envFile).mode&0o777)===0o600,'secret environment mode');
+    const verified=run(target,['verify',archive]);
+    assert(verified.stdout.includes('all match.'),'installed configuration/credential verification');
+    const originalEnvShell=fs.readFileSync(envFile);
+    fs.unlinkSync(envFile);
+    const missingLoader=run(target,['verify',archive],{},false);
+    assert(missingLoader.stdout.includes('environment loader'),'missing runtime environment loader passed verification');
+    put(envFile,originalEnvShell);
+    put(path.join(target.keys,'demo-api'),'incorrect-target-key');
+    const wrongKey=run(target,['verify',archive],{},false);
+    assert(wrongKey.stdout.includes('credential: demo-api')&&wrongKey.stdout.includes('demo.local'),'verify did not identify credential/provider');
+    put(path.join(target.keys,'demo-api'),'key-api');
+    const wrongCheckout=fixture('wrong-checkout');
+    const missing=run(wrongCheckout,['verify',archive],{},false);
+    assert(missing.stdout.includes('file: root/config.sh'),'wrong checkout was not detected');
+    // A native writer can acknowledge a write without persisting it. Readback
+    // must fail the transaction and restore the previously touched keys.
+    const discarded=fixture('discarded');
+    const discardedResult=run(discarded,['import',archive,'--yes'],{DROP_SERVICE:'demo-api'},false);
+    assert(!discardedResult.stdout.includes('Imported.'),'silent native discard reported success');
+    assert(fs.readdirSync(discarded.keys).length===0,'readback failure left partial credentials');
+    assert(!fs.existsSync(path.join(discarded.repo,'config.sh')),'readback failure changed configuration');
+    for (const [name,extra] of [['wrong-native-value',{WRONG_SERVICE:'demo-api'}],['missing-native-metadata',{METADATA_FAIL_SERVICE:'demo-api'}]]) {
+        const broken=fixture(name);
+        run(broken,['import',archive,'--yes'],extra,false);
+        assert(fs.readdirSync(broken.keys).length===0&&!fs.existsSync(path.join(broken.repo,'config.sh')),'native verification failure was not rolled back');
+    }
+    // Explicit portable mode avoids ALL native Keychain calls on a host where
+    // both security and expect are present, and normal verification works.
+    const forced=fixture('forced-portable');
+    const previousCalls=fs.readFileSync(path.join(tmp,'argv.log'),'utf8');
+    const forcedResult=run(forced,['import',archive,'--yes','--portable']);
+    assert(forcedResult.stdout.includes('Keychain is neither read nor written'),'portable mode was not explicit');
+    assert(fs.readFileSync(path.join(tmp,'argv.log'),'utf8')===previousCalls&&fs.readdirSync(forced.keys).length===0,'portable import accessed native Keychain');
+    run(forced,['verify',archive,'--portable']);
+    assert(fs.readFileSync(path.join(tmp,'argv.log'),'utf8')===previousCalls,'portable verify accessed native Keychain');
+    const forcedStore=JSON.parse(fs.readFileSync(path.join(forced.repo,'.state/migration-credentials.json')));
+    assert(forcedStore['demo-plan']===secret,'forced portable key changed');
+    assert((fs.statSync(path.join(forced.repo,'.state/migration-credentials.json')).mode&0o777)===0o600,'forced portable credential mode');
+    forcedStore['demo-api']='wrong-portable-key';
+    put(path.join(forced.repo,'.state/migration-credentials.json'),JSON.stringify(forcedStore));
+    run(forced,['verify',archive,'--portable'],{},false);
+    assert(!fs.existsSync(path.join(tmp,'CONFIG-RAN'))&&!fs.existsSync(path.join(tmp,'HOOK-RAN')),'verify executed imported source');
     assert(!fs.readFileSync(path.join(tmp,'argv.log'),'utf8').includes(secret),'secret reached security argv');
     assert(!exportOutput.stdout.includes(secret)&&!imported.stdout.includes(secret),'secret in summary');
     // Missing a registered key is an error, unlike an unused catalog slot.
@@ -145,7 +188,7 @@ try {
     const removed=cp.spawnSync(shell,[path.join(portable.repo,'bin/crouter'),'remove','demo.local','--surface','plan','--name','demo-plan','-y'],{env:removeEnv,encoding:'utf8'});
     assert(removed.status===0,'fallback remove failed: '+removed.stderr);
     assert(!Object.hasOwn(JSON.parse(fs.readFileSync(path.join(portable.repo,'.state/migration-credentials.json'))),'demo-plan'),'fallback remove retained key');
-    console.log('ok    encrypted migration: exact credentials, endpoints, state, rebase, no execution, wrong password/tamper, rollback, links, schema, portable fallback');
+    console.log('ok    encrypted migration: exact credentials, endpoints, state, rebase, no execution, wrong password/tamper, rollback, links, schema, portable fallback, native readback, installed verification');
 } finally { fs.rmSync(tmp,{recursive:true,force:true}); }
 JS
 

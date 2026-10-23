@@ -76,9 +76,10 @@ then run:
 
 ```sh
 crouter migrate import ~/crouter.crm
+crouter migrate verify ~/crouter.crm
 ```
 
-Both commands request the same passphrase without terminal echo; use at least
+Migration commands request the same passphrase without terminal echo; use at least
 12 characters. The mode-600 package uses AES-256-GCM with scrypt and includes
 API keys. Keep the passphrase separately from the package. Existing conflicting
 files/keys require one replacement confirmation; an encrypted backup is written
@@ -96,13 +97,24 @@ without any available key fail export; unused, unconfigured catalog slots do not
 A locked or denied Keychain read fails rather than silently dropping that key.
 
 On macOS, import restores API keys through the existing Keychain helper; it
-requires `security` and `expect`. Other hosts retain keys in the ignored,
+requires `security` and `expect`, then reads each key back before accepting the
+write. A missing or different value fails the transaction and triggers rollback.
+Use `crouter migrate import ~/crouter.crm --portable` to avoid Keychain entirely,
+including on macOS. This uses the same ignored,
 mode-600 `.state/migration-credentials.json`, used by normal crouter auth and
-presence checks. Multiline keys also use this fallback because the macOS
-password prompt accepts lines. `crouter remove` removes imported fallback keys;
+presence checks. Hosts without Keychain and multiline keys also use this fallback
+because the macOS password prompt accepts lines. `crouter remove` removes imported fallback keys;
 a successful normal `crouter add` replaces a fallback with its new Keychain key.
 Imported environment values are private, shell-quoted data under `.state/`;
 values already exported in the current shell keep precedence.
+
+`migrate verify` decrypts the package and compares the installed configuration,
+providers, key registries, selection/model state, credential values and imported
+environment metadata without executing imported code. Missing or different
+items produce a nonzero exit and names only, never secret values. Use
+`verify --portable` after a portable import to keep verification away from
+Keychain. This checks local recovery, not remote provider/account access; use
+`crouter list` and `crouter doctor <provider>` after reviewing the configuration.
 
 Configuration/provider source is preserved in the encrypted package. Import
 rebases only literal known machine-path settings such as `STATE_DIR`,
@@ -127,6 +139,7 @@ line ending is removed):
 ```sh
 password-manager-command | crouter migrate export ~/crouter.crm --password-stdin
 password-manager-command | crouter migrate import ~/crouter.crm --password-stdin --yes
+password-manager-command | crouter migrate verify ~/crouter.crm --password-stdin
 ```
 
 `--yes` accepts replacement conflicts after authenticated validation and backup;

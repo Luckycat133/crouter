@@ -28,9 +28,13 @@ if command -v bash >/dev/null 2>&1; then
     contains() { printf "%s\n" "${COMPREPLY[@]}" | grep -qx -- "$1"; }
     excludes() { ! printf "%s\n" "${COMPREPLY[@]}" | grep -qx -- "$1"; }
     complete_at crouter migrate ""
-    contains export && contains import && excludes demo
+    contains export && contains import && contains verify && excludes demo
     complete_at crouter migrate import bundle.crm ""
-    contains --password-stdin && contains --yes
+    contains --password-stdin && contains --yes && contains --portable
+    complete_at crouter migrate verify bundle.crm ""
+    contains --password-stdin && contains --portable && excludes --yes
+    complete_at crouter migrate export bundle.crm ""
+    contains --password-stdin && excludes --portable && excludes --yes
     complete_at crouter config ""
     contains show && contains path && excludes demo
     complete_at crouter logs ""
@@ -83,9 +87,13 @@ if command -v zsh >/dev/null 2>&1; then
     contains() { grep -qx -- "$1" "$RESULT_FILE"; }
     excludes() { ! grep -qx -- "$1" "$RESULT_FILE"; }
     complete_at crouter migrate ""
-    contains export && contains import && excludes demo
+    contains export && contains import && contains verify && excludes demo
     complete_at crouter migrate import bundle.crm ""
-    contains --password-stdin && contains --yes
+    contains --password-stdin && contains --yes && contains --portable
+    complete_at crouter migrate verify bundle.crm ""
+    contains --password-stdin && contains --portable && excludes --yes
+    complete_at crouter migrate export bundle.crm ""
+    contains --password-stdin && excludes --portable && excludes --yes
     complete_at crouter config ""
     contains show && contains path && excludes demo
     complete_at crouter logs ""

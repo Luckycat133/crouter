@@ -6,6 +6,12 @@ All notable changes to this local setup are documented in this file.
 
 ### Added
 
+- `crouter migrate verify <file>` checks installed configuration and credential
+  values against the encrypted package without executing imported code or
+  printing secrets. `import --portable` explicitly avoids Keychain on any host.
+- Keychain imports now require exact secret readback and metadata presence;
+  a writer that acknowledges a missing/wrong key triggers transaction rollback.
+
 - `crouter migrate export <file>` / `import <file>` move configuration, custom
   providers, registered API keys, selected target, remembered models and provider
   environment overrides in a passphrase-encrypted AES-256-GCM/scrypt package.

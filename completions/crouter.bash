@@ -68,10 +68,11 @@ _crouter_complete() {
         fi ;;
       migrate)
         if [ "$COMP_CWORD" -eq 2 ]; then
-          candidates="export import"
+          candidates="export import verify"
         elif [ "$COMP_CWORD" -ge 4 ]; then
           candidates="--password-stdin --state-dir"
           [ "${COMP_WORDS[2]:-}" != import ] || candidates="$candidates --yes"
+          [ "${COMP_WORDS[2]:-}" = export ] || candidates="$candidates --portable"
         fi ;;
       config)
         [ "$COMP_CWORD" -ne 2 ] || candidates="show path" ;;
