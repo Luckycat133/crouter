@@ -1,6 +1,6 @@
 ---
 name: crouter-provider-plan
-description: Standardize, configure, audit, and test AI provider subscription plans (Coding Plan, Agent Plan, Token Plan) and companion MCP assets in crouter. Use when integrating new vendor subscription plans, updating dual-surface auth (PLAN_URL / API_URL), configuring session-isolated zero-collision MCP injection (lib/provider-assets.js), adding vendor-bundled companion MCPs (MiniMax MCP, DashScope search, Volcengine tools), tuning context token thresholds, or writing test assertions in test/provider-matrix.sh and test/provider-assets.sh.
+description: Standardize, configure, audit, and test AI provider subscription plans (Coding Plan, Agent Plan, Token Plan) and companion MCP assets in crouter. Use when integrating new vendor subscription plans, updating dual-surface auth (PLAN_URL / API_URL), configuring session-isolated zero-collision MCP injection (lib/provider-assets.js), adding vendor-bundled companion MCPs (MiniMax MCP, DashScope search, Tencent WebSearch), tuning context token thresholds, or writing test assertions in test/provider-matrix.sh and test/provider-assets.sh.
 ---
 
 # crouter Provider Plan & Companion Asset Integration
@@ -9,16 +9,16 @@ Standardized workflow for configuring, auditing, and maintaining AI vendor subsc
 
 ## Architecture & Core Invariants
 
-All vendor plans must adhere to the standard established for **Volcengine Ark** and **MiniMax**:
+All vendor plans must adhere to the standard established for **MiniMax** and **DashScope**:
 
 1. **Dual-Surface Authentication (`AUTH_MODE="surfaces"`)**:
    - Separate subscription plans from pay-as-you-go APIs.
    - Plan configuration: `PLAN_URL`, `PLAN_AUTH_TYPE="bearer"`, `PLAN_KEY_ENV`, `PLAN_KEYS`, `PLAN_MODEL*`.
    - API configuration: `API_URL`, `API_AUTH_TYPE="bearer"`, `API_KEY_ENV`, `API_KEYS`, `API_MODEL*`.
-   - Dedicated provider files when gateway endpoints or model families diverge (e.g. `volcengine` for Agent Plan vs `volcengine-coding` for Coding Plan; `dashscope` vs `dashscope-coding`; `qianfan` vs `qianfan-coding` vs `qianfan-team`).
+   - Dedicated provider files when gateway endpoints or model families diverge (e.g. `dashscope` vs `dashscope-coding`; `qianfan` vs `qianfan-coding` vs `qianfan-team`).
 
 2. **Provider Assets & Companion Tools by Vendor Type**:
-   - **Multi-Tool Suites (e.g. Volcengine Ark)**: Multi-tool suites (e.g. search, data plane, control plane, docs).
+   - **Multi-Tool Suites**: Multi-tool suites (e.g. search, data plane, control plane, docs).
    - **Vendors with Companion MCPs**: MiniMax (`minimax-coding-plan-mcp`), DashScope (`WebSearch`), Z.AI (`@z_ai/mcp-server`, web_search, zread), StepFun (`web_search`), Tencent (`TENCENT_MCP_URL`), Qiniu (`QINIU_MCP_URLS`).
    - **Pure Model Gateways**: Moonshot, Xiaomi, Huawei, DeepSeek do NOT ship companion MCPs. They use `ASSET_PROFILE="empty"` or no asset profile. Do not force MCP injection on vendors that do not offer one.
 
@@ -26,7 +26,7 @@ All vendor plans must adhere to the standard established for **Volcengine Ark** 
    - All MCP servers and plugins are generated dynamically by `lib/provider-assets.js` into an isolated temporary file (`mktemp -t crouter-mcp.XXXXXX`) with mode `0600`.
    - Passed to Claude Code via `--mcp-config <tmpfile>`.
    - The temporary file is deleted immediately upon session exit via trap in `cleanup_provider_assets()` (`lib/assets.sh`).
-   - **`~/.claude.json` is NEVER modified or contaminated.** Switching between different provider plans (e.g. Volcengine -> MiniMax -> DashScope -> Moonshot) completely replaces active tools with zero possibility of collision or leftover state.
+   - **`~/.claude.json` is NEVER modified or contaminated.** Switching between different provider plans (e.g. MiniMax -> DashScope -> Moonshot) completely replaces active tools with zero possibility of collision or leftover state.
 
 4. **Autonomous Tool Invocation**:
    - Companion MCP tools mounted via `--mcp-config` are registered as first-class model tools.

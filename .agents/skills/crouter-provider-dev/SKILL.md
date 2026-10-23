@@ -75,7 +75,7 @@ Never guess parameters, model IDs, context lengths, or authentication headers. C
 Select the archetype that matches the vendor's integration model and create `providers/<provider>.sh`:
 
 1. **Select Archetype**:
-   - **Type 1: Dual-Surface Subscription Plan (`AUTH_MODE="surfaces"`)**: Volcengine, MiniMax, DashScope, Qianfan, Tencent, StepFun, Z.AI.
+   - **Type 1: Dual-Surface Subscription Plan (`AUTH_MODE="surfaces"`)**: MiniMax, DashScope, Qianfan, Tencent, StepFun, Z.AI.
    - **Type 2: Single-Surface API Key / Pure Gateway (`AUTH_MODE="env"`)**: DeepSeek, Moonshot, Xiaomi, Huawei.
    - **Type 3: Third-Party Aggregator (`AUTH_MODE="env"`)**: OpenRouter, SiliconFlow, 302.ai, AIHubMix, Infini, PPIO.
    - **Type 4: Local Translation Proxy (`AUTH_MODE="none"`)**: Codex (port 19000), Ollama (port 11435), Antigravity.

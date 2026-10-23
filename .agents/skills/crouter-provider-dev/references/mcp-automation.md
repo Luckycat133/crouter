@@ -6,7 +6,7 @@ This reference documents the implementation of companion Model Context Protocol 
 
 ## 1. Zero-Collision Architecture
 
-`crouter` guarantees that switching between different providers (e.g. Volcengine -> MiniMax -> DashScope -> DeepSeek) completely replaces active tools with **zero tool collision** and **zero persistent state**.
+`crouter` guarantees that switching between different providers (e.g. MiniMax -> DashScope -> DeepSeek) completely replaces active tools with **zero tool collision** and **zero persistent state**.
 
 ```
 +---------------------------------------------------------------------------------+
@@ -44,7 +44,7 @@ When adding or updating a profile branch in `lib/provider-assets.js`:
 ## 3. Transport Implementation Recipes
 
 ### A. Python UVX (`stdio`)
-Used when vendors distribute tools via PyPI (e.g. MiniMax Coding Plan, Volcengine Doubao Search, OpenViking):
+Used when vendors distribute tools via PyPI (e.g. MiniMax Coding Plan, OpenViking):
 
 ```javascript
 } else if (profile === 'myprovider') {
@@ -80,7 +80,7 @@ Used when tools are distributed via npm (e.g. `@z_ai/mcp-server`):
 ```
 
 ### C. Streamable HTTP (`http`)
-Used for direct vendor-hosted HTTP MCP endpoints (e.g. DashScope WebSearch, StepFun WebSearch, Volcengine DataPro):
+Used for direct vendor-hosted HTTP MCP endpoints (e.g. DashScope WebSearch, StepFun WebSearch):
 
 ```javascript
 } else if (profile === 'myprovider') {

@@ -326,8 +326,6 @@ limit; the selected vendor model or native backend remains authoritative.
 | `tencent-coding` | Coding Plan | `tc-code-latest` | 262,144 | — |
 | `vercel` | AI Gateway API key | `anthropic/claude-sonnet-5` | — | — |
 | `vertex` | native Google ADC | `sonnet` alias | — | — |
-| `volcengine` | Ark Agent Plan | `doubao-seed-evolving` | 1,000,000 | Ark Docs + Doubao Search + DataPro + OpenViking MCPs |
-| `volcengine-coding` | Ark Coding Plan | `doubao-seed-evolving` | 1,000,000 | Ark Docs MCP |
 | `xiaomi` | Token Plan + API | `mimo-v2.6-pro[1m]` | 1,048,576 | — |
 | `z-ai` | Coding Plan + API | `glm-5.3[1m]` | 1,000,000 | vision/search/reader/zread MCPs |
 
@@ -376,8 +374,6 @@ and user-added services in the local key registry:
 | `dashscope-coding` | `DASHSCOPE_CODING_PLAN_KEY` | — |
 | `deepseek` | — | `DEEPSEEK_API_KEY` |
 | `stepfun` | `STEPFUN_PLAN_KEY` | `STEPFUN_API_KEY` |
-| `volcengine` | `VOLCENGINE_PLAN_KEY` | — |
-| `volcengine-coding` | `VOLCENGINE_CODING_PLAN_KEY` | — |
 | `tencent` | `TENCENT_TOKEN_PLAN_KEY` | `TENCENT_API_KEY` |
 | `tencent-coding` | `TENCENT_CODING_PLAN_KEY` | — |
 | `qianfan` | `QIANFAN_TOKEN_PLAN_KEY` | `QIANFAN_API_KEY` |
@@ -389,10 +385,6 @@ and user-added services in the local key registry:
 | `infini` | — | `INFINI_API_KEY` |
 | `ppio` | — | `PPIO_API_KEY` |
 | `xiaomi` | `XIAOMI_TOKEN_PLAN_KEY` | `XIAOMI_API_KEY` |
-
-`VOLCENGINE_AGENT_PLAN_KEY` is an alias for `VOLCENGINE_PLAN_KEY`. Agent Plan
-and Coding Plan keys are accepted only by their respective endpoints; generic
-Ark API keys are not used as subscription fallbacks.
 
 Use `crouter provider show <name>` to inspect the URL, auth type, Keychain
 service names, and tier maps without revealing secrets.
@@ -494,10 +486,6 @@ Current profiles:
   Token Plan credential is available because that MCP requires the API key.
 - Step Plan: official StepSearch (`web_search` and `web_fetch`) and a matching
   session skill.
-- Volcengine: public Ark documentation MCP. When authenticated with an Ark Agent
-  Plan credential, crouter automatically injects the official Doubao Search MCP
-  (`mcp-server-askecho-search-infinity`), DataPro professional datasets MCP, and
-  OpenViking control-plane MCP. Ark Coding Plan retains the public documentation MCP.
 - Tencent: optional console-issued WebSearch SSE URL. Set the complete
   `TENCENT_MCP_URL`; crouter refuses non-HTTPS or non-Tencent hosts.
 - AIHubMix: official API MCP, authenticated with only the active AIHubMix API

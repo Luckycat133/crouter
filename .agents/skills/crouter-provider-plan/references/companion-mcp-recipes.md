@@ -3,7 +3,7 @@
 This guide outlines recipes for injecting vendor-provided MCP tools in `lib/provider-assets.js` and explains how session isolation is maintained.
 
 > [!NOTE]
-> **Terminology**: "Harness" is Volcano Engine Ark's specific product branding for its bundled suite (Doubao Search, DataPro, OpenViking). Other vendors simply provide standalone MCP servers, plugins, or no companion tools at all. In `crouter`, this entire mechanism is called **Provider Assets**.
+> **Terminology**: Some vendors brand their bundled multi-tool suite (e.g. a vendor search bundle) as a "Harness". Other vendors simply provide standalone MCP servers, plugins, or no companion tools at all. In `crouter`, this entire mechanism is called **Provider Assets**.
 
 ---
 
@@ -11,7 +11,7 @@ This guide outlines recipes for injecting vendor-provided MCP tools in `lib/prov
 
 **No.** Providers fall into three categories:
 
-1. **Ark (Harness Suite)**: Volcengine Ark provides an official multi-tool Harness (Doubao search, DataPro, OpenViking, Docs).
+1. **Vendors with multi-tool suites**: a few vendors ship an official multi-tool Harness.
 2. **Vendors with Companion MCPs**: MiniMax (`minimax-coding-plan-mcp`), DashScope (`WebSearch`), Z.AI (`@z_ai/mcp-server`, web_search, zread), StepFun (`step_plan/v1/mcp/web_search`), Tencent (`CR_TENCENT_MCP_URL`), Qiniu (`CR_QINIU_MCP_URLS`).
 3. **Pure Model Gateways**: Moonshot, Xiaomi, Huawei, DeepSeek, etc. do NOT ship companion MCP tools. Their `ASSET_PROFILE` is either `empty` or omitted, requiring zero MCP processes.
 
@@ -19,14 +19,14 @@ This guide outlines recipes for injecting vendor-provided MCP tools in `lib/prov
 
 ## 2. Zero-Collision Lifecycle Architecture
 
-`crouter` guarantees that switching between different subscription plans (e.g. Volcengine -> MiniMax -> DashScope -> Moonshot) will NEVER contaminate tools or retain residual configurations.
+`crouter` guarantees that switching between different subscription plans (e.g. MiniMax -> DashScope -> Moonshot) will NEVER contaminate tools or retain residual configurations.
 
 ```
 +-------------------------------------------------------------------+
-| 1. User launches session: crouter volcengine                      |
+| 1. User launches session: crouter minimax                        |
 |                                                                   |
 | 2. lib/assets.sh: prepare_provider_assets()                       |
-|    - Runs: node lib/provider-assets.js render volcengine <tmpfile>|
+|    - Runs: node lib/provider-assets.js render minimax <tmpfile>  |
 |    - Outputs JSON with file permissions 0600                     |
 |                                                                   |
 | 3. bin/crouter -> lib/launch.sh:                                  |
@@ -45,7 +45,7 @@ This guide outlines recipes for injecting vendor-provided MCP tools in `lib/prov
 ## 3. Common Transport Recipes
 
 ### A. Python UVX / Stdio Tools
-Used when vendors publish Python packages (e.g. MiniMax Coding Plan, Doubao Search, OpenViking):
+Used when vendors publish Python packages (e.g. MiniMax Coding Plan, OpenViking):
 
 ```javascript
 mcpServers['crouter-minimax-token-plan'] = {
@@ -74,7 +74,7 @@ mcpServers['crouter-zai-vision'] = {
 ```
 
 ### C. Streamable HTTP Tools
-Used for direct HTTP endpoints (e.g. DashScope WebSearch, Volcengine DataPro):
+Used for direct HTTP endpoints (e.g. DashScope WebSearch, StepFun WebSearch):
 
 ```javascript
 mcpServers['crouter-dashscope-web-search'] = {

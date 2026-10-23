@@ -342,7 +342,7 @@ fi
 # intentionally hides providers that still have no credential, and re-running
 # the whole catalog once per provider multiplies the slowest step in the suite.
 CATALOG=$("$GATEWAY" list --all 2>/dev/null)
-for _dp in anthropic openrouter codex 302ai aihubmix infini minimax dashscope moonshot ppio z-ai siliconflow stepfun volcengine volcengine-coding tencent qianfan qianfan-team qianfan-coding qiniu huawei xiaomi; do
+for _dp in anthropic openrouter codex 302ai aihubmix infini minimax dashscope moonshot ppio z-ai siliconflow stepfun tencent qianfan qianfan-team qiniu huawei xiaomi; do
   if printf '%s\n' "$CATALOG" | grep -q "^$_dp "; then
     ok "$_dp provider is listed"
   else

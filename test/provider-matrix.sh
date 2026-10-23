@@ -335,69 +335,6 @@ assert_eq stepfun.api.haiku step-3.7-flash "$API_MODEL_HAIKU"
 assert_eq stepfun.api.subagent step-3.7-flash "$API_MODEL_SUBAGENT"
 assert_eq stepfun.assets stepfun "$ASSET_PROFILE"
 
-load volcengine
-assert_eq volcengine.auth surfaces "$AUTH_MODE"
-assert_eq volcengine.model doubao-seed-evolving "$MODEL"
-assert_eq volcengine.context 1000000 "$CONTEXT_TOKENS"
-assert_eq volcengine.plan.url https://ark.cn-beijing.volces.com/api/plan "$PLAN_URL"
-assert_eq volcengine.plan.key-env VOLCENGINE_PLAN_KEY "$PLAN_KEY_ENV"
-assert_eq volcengine.plan.key-services 'volcengine-agent-plan volcengine-plan' "$PLAN_KEYS"
-assert_eq volcengine.assets volcengine "$ASSET_PROFILE"
-
-load volcengine-coding
-assert_eq volcengine-coding.auth surfaces "$AUTH_MODE"
-assert_eq volcengine-coding.model doubao-seed-evolving "$MODEL"
-assert_eq volcengine-coding.context 1000000 "$CONTEXT_TOKENS"
-assert_eq volcengine-coding.plan.url https://ark.cn-beijing.volces.com/api/coding "$PLAN_URL"
-assert_eq volcengine-coding.plan.key-env VOLCENGINE_CODING_PLAN_KEY "$PLAN_KEY_ENV"
-assert_eq volcengine-coding.plan.key-service volcengine-coding-plan "$PLAN_KEYS"
-assert_eq volcengine-coding.assets volcengine-coding "$ASSET_PROFILE"
-
-# Subscription keys must never be silently sent to the other plan endpoint.
-# Stub Keychain discovery so this test is independent of a developer's account.
-check_volcengine_credential_isolation() (
-  . "$ROOT_DIR/lib/auth.sh"
-  kc_get() { return 1; }
-  unset VOLCENGINE_PLAN_KEY VOLCENGINE_AGENT_PLAN_KEY VOLCENGINE_CODING_PLAN_KEY
-  unset VOLCANO_ENGINE_API_KEY ARK_API_KEY VOLCENGINE_API_KEY
-
-  VOLCENGINE_CODING_PLAN_KEY=coding-fixture
-  export VOLCENGINE_CODING_PLAN_KEY
-  load volcengine
-  resolve_surface_tokens 1
-  assert_eq agent.reject-coding-key 0 "$_SURFACE_COUNT"
-  unset VOLCENGINE_CODING_PLAN_KEY
-
-  VOLCANO_ENGINE_API_KEY=generic-fixture
-  ARK_API_KEY=generic-fixture
-  VOLCENGINE_API_KEY=generic-fixture
-  export VOLCANO_ENGINE_API_KEY ARK_API_KEY VOLCENGINE_API_KEY
-  load volcengine
-  resolve_surface_tokens 1
-  assert_eq agent.reject-generic-keys 0 "$_SURFACE_COUNT"
-  load volcengine-coding
-  resolve_surface_tokens 1
-  assert_eq coding.reject-generic-keys 0 "$_SURFACE_COUNT"
-  unset VOLCANO_ENGINE_API_KEY ARK_API_KEY VOLCENGINE_API_KEY
-
-  VOLCENGINE_AGENT_PLAN_KEY=agent-fixture
-  export VOLCENGINE_AGENT_PLAN_KEY
-  load volcengine
-  resolve_surface_tokens 1
-  assert_eq agent.accept-alias 1 "$_SURFACE_COUNT"
-  assert_eq agent.alias-token agent-fixture "$_PLAN_FIRST_TOKEN"
-  load volcengine-coding
-  resolve_surface_tokens 1
-  assert_eq coding.reject-agent-key 0 "$_SURFACE_COUNT"
-  unset VOLCENGINE_AGENT_PLAN_KEY VOLCENGINE_PLAN_KEY
-
-  kc_get() { [ "$1" = volcengine-coding-plan ] && printf 'coding-keychain-fixture'; }
-  load volcengine
-  resolve_surface_tokens 1
-  assert_eq agent.reject-coding-keychain 0 "$_SURFACE_COUNT"
-)
-check_volcengine_credential_isolation
-
 load tencent
 assert_eq tencent.auth surfaces "$AUTH_MODE"
 assert_eq tencent.model tc-code-latest "$MODEL"
@@ -481,7 +418,7 @@ assert_eq antigravity.model gemini-3.8-flash "$MODEL"
 assert_eq antigravity.context 1048576 "$CONTEXT_TOKENS"
 assert_eq antigravity.aliases 'gemini-3.8-flash-tiered gemini-3.7-flash gemini-3.7-flash-tiered gemini-3.5-flash-medium gemini-3.1-pro-low' "$MODEL_ALIASES"
 
-for _provider in 302ai aihubmix fireworks vercel longcat meta requesty nagaai infini minimax moonshot ppio z-ai dashscope dashscope-coding deepseek siliconflow stepfun volcengine volcengine-coding tencent tencent-coding qianfan qianfan-team qianfan-coding qiniu huawei xiaomi; do
+for _provider in 302ai aihubmix fireworks vercel longcat meta requesty nagaai infini minimax moonshot ppio z-ai dashscope dashscope-coding deepseek siliconflow stepfun tencent tencent-coding qianfan qianfan-team qianfan-coding qiniu huawei xiaomi; do
   load "$_provider"
   case $BASE_URL in
     */v1/messages|*/v3/messages) die "$_provider BASE_URL must be a prefix; Claude Code appends /v1/messages" ;;

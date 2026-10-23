@@ -19,8 +19,6 @@ render minimax "$TMP_DIR/minimax.json"
 render zai "$TMP_DIR/zai.json"
 render dashscope "$TMP_DIR/dashscope.json"
 render dashscope-coding "$TMP_DIR/dashscope-coding.json"
-render volcengine "$TMP_DIR/volcengine.json"
-render volcengine-coding "$TMP_DIR/volcengine-coding.json"
 render stepfun "$TMP_DIR/stepfun.json"
 render aihubmix "$TMP_DIR/aihubmix.json"
 render ppio "$TMP_DIR/ppio.json"
@@ -76,38 +74,6 @@ assert.deepStrictEqual(dashscopeCoding['crouter-dashscope-web-search'], {
   headers: {Authorization: 'Bearer plan-secret'},
 });
 
-const volcengine = load('volcengine').mcpServers;
-assert.deepStrictEqual(volcengine['crouter-volcengine-docs'], {
-  type: 'http',
-  url: 'https://sd6j8o9hu8aldae0o6es0.apigateway-cn-beijing.volceapi.com/mcp',
-});
-assert.deepStrictEqual(volcengine['crouter-volcengine-doubao-search'], {
-  command: 'uvx',
-  args: ['--from', 'mcp-server-askecho-search-infinity>=0.2.0', 'mcp-server-askecho-search-infinity'],
-  env: {ASK_ECHO_SEARCH_INFINITY_API_KEY: 'plan-secret'},
-});
-assert.deepStrictEqual(volcengine['crouter-volcengine-datapro'], {
-  type: 'http',
-  url: 'https://datapro.hqd.cn-beijing.volces.com/mcp',
-  headers: {'X-Agent-Plan-Key': 'plan-secret', Accept: 'application/json'},
-});
-assert.deepStrictEqual(volcengine['crouter-volcengine-openviking'], {
-  command: 'uvx',
-  args: [
-    '--from',
-    'git+https://github.com/volcengine/mcp-server#subdirectory=server/mcp_server_openviking_controlplane',
-    'mcp-server-openviking-controlplane',
-  ],
-  env: {AGENTPLAN_API_KEY: 'plan-secret'},
-});
-
-const volcengineCoding = load('volcengine-coding').mcpServers;
-assert.deepStrictEqual(volcengineCoding['crouter-volcengine-docs'], {
-  type: 'http',
-  url: 'https://sd6j8o9hu8aldae0o6es0.apigateway-cn-beijing.volceapi.com/mcp',
-});
-assert.strictEqual(volcengineCoding['crouter-volcengine-doubao-search'], undefined);
-
 const stepfun = load('stepfun').mcpServers;
 assert.deepStrictEqual(stepfun['crouter-stepfun-web-search'], {
   type: 'http',
@@ -153,11 +119,11 @@ assert.deepStrictEqual(qiniu['crouter-qiniu-managed-2'], {
   headers: {Authorization: 'Bearer plan-secret'},
 });
 
-const names = [minimax, zai, dashscope, volcengine, stepfun, aihubmix, ppio, tencent, qiniu]
+const names = [minimax, zai, dashscope, stepfun, aihubmix, ppio, tencent, qiniu]
   .flatMap((servers) => Object.keys(servers));
 assert.strictEqual(new Set(names).size, names.length, 'provider MCP names must never collide');
 
-const codingNames = [minimax, zai, dashscopeCoding, volcengineCoding, stepfun, aihubmix, ppio, tencentCoding, qiniu]
+const codingNames = [minimax, zai, dashscopeCoding, stepfun, aihubmix, ppio, tencentCoding, qiniu]
   .flatMap((servers) => Object.keys(servers));
 assert.strictEqual(new Set(codingNames).size, codingNames.length, 'coding provider MCP names must never collide');
 NODE

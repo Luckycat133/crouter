@@ -4,6 +4,15 @@ All notable changes to this local setup are documented in this file.
 
 ## [Unreleased]
 
+### Removed
+
+- Dropped Volcengine Ark support: the `volcengine` (Ark Agent Plan) and
+  `volcengine-coding` (Ark Coding Plan) providers, their Keychain/keypool
+  services, the Ark documentation/Doubao Search/DataPro/OpenViking MCP assets,
+  the related provider-matrix and provider-asset tests, and the provider
+  documentation. The Ark Coding Plan key stopped being accepted by the remote
+  endpoint, so the providers were retired instead of carried forward.
+
 ### Added
 
 - `crouter migrate verify <file>` checks installed configuration and credential

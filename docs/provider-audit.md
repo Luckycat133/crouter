@@ -121,8 +121,8 @@ vendor releases across the catalog:
 - **Antigravity:** Upgraded default Gemini model to `gemini-3.8-flash` (Google
   DeepMind September 2026 release) across default, Opus, Sonnet, Haiku, and subagent
   mappings, with `gemini-3.7-flash` retained in aliases.
-- **Gateway Aliases:** Added `deepseek-v4.1-flash` and `glm-5.3` across Volcengine,
-  Tencent, DashScope, and OpenRouter alias pools.
+- **Gateway Aliases:** Added `deepseek-v4.1-flash` and `glm-5.3` across Tencent,
+  DashScope, and OpenRouter alias pools.
 
 ## Targeted documentation recheck — 2026-09-26
 
@@ -171,14 +171,6 @@ not establish that a particular account owns the updated models or plans.
   says `GLM-5` and `DeepSeek-V3.2` have been removed from the subscription.
   Those IDs no longer appear in the shared alias list; an API customer may
   still specify an account-specific model explicitly.
-- [Volcengine Agent Plan](https://docs.volcengine.com/docs/ark/agent-plan-enterprise-other-tools?lang=zh)
-  uses a dedicated `/api/plan` endpoint and plan-only API key, distinct from
-  regular Ark API keys. Its [Coding Plan guide](https://docs.volcengine.com/docs/ark/coding-plan-enterprise-ai-opencode?lang=zh)
-  uses `/api/coding` and a separate Coding Plan key. The Agent Plan reads only
-  `VOLCENGINE_PLAN_KEY` or its `VOLCENGINE_AGENT_PLAN_KEY` alias and only its
-  own Keychain services; Coding Plan reads only
-  `VOLCENGINE_CODING_PLAN_KEY` and `volcengine-coding-plan`. The two plans do
-  not borrow each other's keys or generic Ark API keys.
 
 ## Additional direct routes and native backend — 2026-09-26
 
@@ -668,34 +660,6 @@ same upstream model. The public logical ID is `mimo-v2.6-pro[1m]`; crouter
 removes the Claude Code annotation through the surface model map before the
 upstream request. Raw V2.5 IDs remain as explicit migration aliases.
 
-### Volcengine Ark
-
-Volcano Engine offers two distinct subscription plan interfaces:
-1. `volcengine` (Ark Agent Plan):
-   - Gateway endpoint: `https://ark.cn-beijing.volces.com/api/plan` for Anthropic tools.
-   - Empirically validated multi-vendor models: `doubao-seed-evolving` (default, 1M context),
-     `deepseek-v4-pro` (1M), `glm-5.3` / `glm-latest` (1M), `kimi-k3` (1M / 256K), `minimax-m3` (1M),
-     `glm-5.3-flash` (1M / 256K, multimodal), `deepseek-v4-flash` (1M / 256K), `kimi-k2.7-code` (256K),
-     `kimi-k2.6` (256K), `minimax-m2.7` (256K), `doubao-seed-2.1-turbo` (256K), `doubao-seed-2.0-code` (256K),
-     `doubao-seed-2.0-lite` (256K), `doubao-seed-2.0-mini` (256K), and `ark-code-latest`.
-   - Defaults to `doubao-seed-evolving` with 1,000,000 tokens context. Haiku maps to
-     `doubao-seed-2.1-turbo`. Context overrides apply to non-1M models (256K).
-   - Uses `VOLCENGINE_PLAN_KEY` or its `VOLCENGINE_AGENT_PLAN_KEY` alias.
-     `PLAN_KEYS` checks only `volcengine-agent-plan` and `volcengine-plan`.
-
-2. `volcengine-coding` (Ark Coding Plan):
-   - [Ark Coding Plan gateway](https://www.volcengine.com/article/37839)
-     documents `https://ark.cn-beijing.volces.com/api/coding` for Anthropic tools.
-   - [Ark Coding Plan catalog](https://www.volcengine.com/article/37570) lists
-     `doubao-seed-evolving` (1M), Seed 2.1 variants (`doubao-seed-2.1-pro`,
-     `doubao-seed-2.1-turbo`), Seed 2.0 variants, `ark-code-latest`, and DeepSeek variants.
-   - Dedicated coding gateway using only `VOLCENGINE_CODING_PLAN_KEY` and
-     the `volcengine-coding-plan` Keychain service.
-
-   `volcengine` (Agent Plan) automatically injects the official Doubao Search MCP
-   (`mcp-server-askecho-search-infinity`), DataPro professional datasets MCP, and
-   OpenViking control-plane MCP alongside the public Ark documentation MCP.
-   `volcengine-coding` (Coding Plan) provides the public documentation MCP.
 
 ## Exclusions and non-vendor routes
 

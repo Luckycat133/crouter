@@ -54,7 +54,6 @@ This document compiles the real-world engineering lessons, historical bug fixes,
 ### Why `~/.claude.json` Must Never Be Modified
 - **History**: Early provider tooling registered MCP servers directly in `~/.claude.json`.
 - **Catastrophic Failure**:
-  - Switching from Volcengine to MiniMax left Doubao Search tools registered in MiniMax sessions, causing tool failure or credential leaks.
   - Uninstalling a provider left dangling MCP configurations.
   - Concurrent Claude Code sessions collided and overwrote each other's configuration.
 - **Solution**: Completely moved to dynamic session rendering:
@@ -82,10 +81,10 @@ This document compiles the real-world engineering lessons, historical bug fixes,
 
 ## 6. Dual-Surface Plan/API Splitting Experience
 
-### Lesson from Volcengine, DashScope, and Qianfan
+### Lesson from DashScope and Qianfan
 - **History**: Initially, single provider files tried to handle both subscription plans (Coding Plan / Token Plan) and pay-as-you-go API keys.
-- **Failure**: Different models and different rate limits exist between personal Coding Plans, enterprise Agent Plans, and direct APIs. For example, Volcengine Coding Plan exposes only `/api/coding` with coding models, while Agent Plan exposes `/api/plan` with multi-vendor models (Doubao, DeepSeek, GLM, Kimi).
+- **Failure**: Different models and different rate limits exist between personal Coding Plans, enterprise Agent Plans, and direct APIs. For example, a coding-only plan exposes just `/api/coding` with coding models, while a general plan exposes `/api/plan` with multi-vendor models (DeepSeek, GLM, Kimi).
 - **Solution**:
-  - Dedicated provider files when gateway URLs or model tiers diverge: `volcengine` vs `volcengine-coding`; `dashscope` vs `dashscope-coding`; `qianfan` vs `qianfan-coding` vs `qianfan-team`.
+  - Dedicated provider files when gateway URLs or model tiers diverge: `dashscope` vs `dashscope-coding`; `qianfan` vs `qianfan-coding` vs `qianfan-team`.
   - Dual-surface declarations (`AUTH_MODE="surfaces"`) when sharing a script: `PLAN_URL` / `API_URL`, `PLAN_KEY_ENV` / `API_KEY_ENV`.
   - Fallback logic: if plan key is unset, fall back to API key to prevent onboarding friction.

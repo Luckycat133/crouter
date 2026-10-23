@@ -6,8 +6,6 @@ This reference documents the configuration parameters, endpoint URLs, auth heade
 
 | Provider | Surface Name | Plan Gateway URL | Default Plan Key Env | Context Limit | Companion MCP Tools / Assets |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **volcengine** | Agent Plan | `https://ark.cn-beijing.volces.com/api/plan` | `VOLCENGINE_PLAN_KEY` | 1,000,000 | Doubao Search (`uvx`), DataPro (`http`), OpenViking (`uvx`), Docs (`http`) |
-| **volcengine-coding** | Coding Plan | `https://ark.cn-beijing.volces.com/api/coding` | `VOLCENGINE_CODING_PLAN_KEY` | 1,000,000 | Docs (`http`) |
 | **minimax** | Token Plan | `https://api.minimaxi.com/anthropic` | `MINIMAX_TOKEN_PLAN_KEY` | 1,048,576 | MiniMax Token Plan MCP (`uvx minimax-coding-plan-mcp`), media plugin |
 | **dashscope** | Token Plan | `https://token-plan.cn-beijing.maas.aliyuncs.com/apps/anthropic` | `DASHSCOPE_TOKEN_PLAN_KEY` | 983,616 | DashScope WebSearch (`http`), DashScope media plugin |
 | **dashscope-coding**| Coding Plan | `https://coding.dashscope.aliyuncs.com/apps/anthropic` | `DASHSCOPE_CODING_PLAN_KEY` | 983,616 | DashScope WebSearch (`http`, isolated profile) |
