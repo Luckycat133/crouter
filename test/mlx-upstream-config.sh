@@ -33,7 +33,8 @@ chmod +x "$TEST_DIR/bin/curl" "$TEST_DIR/bin/node"
 PATH=$TEST_DIR/bin:$PATH
 export PATH
 
-load_last_selected_model() { return 1; }
+# This suite explicitly exercises the MLX route, independent of the default.
+load_last_selected_model() { printf '%s\n' qwen3.8-27b; }
 die() { printf '%s\n' "$*" >&2; exit 1; }
 . "$ROOT_DIR/providers/ollama.sh"
 

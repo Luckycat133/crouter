@@ -102,11 +102,11 @@ else
 fi
 
 _ollama_default_launch=$("$GATEWAY" ollama --version 2>&1)
-if printf '%s\n' "$_ollama_default_launch" | grep -q '^ANTHROPIC_MODEL=qwen3.8-27b$' && \
+if printf '%s\n' "$_ollama_default_launch" | grep -q '^ANTHROPIC_MODEL=qwen3.8:27b-dflash$' && \
    printf '%s\n' "$_ollama_default_launch" | grep -q '^CLAUDE_CODE_MAX_CONTEXT_TOKENS=262144$'; then
-  ok "Ollama help preserves the default Qwen profile"
+  ok "Ollama help preserves the default DFlash profile"
 else
-  bad "Ollama default Qwen profile is not applied"
+  bad "Ollama default DFlash profile is not applied"
 fi
 
 # an unknown subcommand is rejected (non-zero exit)
@@ -386,9 +386,9 @@ fi
 _ollama_show=$("$GATEWAY" provider show ollama 2>&1)
 _ollama_show_rc=$?
 if [ "$_ollama_show_rc" -eq 0 ] &&
-   printf '%s\n' "$_ollama_show" | grep -q '^default:     qwen3.8-27b$' &&
+   printf '%s\n' "$_ollama_show" | grep -q '^default:     qwen3.8:27b-dflash$' &&
    printf '%s\n' "$_ollama_show" | grep -q '^context:     262144 tokens$' &&
-   printf '%s\n' "$_ollama_show" | grep -q '^effort:      max$'; then
+   printf '%s\n' "$_ollama_show" | grep -q '^effort:      xhigh$'; then
   ok "ollama provider display applies the default model context override"
 else
   bad "ollama provider display is inconsistent with its default model"
