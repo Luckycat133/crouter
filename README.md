@@ -299,7 +299,7 @@ limit; the selected vendor model or native backend remains authoritative.
 | `minimax` | Token Plan + API | `MiniMax-M3` | 1,000,000 | Plan MCP + CLI skill |
 | `moonshot` | Kimi Code membership | `k3-256k` | 262,144 | — |
 | `nagaai` | API | `claude-sonnet-4.5` | — | — |
-| `ollama` | local MLX/Ollama | `qwen3.8-27b` | 262,144 for Qwen; 373,760 for DeepSeek V4 Flash | 60s SSE heartbeat |
+| `ollama` | local Ollama/MLX | `qwen3.8:27b-dflash` | 262,144 for DFlash2; explicit legacy profiles retain their caps | 60s SSE heartbeat |
 | `openrouter` | API | `nvidia/nemotron-3-ultra-550b-a55b:free` | 1,000,000 | — |
 | `ppio` | API | `minimax/minimax-m3` | 1,000,000 | cloud OAuth MCP |
 | `qianfan` | personal Token Plan + API | `deepseek-v4-pro` | 262,144 | — |
@@ -584,8 +584,29 @@ the process; a proxy that was already running is left untouched.
 
 Ollama exposes its native Anthropic compatibility endpoint at
 `http://127.0.0.1:11434`. The local crouter profile defaults to
-`qwen3.8-27b` through the MLX adapter at port 11436 with `max` effort and a
-262,144-token client cap. That Qwen preset expects an OpenAI-compatible MLX
+`qwen3.8:27b-dflash` through the Ollama relay at port 11435 with `xhigh` effort
+and Qwen's native 262,144-token client window. Opus,
+Sonnet, Haiku and subagent tiers all use that same model. This model must
+already exist in Ollama with its compatible DFlash2 draft attached; selecting
+the profile does not download or attach a draft. Claude's `max` and `high`
+efforts map to Qwen's maximum `xhigh`; `low` and `medium` remain available.
+For this exact model, the relay converts `thinking.type=enabled` to `adaptive`
+so Ollama 0.40.6 honors the named effort rather than its boolean-thinking
+precedence. An explicit `thinking.type=disabled` remains off. Anthropic
+`budget_tokens` is not enforced by Ollama and is removed when converting an
+enabled request to adaptive; effort does not change `max_tokens`.
+
+This DFlash2 profile does not inject `CLAUDE_CODE_MAX_OUTPUT_TOKENS`.
+Claude Code and Ollama retain their own output limits; crouter adds no
+per-response token cap. The reasoning effort remains `xhigh`. Configure the
+Ollama model with `num_ctx=262144` to match the advertised native window.
+
+```sh
+crouter ollama qwen3.8:27b-dflash
+```
+
+An explicitly selected `qwen3.8-27b` retains the MLX adapter at port 11436,
+`max` effort and its 262,144-token cap. That preset expects an OpenAI-compatible MLX
 server at `10.211.55.2:18080` by default (the existing local VM setup). Set
 `MLX_UPSTREAM_HOST` and `MLX_UPSTREAM_PORT` in `config.sh` or your environment
 to point it at another server, for example `127.0.0.1:18080`. crouter probes

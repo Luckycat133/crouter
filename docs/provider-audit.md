@@ -15,7 +15,31 @@ Qianfan personal/team/legacy Coding Plan, and Tencent personal/Coding Plan.
 The published README catalog table documents 37 of them; the local experimental
 `bonsai` route is intentionally excluded from that table.
 
-## Local Ollama reasoning-effort contract — 2026-10-06
+## Official Ollama Qwen3.8 DFlash2 profile — 2026-10-18
+
+Primary sources: [Ollama 0.40.6 Anthropic request conversion](https://github.com/ollama/ollama/blob/v0.40.6/anthropic/anthropic.go#L406),
+[named-effort compatibility contract](https://docs.ollama.com/api/anthropic-compatibility),
+and [Qwen3.8 model sampling and effort guidance](https://huggingface.co/Qwen/Qwen3.8-27B#api-usage).
+
+- The exact `qwen3.8:27b-dflash` profile is the new declared Ollama default,
+  subject to the existing remembered-model selection. All tiers self-route to
+  this model and the client window is the native 262,144 tokens. The local
+  64K window and injected 16K output cap were removed on 2026-10-23.
+- Qwen supports `low`, `medium`, and maximum `xhigh`. Current Ollama preserves
+  model-defined effort names; its old unconditional xhigh-to-high collapse
+  does not apply when the model carries valid thinking metadata. The relay
+  preserves these levels, maps Claude `high`/`max` to `xhigh`, and defaults
+  omitted or unsupported levels to `xhigh` for this exact model only.
+- Ollama handles `thinking.type=enabled` before `output_config.effort`. The
+  relay changes that enabled shape to adaptive so named effort applies,
+  preserving other thinking fields except the unsupported token budget.
+  Explicit disabled thinking remains authoritative; `max_tokens` is unchanged.
+- Focused offline tests cover relay body mapping, unchanged neighboring IDs,
+  legacy effort caps, the native 256K client window, all-tier routing and session
+  ownership. Live inference and Claude Code integration are separate checks;
+  this source update alone does not establish end-to-end success.
+
+## Historical local Ollama reasoning-effort contract — 2026-10-06
 
 Primary sources: the `qwen3.8-27b-heretic:q4` GGUF chat template as rendered by
 Ollama 0.12.x, a live effort sweep against `http://127.0.0.1:11434/v1/messages`,
@@ -34,8 +58,9 @@ and the recorded Claude Code sessions under `~/.claude/projects/`.
   resending the same rejected request with exponential backoff. Observed on
   2026-10-06 15:04:59–15:07:24 (+08:00): eight retries of a `qwen3.8-27b-heretic:q4`
   turn, ending in the "Waiting for API response · will retry in 29m" state.
-- Fix: `providers/ollama.sh` declares `OLLAMA_EFFORT_MAX=medium` for the
-  `qwen3.8*` selections (the highest level the template accepts, since an
+- Fix: `providers/ollama.sh` declares `OLLAMA_EFFORT_MAX=medium` for the older
+  `qwen3.8*` selections (excluding the exact DFlash2 profile described above;
+  the highest level the legacy combination accepts, since an
   inbound `xhigh` would be collapsed and rejected). The heartbeat relay clamps
   every matching request down to that cap, records
   `{"type":"effort_clamp",...,"cap":"medium"}`, and reports the cap in `/health`
@@ -682,12 +707,13 @@ Volcano Engine offers two distinct subscription plan interfaces:
   Anthropic URL and even included the full `/v1/messages` path. It was removed.
 - [Ollama's Claude Code integration](https://docs.ollama.com/integrations/claude-code) supports
   the local Anthropic endpoint; the installed model catalog remains local.
-- Local implementation (checked 2026-09-26): `ollama` defaults to
-  `qwen3.8-27b` on the MLX adapter, unless an actual Ollama-provider launch has
+- Local implementation (DFlash2 profile updated 2026-10-18): `ollama` defaults to
+  `qwen3.8:27b-dflash` through the Ollama relay, unless an actual Ollama-provider launch has
   saved another model selection. `providers/ollama.sh` owns the current model
-  IDs and caps: Qwen uses 262,144 tokens, and the explicit DeepSeek V4 Flash
-  entries use the measured 373,760-token cap. Default Claude effort is `max`;
-  the `qwen3.8*` selections instead declare `medium` and the relay clamps every
+  IDs and caps: DFlash2 uses 262,144 tokens and `xhigh`; the explicit older MLX
+  Qwen profile uses 262,144, and DeepSeek V4 Flash entries use the measured
+  373,760-token cap. Default Claude effort for older non-Qwen profiles is `max`;
+  older Ollama `qwen3.8*` selections instead declare `medium` and the relay clamps every
   request to that cap, because Ollama's chat template rejects higher levels with
   an HTTP 500 that Claude Code cannot downgrade from. See "Local Ollama
   reasoning-effort contract" above.

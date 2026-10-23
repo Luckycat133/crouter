@@ -1,0 +1,469 @@
+#!/usr/bin/env node
+'use strict';
+
+// openrouter-models — interactive OpenRouter model picker for crouter
+// No npm dependencies; uses only Node.js built-ins.
+
+const os = require('os');
+const fs = require('fs');
+const path = require('path');
+const https = require('https');
+const readline = require('readline');
+
+// ─── Paths ────────────────────────────────────────────────────────────────────
+
+const STATE_DIR = path.join(
+  process.env.XDG_STATE_HOME || path.join(os.homedir(), '.local', 'state'),
+  'crouter'
+);
+const MODEL_FILE    = path.join(STATE_DIR, 'last-model-openrouter');
+const CONTEXT_FILE  = path.join(STATE_DIR, 'openrouter-context');
+const CACHE_FILE    = path.join(STATE_DIR, 'openrouter-models-cache.json');
+const CACHE_TTL_MS  = 60 * 60 * 1000; // 1 hour
+
+// ─── API ──────────────────────────────────────────────────────────────────────
+
+function fetchModels() {
+  return new Promise((resolve, reject) => {
+    const opts = {
+      hostname: 'openrouter.ai',
+      path: '/api/v1/models',
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'crouter/openrouter-models',
+      },
+    };
+    const key = process.env.OPENROUTER_API_KEY;
+    if (key) opts.headers['Authorization'] = `Bearer ${key}`;
+
+    const req = https.request(opts, (res) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => {
+        try {
+          const body = Buffer.concat(chunks).toString('utf8');
+          const parsed = JSON.parse(body);
+          if (!parsed.data) return reject(new Error('Unexpected API response shape'));
+          resolve(parsed.data);
+        } catch (e) {
+          reject(e);
+        }
+      });
+    });
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+async function getModels(forceRefresh = false) {
+  // Check cache freshness
+  if (!forceRefresh && fs.existsSync(CACHE_FILE)) {
+    try {
+      const stat = fs.statSync(CACHE_FILE);
+      if (Date.now() - stat.mtimeMs < CACHE_TTL_MS) {
+        const cached = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
+        if (Array.isArray(cached) && cached.length > 0) return cached;
+      }
+    } catch (_) {}
+  }
+
+  process.stderr.write('Fetching models from OpenRouter...\n');
+  const models = await fetchModels();
+
+  // Persist cache
+  try {
+    fs.mkdirSync(STATE_DIR, { recursive: true });
+    fs.writeFileSync(CACHE_FILE, JSON.stringify(models, null, 2), 'utf8');
+  } catch (_) {}
+
+  return models;
+}
+
+// ─── Model helpers ────────────────────────────────────────────────────────────
+
+function isFree(m) {
+  return (m.pricing && m.pricing.prompt === '0') ||
+         (m.id && m.id.endsWith(':free'));
+}
+
+function fmtContext(len) {
+  if (!len) return '     ?    ';
+  if (len >= 1_000_000) return `${(len / 1_000_000).toFixed(0)}M ctx  `;
+  if (len >= 1_000)     return `${(len / 1_000).toFixed(0)}K ctx  `;
+  return `${len} ctx  `;
+}
+
+function fmtPrice(m) {
+  if (isFree(m)) return 'FREE          ';
+  const p = parseFloat(m.pricing?.prompt || 0);
+  const c = parseFloat(m.pricing?.completion || 0);
+  // API prices are per token; display per 1M
+  const pM = (p * 1_000_000).toFixed(2);
+  const cM = (c * 1_000_000).toFixed(2);
+  return `\$${pM}/\$${cM}`.padEnd(14);
+}
+
+function getCurrentModel() {
+  try {
+    const v = fs.readFileSync(MODEL_FILE, 'utf8').trim();
+    return v || null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function setModel(modelId, contextLength) {
+  fs.mkdirSync(STATE_DIR, { recursive: true });
+  fs.writeFileSync(MODEL_FILE, modelId + '\n', 'utf8');
+  if (contextLength) {
+    fs.writeFileSync(CONTEXT_FILE, String(contextLength) + '\n', 'utf8');
+  }
+}
+
+// ─── CLI flags (non-interactive) ──────────────────────────────────────────────
+
+async function cliMode(args) {
+  const flag = args[0];
+
+  if (flag === '--list' || flag === '--list-free') {
+    const models = await getModels();
+    const out = flag === '--list-free' ? models.filter(isFree) : models;
+    process.stdout.write(JSON.stringify(out, null, 2) + '\n');
+    return;
+  }
+
+  if (flag === '--current') {
+    const cur = getCurrentModel();
+    process.stdout.write((cur || '(none)') + '\n');
+    return;
+  }
+
+  if (flag === '--set') {
+    const modelId = args[1];
+    if (!modelId) { process.stderr.write('Usage: openrouter-models --set <model-id>\n'); process.exit(1); }
+    const models = await getModels();
+    const match = models.find((m) => m.id === modelId);
+    if (!match) {
+      process.stderr.write(`Model not found: ${modelId}\n`);
+      process.stderr.write('Use --list to see available models.\n');
+      process.exit(1);
+    }
+    setModel(modelId, match.context_length);
+    process.stdout.write(`✓ OpenRouter model set to: ${modelId}\n`);
+    return;
+  }
+
+  if (flag === '--refresh') {
+    await getModels(true);
+    process.stdout.write('Cache refreshed.\n');
+    return;
+  }
+
+  if (flag === '--help' || flag === '-h') {
+    process.stdout.write(`openrouter-models — interactive OpenRouter model picker for crouter
+
+Usage:
+  openrouter-models              Interactive TUI model picker
+  openrouter-models --list       Print all models as JSON
+  openrouter-models --list-free  Print free models only as JSON
+  openrouter-models --set <id>   Set model non-interactively
+  openrouter-models --current    Print current model id
+  openrouter-models --refresh    Force-refresh model cache
+
+Keys in TUI:
+  Type       Filter by name/id
+  ↑/↓        Navigate
+  Tab        Toggle free-only filter
+  Enter      Select and apply
+  Esc/q      Quit without changing
+`);
+    return;
+  }
+
+  // Unknown flag
+  if (flag) {
+    process.stderr.write(`Unknown flag: ${flag}\nRun with --help for usage.\n`);
+    process.exit(1);
+  }
+}
+
+// ─── ANSI helpers ─────────────────────────────────────────────────────────────
+
+const ESC      = '\x1b[';
+const RESET    = '\x1b[0m';
+const BOLD     = '\x1b[1m';
+const DIM      = '\x1b[2m';
+const REVERSE  = '\x1b[7m';
+const GREEN    = '\x1b[32m';
+const CYAN     = '\x1b[36m';
+const YELLOW   = '\x1b[33m';
+
+function clearScreen() { process.stdout.write('\x1b[2J\x1b[H'); }
+function moveTo(row, col) { process.stdout.write(`${ESC}${row};${col}H`); }
+function clearLine() { process.stdout.write(`${ESC}2K`); }
+function hideCursor() { process.stdout.write('\x1b[?25l'); }
+function showCursor() { process.stdout.write('\x1b[?25h'); }
+
+// ─── TUI ──────────────────────────────────────────────────────────────────────
+
+const MAX_VISIBLE = 20;
+const NAME_WIDTH  = 40;
+
+function truncate(s, len) {
+  if (!s) return ''.padEnd(len);
+  if (s.length <= len) return s.padEnd(len);
+  return s.slice(0, len - 1) + '…';
+}
+
+function renderRow(model, isSelected, isCurrent, nameWidth) {
+  const prefix = isSelected ? '> ' : '  ';
+  const name   = truncate(model.id, nameWidth);
+  const ctx    = fmtContext(model.context_length);
+  const price  = fmtPrice(model);
+  const cur    = isCurrent ? ` ${YELLOW}★ current${RESET}` : '';
+
+  let row = `${prefix}${name}  ${ctx}  ${price}${cur}`;
+
+  if (isSelected) {
+    // Reverse video for the selected row, but restore for the star
+    row = `${REVERSE}${prefix}${name}  ${ctx}  ${price}${RESET}${cur}`;
+  } else if (isFree(model)) {
+    row = `${prefix}${GREEN}${name}${RESET}  ${DIM}${ctx}${RESET}  ${GREEN}${price}${RESET}${cur}`;
+  } else {
+    row = `${prefix}${name}  ${DIM}${ctx}${RESET}  ${price}${cur}`;
+  }
+
+  return row;
+}
+
+async function tui(allModels) {
+  const currentModel = getCurrentModel();
+  let filter     = '';
+  let freeOnly   = false;
+  let cursor     = 0;  // index in filtered list
+  let scrollTop  = 0;  // first visible index in filtered list
+
+  function getFiltered() {
+    let list = allModels;
+    if (freeOnly) list = list.filter(isFree);
+    if (filter) {
+      const q = filter.toLowerCase();
+      list = list.filter((m) =>
+        m.id.toLowerCase().includes(q) ||
+        (m.name || '').toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }
+
+  function clampCursor(filtered) {
+    if (filtered.length === 0) { cursor = 0; scrollTop = 0; return; }
+    cursor = Math.max(0, Math.min(cursor, filtered.length - 1));
+    if (cursor < scrollTop) scrollTop = cursor;
+    if (cursor >= scrollTop + MAX_VISIBLE) scrollTop = cursor - MAX_VISIBLE + 1;
+  }
+
+  // Pre-position cursor on current model
+  {
+    const init = getFiltered();
+    const idx = currentModel ? init.findIndex((m) => m.id === currentModel) : -1;
+    if (idx >= 0) {
+      cursor = idx;
+      scrollTop = Math.max(0, idx - Math.floor(MAX_VISIBLE / 2));
+    }
+  }
+
+  function render() {
+    const cols = process.stdout.columns || 120;
+    const filtered = getFiltered();
+    clampCursor(filtered);
+
+    clearScreen();
+
+    // Header
+    moveTo(1, 1);
+    process.stdout.write(`${BOLD}OpenRouter Model Picker${RESET}  ${DIM}(${filtered.length} models${freeOnly ? ', free only' : ''})${RESET}\n`);
+    process.stdout.write(`${DIM}Filter:${RESET} ${CYAN}${filter}${RESET}${CYAN}▎${RESET}\n`);
+    process.stdout.write(`${DIM}↑↓ navigate  Tab free-only  Enter select  Esc/q quit${RESET}\n`);
+    process.stdout.write(`${'─'.repeat(Math.min(cols, 100))}\n`);
+
+    // Column headers
+    const nameW = Math.min(NAME_WIDTH, Math.max(20, cols - 32));
+    process.stdout.write(
+      `${BOLD}  ${'Model ID'.padEnd(nameW)}  Context     Price (per 1M tokens)${RESET}\n`
+    );
+    process.stdout.write(`${'─'.repeat(Math.min(cols, 100))}\n`);
+
+    // Rows
+    const visible = filtered.slice(scrollTop, scrollTop + MAX_VISIBLE);
+    for (let i = 0; i < visible.length; i++) {
+      const m = visible[i];
+      const absIdx = scrollTop + i;
+      const isSelected = absIdx === cursor;
+      const isCurrent = m.id === currentModel;
+      clearLine();
+      process.stdout.write(renderRow(m, isSelected, isCurrent, nameW) + '\n');
+    }
+
+    // Fill blank rows to avoid flicker
+    for (let i = visible.length; i < MAX_VISIBLE; i++) {
+      clearLine();
+      process.stdout.write('\n');
+    }
+
+    // Footer
+    process.stdout.write(`${'─'.repeat(Math.min(cols, 100))}\n`);
+    if (filtered.length > 0) {
+      const sel = filtered[cursor];
+      if (sel) {
+        const desc = sel.description
+          ? sel.description.replace(/\n/g, ' ').slice(0, cols - 2)
+          : '';
+        process.stdout.write(`${DIM}${desc}${RESET}\n`);
+      }
+    } else {
+      process.stdout.write(`${DIM}No models match.${RESET}\n`);
+    }
+  }
+
+  // Set up raw mode
+  hideCursor();
+  if (process.stdin.isTTY) process.stdin.setRawMode(true);
+  process.stdin.resume();
+  process.stdin.setEncoding('utf8');
+
+  let selected = null;
+
+  function cleanup() {
+    if (process.stdin.isTTY) process.stdin.setRawMode(false);
+    process.stdin.pause();
+    showCursor();
+    clearScreen();
+  }
+
+  await new Promise((resolve) => {
+    process.stdin.on('data', (key) => {
+      const filtered = getFiltered();
+
+      // Ctrl-C
+      if (key === '\x03') {
+        cleanup();
+        process.exit(0);
+      }
+
+      // Escape or q
+      if (key === '\x1b' || key === 'q') {
+        cleanup();
+        process.stdout.write('Cancelled.\n');
+        resolve();
+        return;
+      }
+
+      // Enter
+      if (key === '\r' || key === '\n') {
+        if (filtered.length > 0 && filtered[cursor]) {
+          selected = filtered[cursor];
+        }
+        cleanup();
+        resolve();
+        return;
+      }
+
+      // Arrow up
+      if (key === '\x1b[A') {
+        cursor = Math.max(0, cursor - 1);
+        if (cursor < scrollTop) scrollTop = cursor;
+        render();
+        return;
+      }
+
+      // Arrow down
+      if (key === '\x1b[D' || key === '\x1b[B') {
+        // \x1b[B = down, \x1b[D = left (ignore left but guard here)
+        if (key === '\x1b[B') {
+          cursor = Math.min(Math.max(0, filtered.length - 1), cursor + 1);
+          if (cursor >= scrollTop + MAX_VISIBLE) scrollTop = cursor - MAX_VISIBLE + 1;
+        }
+        render();
+        return;
+      }
+
+      // Page up / Page down
+      if (key === '\x1b[5~') { // Page Up
+        cursor = Math.max(0, cursor - MAX_VISIBLE);
+        clampCursor(filtered);
+        render();
+        return;
+      }
+      if (key === '\x1b[6~') { // Page Down
+        cursor = Math.min(Math.max(0, filtered.length - 1), cursor + MAX_VISIBLE);
+        clampCursor(filtered);
+        render();
+        return;
+      }
+
+      // Tab — toggle free-only
+      if (key === '\t') {
+        freeOnly = !freeOnly;
+        cursor = 0; scrollTop = 0;
+        render();
+        return;
+      }
+
+      // Backspace
+      if (key === '\x7f' || key === '\b') {
+        filter = filter.slice(0, -1);
+        cursor = 0; scrollTop = 0;
+        render();
+        return;
+      }
+
+      // Printable characters → filter
+      if (key.length === 1 && key >= ' ') {
+        filter += key;
+        cursor = 0; scrollTop = 0;
+        render();
+        return;
+      }
+
+      render();
+    });
+
+    // Handle terminal resize
+    process.on('SIGWINCH', render);
+
+    render();
+  });
+
+  if (selected) {
+    setModel(selected.id, selected.context_length);
+    process.stdout.write(`✓ OpenRouter model set to: ${selected.id}\n`);
+  }
+}
+
+// ─── Entry point ──────────────────────────────────────────────────────────────
+
+async function main() {
+  const args = process.argv.slice(2);
+  const hasFlag = args.length > 0 && args[0].startsWith('-');
+
+  if (hasFlag) {
+    await cliMode(args);
+    return;
+  }
+
+  // Interactive TUI
+  if (!process.stdout.isTTY) {
+    process.stderr.write('stdout is not a TTY; use --list, --list-free, --current, or --set\n');
+    process.exit(1);
+  }
+
+  const models = await getModels();
+  await tui(models);
+}
+
+main().catch((err) => {
+  process.stderr.write(`Error: ${err.message}\n`);
+  process.exit(1);
+});

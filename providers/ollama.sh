@@ -4,21 +4,21 @@ PROVIDER_NAME="ollama"
 PROVIDER_DESC="Local models: multimodal MLX Qwen3.8 and Ollama DeepSeek"
 
 BASE_URL="http://127.0.0.1:11435"
-# Preserve the user's last selection. The exact qwen3.8-27b ID is routed to
-# MLX; all other selected IDs retain the Ollama path.
-MODEL="qwen3.8-27b"
+# Default to the selected DFlash profile while preserving explicit selections.
+# The exact qwen3.8-27b ID retains the existing MLX route.
+MODEL="qwen3.8:27b-dflash"
 _ollama_last_model=$(load_last_selected_model ollama 2>/dev/null || true)
 if [ -n "$_ollama_last_model" ]; then
   MODEL="$_ollama_last_model"
 fi
 unset _ollama_last_model
 CONTEXT_TOKENS="65536"
-# DeepSeek keeps its validated practical cap. Only the canonical Qwen ID gets
-# the MLX model's native 262K context; legacy Qwen aliases are intentionally
-# unsupported.
-MODEL_CONTEXT_OVERRIDES="deepseek-v4-flash:q8=373760 deepseek-v4-flash=373760 qwen3.8-27b=262144 qwen3.8-27b-heretic:q4=262144 qwen3.8-27b-heretic:q4-dflash=262144 qwen3.8-27b-heretic=262144"
-MODEL_SELF_ROUTE_MODELS="deepseek-v4-flash:q8 deepseek-v4-flash qwen3.8-27b qwen3.8-27b-heretic:q4 qwen3.8-27b-heretic:q4-dflash qwen3.8-27b-heretic"
+# Keep context windows scoped to the selected model; both native Qwen routes
+# and the DFlash profile retain their 262K window.
+MODEL_CONTEXT_OVERRIDES="deepseek-v4-flash:q8=373760 deepseek-v4-flash=373760 qwen3.8-27b=262144 qwen3.8-27b-heretic:q4=262144 qwen3.8-27b-heretic:q4-dflash=262144 qwen3.8-27b-heretic=262144 qwen3.8:27b-dflash=262144"
+MODEL_SELF_ROUTE_MODELS="deepseek-v4-flash:q8 deepseek-v4-flash qwen3.8-27b qwen3.8-27b-heretic:q4 qwen3.8-27b-heretic:q4-dflash qwen3.8-27b-heretic qwen3.8:27b-dflash"
 EFFORT="max"
+case $MODEL in qwen3.8:27b-dflash) EFFORT="xhigh" ;; esac
 
 # DeepSeek V4 receives Claude Code's max effort through output_config. The
 # localhost proxy preserves the thinking request; its telemetry reports the
@@ -88,7 +88,9 @@ else
   # as the highest usable level. The heartbeat proxy clamps every request to the
   # level declared here so a caller-supplied --effort cannot wedge the session.
   _ollama_effort_cap=""
+  EFFORT="max"
   case $_local_selected_model in
+    qwen3.8:27b-dflash) EFFORT="xhigh"; _ollama_effort_cap="xhigh" ;;
     qwen3.8*) EFFORT="medium"; _ollama_effort_cap="medium" ;;
   esac
   curl -fsS --max-time 3 http://127.0.0.1:11434 >/dev/null 2>&1 || die "Ollama not reachable at http://127.0.0.1:11434 — start it (ollama serve) and pull the selected model first"
@@ -120,6 +122,11 @@ else
   esac
   _ollama_health=$(curl -fsS --max-time 1 "$HEALTH_CHECK_URL" 2>/dev/null || true)
   if printf "%s\n" "$_ollama_health" | grep -q crouter-ollama-heartbeat; then
+    if [ "$_local_selected_model" = qwen3.8:27b-dflash ]; then
+      printf "%s\n" "$_ollama_health" | grep -Fq "\"effort_cap\":\"xhigh\"" &&
+        printf "%s\n" "$_ollama_health" | grep -Fq "\"dflash_effort_rewrite\":\"qwen38-dflash-named-effort-v1\"" ||
+        die "Ollama relay uses another DFlash effort profile; wait for its current task to finish, then restart the relay"
+    fi
     if [ -n "$_ollama_system_order_models" ]; then
       printf "%s\n" "$_ollama_health" | grep -Fq "\"system_order_models\":\"$_ollama_system_order_models\"" || \
         die "Ollama relay predates the selected model template; restart the relay after its current task finishes"
