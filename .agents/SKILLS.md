@@ -13,6 +13,7 @@ Load only the Skill whose trigger matches the current task. A Skill may be reuse
 | `crouter-provider-dev` | Universal provider development across all 5 archetypes, using the relevant contract stages (docs audit, parameters, session MCP assets, routing, and verification) |
 | `crouter-provider-plan` | Provider subscription plans (Coding/Agent/Token Plan), dual-surface auth, session MCP assets, and matrix tests |
 | `github-actions` | Shell-project CI workflow design and debugging |
+| `computer-use` | Desktop control, screen capture, mouse/keyboard automation, shell command execution, and desktop application interaction within safe boundaries |
 
 ## Maintenance rules
 
