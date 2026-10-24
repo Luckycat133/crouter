@@ -1,0 +1,539 @@
+#!/usr/bin/env node
+'use strict';
+
+// crouter-models — generic interactive model picker for crouter providers.
+// No npm dependencies; Node built-ins only.
+//
+//   crouter-models --provider <name>            Interactive TUI model picker
+//   crouter-models --provider <name> --list     Print all models as JSON
+//   crouter-models --provider <name> --list-free Print free models as JSON
+//   crouter-models --provider <name> --current  Print currently selected model
+//   crouter-models --provider <name> --set <id> Select model non-interactively
+//   crouter-models --provider <name> --refresh  Force-refresh model cache
+//   crouter-models --provider <name> --help     Show usage
+//
+// Cache: ~/.local/state/crouter/models-<provider>.json
+//   { fetched_at, models: [{id, name, context_length, pricing, is_free}] }
+//   Refreshed at most once per day (24 h TTL) — the picker only hits the
+//   network once per provider per day, then reuses the local cache. Pass
+//   --refresh to force a re-fetch when the user explicitly asks for it.
+//   Source: CR_MODELS_API_URL (HTTP JSON) or CR_MODELS static whitespace list.
+
+const os = require('os');
+const fs = require('fs');
+const path = require('path');
+const https = require('https');
+const http = require('http');
+
+const STATE_DIR = path.join(
+  process.env.XDG_STATE_HOME || path.join(os.homedir(), '.local', 'state'),
+  'crouter'
+);
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // one day
+
+// Provider is resolved in main() (--provider flag or env); paths derive from it.
+let PROVIDER = process.env.CR_PROVIDER || '';
+function modelFile()  { return path.join(STATE_DIR, `last-model-${PROVIDER}`); }
+function contextFile() { return path.join(STATE_DIR, `${PROVIDER}-context`); }
+function cacheFile()  { return path.join(STATE_DIR, `models-${PROVIDER}.json`); }
+
+function fail(msg) { process.stderr.write(`crouter-models: ${msg}\n`); process.exit(1); }
+
+const API_URL     = process.env.CR_MODELS_API_URL || '';
+const API_AUTH    = (process.env.CR_MODELS_API_AUTH || 'none').toLowerCase();
+const API_KEY     = process.env.CR_API_KEY || '';
+const BASE_URL    = process.env.CR_BASE_URL || '';
+const STATIC_MODELS = (process.env.CR_STATIC_MODELS || '').split(/\s+/).filter(Boolean);
+const FORCE_REFRESH = process.argv.includes('--refresh');
+
+function isFree(m) {
+  return (m.pricing && m.pricing.prompt === '0') || (m.id && m.id.endsWith(':free'));
+}
+
+function parseModels(body) {
+  let parsed;
+  try { parsed = JSON.parse(body); } catch (e) { return null; }
+  let list;
+  if (Array.isArray(parsed.data)) list = parsed.data;
+  else if (Array.isArray(parsed)) list = parsed;
+  else if (Array.isArray(parsed.models)) list = parsed.models;
+  else return null;
+  return list.map(m => ({
+    id: String(m.id || m),
+    name: String(m.name || ''),
+    context_length: Number(m.context_length || m.context_window || 0) || 0,
+    pricing: m.pricing && typeof m.pricing === 'object' ? m.pricing : {},
+  }));
+}
+
+function fetchOne(url) {
+  return new Promise((resolve, reject) => {
+    let u;
+    try { u = new URL(url); } catch (e) { return reject(e); }
+    const lib = u.protocol === 'https:' ? https : http;
+    const opts = {
+      hostname: u.hostname,
+      port: u.port || (u.protocol === 'https:' ? 443 : 80),
+      path: u.pathname || '/',
+      method: 'GET',
+      headers: { Accept: 'application/json', 'User-Agent': 'crouter/crouter-models' },
+    };
+    if (API_AUTH === 'bearer' && API_KEY) opts.headers.Authorization = `Bearer ${API_KEY}`;
+    const req = lib.request(opts, (res) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => {
+        const body = Buffer.concat(chunks).toString('utf8');
+        const models = parseModels(body);
+        if (models) resolve(models);
+        else reject(new Error('Unexpected API response shape from ' + url));
+      });
+    });
+    req.on('error', reject);
+    req.setTimeout(15000, () => { req.destroy(new Error('timeout')); });
+    req.end();
+  });
+}
+
+// Candidate model-list URLs, tried in order. OpenRouter declares MODELS_API_URL
+// explicitly; other Anthropic-compatible providers are probed at BASE_URL/v1/models.
+// Any provider that does not expose a model list falls back to its declared static
+// aliases, so browsing always works even without network.
+function candidateUrls() {
+  const urls = [];
+  const add = (u) => { if (u && !urls.includes(u)) urls.push(u); };
+  if (API_URL) add(API_URL);
+  if (BASE_URL) {
+    let b = BASE_URL.replace(/\/+$/, '');
+    add(b + '/v1/models');
+    if (!b.endsWith('/api')) add(b + '/api/v1/models');
+  }
+  return urls;
+}
+
+function fetchModels() {
+  return new Promise((resolve, reject) => {
+    const urls = candidateUrls();
+    if (urls.length === 0) return resolve(null);
+    let lastError = null;
+    (function tryNext(index) {
+      if (index >= urls.length) {
+        if (lastError) reject(lastError);
+        else resolve(null);
+        return;
+      }
+      fetchOne(urls[index]).then(resolve).catch((e) => {
+        lastError = e;
+        tryNext(index + 1);
+      });
+    })(0);
+  });
+}
+
+function readCache() {
+  try {
+    const c = JSON.parse(fs.readFileSync(cacheFile(), 'utf8'));
+    if (c && Array.isArray(c.models) && c.models.length > 0 &&
+        typeof c.fetched_at === 'number' && Date.now() - c.fetched_at < CACHE_TTL_MS) {
+      return c.models;
+    }
+  } catch (_) {}
+  return null;
+}
+
+function writeCache(models) {
+  try {
+    fs.mkdirSync(STATE_DIR, { recursive: true });
+    fs.writeFileSync(cacheFile(), JSON.stringify({ fetched_at: Date.now(), models }), 'utf8');
+  } catch (_) {}
+}
+
+function getCurrentModel() {
+  try { const v = fs.readFileSync(modelFile(), 'utf8').trim(); return v || null; } catch (_) { return null; }
+}
+function setModel(modelId, contextLength) {
+  try {
+    fs.mkdirSync(STATE_DIR, { recursive: true });
+    fs.writeFileSync(modelFile(), modelId + '\n', 'utf8');
+    if (contextLength) fs.writeFileSync(contextFile(), String(contextLength) + '\n', 'utf8');
+  } catch (_) {}
+}
+
+async function loadModels() {
+  if (!FORCE_REFRESH) {
+    const cached = readCache();
+    if (cached) return cached;
+  }
+  let models = null;
+  if (API_URL) {
+    try { models = await fetchModels(); } catch (_) { models = null; }
+  }
+  if (!models || models.length === 0) {
+    // Dedup the static alias list, keeping first occurrence order.
+    const seen = new Set();
+    models = STATIC_MODELS.filter((id) => {
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    }).map((id) => ({ id, name: '', context_length: 0, pricing: {} }));
+  }
+  writeCache(models);
+  // Mirror the legacy OpenRouter cache path so the unified gateway keeps working.
+  if (PROVIDER === 'openrouter') {
+    try {
+      const legacy = path.join(STATE_DIR, 'openrouter-models-cache.json');
+      fs.writeFileSync(legacy, JSON.stringify(models.map((m) => ({
+        id: m.id, name: m.name, context_length: m.context_length, pricing: m.pricing,
+      })), null, 2), 'utf8');
+    } catch (_) {}
+  }
+  return models;
+}
+
+// ─── CLI flags (non-interactive) ─────────────────────────────────────────
+
+async function cliMode(args) {
+  const flag = args[0];
+
+  if (flag === '--list' || flag === '--list-free') {
+    const models = await loadModels();
+    const out = flag === '--list-free' ? models.filter(isFree) : models;
+    process.stdout.write(JSON.stringify(out, null, 2) + '\n');
+    return;
+  }
+
+  if (flag === '--current') {
+    process.stdout.write((getCurrentModel() || '(none)') + '\n');
+    return;
+  }
+
+  if (flag === '--set') {
+    const modelId = args[1];
+    if (!modelId) { process.stderr.write(`Usage: crouter-models --provider <name> --set <model-id>\n`); process.exit(1); }
+    const models = await loadModels();
+    const match = models.find((m) => m.id === modelId);
+    if (!match) {
+      process.stderr.write(`Model not found: ${modelId}\n`);
+      process.stderr.write('Use --list to see available models.\n');
+      process.exit(1);
+    }
+    setModel(modelId, match.context_length);
+    process.stdout.write(`✓ ${PROVIDER}: model set to ${modelId}\n`);
+    return;
+  }
+
+  if (flag === '--refresh') {
+    await loadModels();
+    process.stdout.write(`✓ ${PROVIDER}: model cache refreshed.\n`);
+    return;
+  }
+
+  if (flag === '--help' || flag === '-h') {
+    process.stdout.write(`crouter-models — interactive model picker for crouter providers
+
+Usage:
+  crouter-models --provider <name>              Interactive TUI model picker
+  crouter-models --provider <name> --list       Print all models as JSON
+  crouter-models --provider <name> --list-free  Print free models only as JSON
+  crouter-models --provider <name> --set <id>   Set model non-interactively
+  crouter-models --provider <name> --current    Print current model id
+  crouter-models --provider <name> --refresh    Force-refresh model cache
+
+Keys in TUI:
+  Type       Filter by name/id
+  ↑/↓        Navigate
+  Tab        Toggle free-only filter
+  Enter      Select and apply
+  Esc/q      Quit without changing
+
+Cache:
+  ~/.local/state/crouter/models-<provider>.json — fetched at most once per day;
+  --refresh forces a re-fetch.
+`);
+    return;
+  }
+
+  if (flag) {
+    process.stderr.write(`Unknown flag: ${flag}\nRun with --help for usage.\n`);
+    process.exit(1);
+  }
+}
+
+// ─── ANSI helpers ─────────────────────────────────────────────────────────
+
+const ESC      = '\x1b[';
+const RESET    = '\x1b[0m';
+const BOLD     = '\x1b[1m';
+const DIM      = '\x1b[2m';
+const REVERSE  = '\x1b[7m';
+const GREEN    = '\x1b[32m';
+const CYAN     = '\x1b[36m';
+const YELLOW   = '\x1b[33m';
+
+function clearScreen() { process.stdout.write('\x1b[2J\x1b[H'); }
+function moveTo(row, col) { process.stdout.write(`${ESC}${row};${col}H`); }
+function clearLine() { process.stdout.write(`${ESC}2K`); }
+function hideCursor() { process.stdout.write('\x1b[?25l'); }
+function showCursor() { process.stdout.write('\x1b[?25h'); }
+
+// ─── TUI ──────────────────────────────────────────────────────────────────
+
+const MAX_VISIBLE = 20;
+const NAME_WIDTH  = 40;
+
+function truncate(s, len) {
+  if (!s) return ''.padEnd(len);
+  if (s.length <= len) return s.padEnd(len);
+  return s.slice(0, len - 1) + '…';
+}
+
+function renderRow(model, isSelected, isCurrent, nameWidth) {
+  const prefix = isSelected ? '> ' : '  ';
+  const name   = truncate(model.id, nameWidth);
+  const ctx    = fmtContext(model.context_length);
+  const price  = fmtPrice(model);
+  const cur    = isCurrent ? ` ${YELLOW}★ current${RESET}` : '';
+
+  let row = `${prefix}${name}  ${ctx}  ${price}${cur}`;
+
+  if (isSelected) {
+    row = `${REVERSE}${prefix}${name}  ${ctx}  ${price}${RESET}${cur}`;
+  } else if (isFree(model)) {
+    row = `${prefix}${GREEN}${name}${RESET}  ${DIM}${ctx}${RESET}  ${GREEN}${price}${RESET}${cur}`;
+  } else {
+    row = `${prefix}${name}  ${DIM}${ctx}${RESET}  ${price}${cur}`;
+  }
+  return row;
+}
+
+function fmtContext(len) {
+  if (!len) return '     ?    ';
+  if (len >= 1_000_000) return `${(len / 1_000_000).toFixed(0)}M ctx  `;
+  if (len >= 1_000)     return `${(len / 1_000).toFixed(0)}K ctx  `;
+  return `${len} ctx  `;
+}
+
+function fmtPrice(m) {
+  if (isFree(m)) return 'FREE          ';
+  const p = parseFloat(m.pricing?.prompt || 0);
+  const c = parseFloat(m.pricing?.completion || 0);
+  const pM = (p * 1_000_000).toFixed(2);
+  const cM = (c * 1_000_000).toFixed(2);
+  return `\$${pM}/\$${cM}`.padEnd(14);
+}
+
+async function tui(allModels) {
+  const currentModel = getCurrentModel();
+  let filter     = '';
+  let freeOnly   = false;
+  let cursor     = 0;
+  let scrollTop  = 0;
+
+  function getFiltered() {
+    let list = allModels;
+    if (freeOnly) list = list.filter(isFree);
+    if (filter) {
+      const q = filter.toLowerCase();
+      list = list.filter((m) =>
+        m.id.toLowerCase().includes(q) ||
+        (m.name || '').toLowerCase().includes(q));
+    }
+    return list;
+  }
+
+  function clampCursor(filtered) {
+    if (filtered.length === 0) { cursor = 0; scrollTop = 0; return; }
+    cursor = Math.max(0, Math.min(cursor, filtered.length - 1));
+    if (cursor < scrollTop) scrollTop = cursor;
+    if (cursor >= scrollTop + MAX_VISIBLE) scrollTop = cursor - MAX_VISIBLE + 1;
+  }
+
+  {
+    const init = getFiltered();
+    const idx = currentModel ? init.findIndex((m) => m.id === currentModel) : -1;
+    if (idx >= 0) {
+      cursor = idx;
+      scrollTop = Math.max(0, idx - Math.floor(MAX_VISIBLE / 2));
+    }
+  }
+
+  function render() {
+    const cols = process.stdout.columns || 120;
+    const filtered = getFiltered();
+    clampCursor(filtered);
+
+    clearScreen();
+
+    moveTo(1, 1);
+    process.stdout.write(`${BOLD}${PROVIDER} Model Picker${RESET}  ${DIM}(${filtered.length} models${freeOnly ? ', free only' : ''})${RESET}\n`);
+    process.stdout.write(`${DIM}Filter:${RESET} ${CYAN}${filter}${RESET}${CYAN}▎${RESET}\n`);
+    process.stdout.write(`${DIM}↑↓ navigate  Tab free-only  Enter select  Esc/q quit${RESET}\n`);
+    process.stdout.write(`${'─'.repeat(Math.min(cols, 100))}\n`);
+
+    const nameW = Math.min(NAME_WIDTH, Math.max(20, cols - 32));
+    process.stdout.write(
+      `${BOLD}  ${'Model ID'.padEnd(nameW)}  Context     Price (per 1M tokens)${RESET}\n`);
+    process.stdout.write(`${'─'.repeat(Math.min(cols, 100))}\n`);
+
+    const visible = filtered.slice(scrollTop, scrollTop + MAX_VISIBLE);
+    for (let i = 0; i < visible.length; i++) {
+      const m = visible[i];
+      const absIdx = scrollTop + i;
+      clearLine();
+      process.stdout.write(renderRow(m, absIdx === cursor, m.id === currentModel, nameW) + '\n');
+    }
+    for (let i = visible.length; i < MAX_VISIBLE; i++) {
+      clearLine();
+      process.stdout.write('\n');
+    }
+
+    process.stdout.write(`${'─'.repeat(Math.min(cols, 100))}\n`);
+    if (filtered.length > 0) {
+      const sel = filtered[cursor];
+      if (sel) {
+        const desc = sel.description
+          ? sel.description.replace(/\n/g, ' ').slice(0, cols - 2)
+          : '';
+        process.stdout.write(`${DIM}${desc}${RESET}\n`);
+      }
+    } else {
+      process.stdout.write(`${DIM}No models match.${RESET}\n`);
+    }
+  }
+
+  hideCursor();
+  if (process.stdin.isTTY) process.stdin.setRawMode(true);
+  process.stdin.resume();
+  process.stdin.setEncoding('utf8');
+
+  let selected = null;
+
+  function cleanup() {
+    if (process.stdin.isTTY) process.stdin.setRawMode(false);
+    process.stdin.pause();
+    showCursor();
+    clearScreen();
+  }
+
+  await new Promise((resolve) => {
+    process.stdin.on('data', (key) => {
+      const filtered = getFiltered();
+
+      if (key === '\x03') { // Ctrl-C
+        cleanup();
+        process.exit(0);
+      }
+      if (key === '\x1b' || key === 'q') { // Escape or q
+        cleanup();
+        process.stdout.write('Cancelled.\n');
+        resolve();
+        return;
+      }
+      if (key === '\r' || key === '\n') { // Enter
+        if (filtered.length > 0 && filtered[cursor]) selected = filtered[cursor];
+        cleanup();
+        resolve();
+        return;
+      }
+      if (key === '\x1b[A') { // Arrow up
+        cursor = Math.max(0, cursor - 1);
+        if (cursor < scrollTop) scrollTop = cursor;
+        render();
+        return;
+      }
+      if (key === '\x1b[B') { // Arrow down
+        cursor = Math.min(Math.max(0, filtered.length - 1), cursor + 1);
+        if (cursor >= scrollTop + MAX_VISIBLE) scrollTop = cursor - MAX_VISIBLE + 1;
+        render();
+        return;
+      }
+      if (key === '\x1b[5~') { // Page Up
+        cursor = Math.max(0, cursor - MAX_VISIBLE);
+        clampCursor(filtered);
+        render();
+        return;
+      }
+      if (key === '\x1b[6~') { // Page Down
+        cursor = Math.min(Math.max(0, filtered.length - 1), cursor + MAX_VISIBLE);
+        clampCursor(filtered);
+        render();
+        return;
+      }
+      if (key === '\t') { // Tab — toggle free-only
+        freeOnly = !freeOnly;
+        cursor = 0; scrollTop = 0;
+        render();
+        return;
+      }
+      if (key === '\x7f' || key === '\b') { // Backspace
+        filter = filter.slice(0, -1);
+        cursor = 0; scrollTop = 0;
+        render();
+        return;
+      }
+      if (key.length === 1 && key >= ' ') { // Printable → filter
+        filter += key;
+        cursor = 0; scrollTop = 0;
+        render();
+        return;
+      }
+      render();
+    });
+
+    process.on('SIGWINCH', render);
+    render();
+  });
+
+  if (selected) {
+    setModel(selected.id, selected.context_length);
+    process.stdout.write(`✓ ${PROVIDER}: model set to ${selected.id}\n`);
+  }
+}
+
+// ─── Entry point ──────────────────────────────────────────────────────────
+
+async function main() {
+  const args = process.argv.slice(2);
+
+  // Extract --provider <name> wherever it appears; the rest are CLI flags.
+  let resolvedProvider = PROVIDER;
+  const flagArgs = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--provider' && args[i + 1]) {
+      resolvedProvider = args[i + 1];
+      i++;
+      continue;
+    }
+    if (args[i].startsWith('--provider=')) {
+      resolvedProvider = args[i].slice('--provider='.length);
+      continue;
+    }
+    flagArgs.push(args[i]);
+  }
+  if (resolvedProvider) {
+    PROVIDER = resolvedProvider;
+    process.env.CR_PROVIDER = resolvedProvider;
+  }
+  if (!PROVIDER) fail('CR_PROVIDER not set');
+
+  const flag = flagArgs[0];
+  if (flag && flag.startsWith('-')) {
+    // Non-interactive CLI mode.
+    await cliMode(flagArgs);
+    return;
+  }
+
+  // Interactive TUI.
+  if (!process.stdout.isTTY) {
+    process.stderr.write('stdout is not a TTY; use --list, --list-free, --current, or --set\n');
+    process.exit(1);
+  }
+
+  const models = await loadModels();
+  await tui(models);
+}
+
+main().catch((err) => {
+  process.stderr.write(`Error: ${err.message}\n`);
+  process.exit(1);
+});

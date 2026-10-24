@@ -119,6 +119,24 @@ All notable changes to this local setup are documented in this file.
   previously ran work instead of printing usage (`doctor`, `provider`, `remove`,
   `config`, `logs`, `list keys`). `crouter <command> --help` never launches a
   provider or starts a local service.
+- `crouter <provider> --browse` opens an interactive model picker for any
+  provider (search, free-only filter, Enter to select): the chosen model is
+  saved to provider state with its context, every Claude Code tier routes to
+  it, and the session launches with those settings applied.
+  `crouter <provider> --model <id>` applies settings for any model directly.
+  The catalog is fetched from `MODELS_API_URL` when declared, or probed at
+  `BASE_URL/v1/models` for any Anthropic-compatible endpoint; results are
+  persisted to `~/.local/state/crouter/models-<provider>.json` and re-used for
+  up to 24 h (`--refresh` forces a re-fetch). Providers without a public list
+  fall back to their declared static aliases. When a model is selected, its
+  `context_length` from the catalog is applied automatically, all Claude Code
+  tiers route to it, and the provider's default effort is used.
+  Add `--apply-only` to persist the model and context without launching Claude:
+  alongside a running `crouter all` session, pick a model in another terminal,
+  then switch live inside Claude Code with `/model <provider>/<id>`. Context
+  and effort are fixed when the Claude Code process starts, so gateway-mode
+  model switches keep the session's context/effort; use a direct
+  `crouter <provider>` launch for per-model auto-config.
 
 ### Fixed
 

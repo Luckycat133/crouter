@@ -202,6 +202,12 @@ crouter nagaai                     # NagaAI inference API key
 crouter dashscope qwen3.7-max
 crouter deepseek --model 'deepseek-v4-pro[1m]'
 
+crouter <provider> --browse                    # pick any model in the provider TUI; settings applied, Claude launches
+crouter <provider> --model <id>                # launch any provider model with its settings applied
+crouter <provider> --browse --apply-only       # pick + persist settings only (no launch); then `/model <provider>/<id>` live in `crouter all`
+crouter openrouter --browse                    # OpenRouter: dynamic catalog (469 models, fetched once per day, cached locally)
+crouter openrouter --model <id>                # launch any OpenRouter model with its settings applied
+
 crouter add                         # pick a provider from a menu
 crouter add minimax --surface plan
 crouter add minimax --surface api
@@ -519,11 +525,39 @@ crouter all
 /model dashscope/qwen3.7-max
 ```
 
+Inside a `crouter all` session, `/model openrouter/<id>` switches to any model
+in the namespaced catalog live — no restart needed. To pick interactively, run
+`crouter openrouter --browse --apply-only` in another terminal (or
+`crouter openrouter --model <id> --apply-only` for a known id): it saves the
+model and its context to state, then exits without launching anything; back in
+Claude Code, `/model openrouter/<id>` completes the switch. Context and effort
+are fixed when the Claude Code process starts, so they follow each model only
+for direct `crouter openrouter` launches and stay fixed for the session in
+gateway mode.
+
 `crouter all` exposes a namespaced `/v1/models` catalog on
 `127.0.0.1:${CROUTER_GATEWAY_PORT:-18799}` and uses the same bound candidates
 and per-surface model maps. Its paid `/v1/messages` route requires a random
 per-session local token. Native Bedrock/Vertex/Foundry routes are excluded because their
 SDK signers live inside Claude Code.
+
+Model catalog and cache. `crouter <provider> --browse` opens an interactive
+picker (search, free-only filter, Enter to select) for **any provider**. The
+catalog is fetched from `MODELS_API_URL` when declared (e.g. OpenRouter), or
+probed at `BASE_URL/v1/models` for any Anthropic-compatible endpoint; results are
+persisted to `~/.local/state/crouter/models-<provider>.json` and re-used for up
+to 24 h so the picker never hammers the network. Providers without a public list
+fall back to their declared static aliases. Pass `--refresh` to force a re-fetch.
+
+When a model is selected, crouter reads its `context_length` from the catalog
+cache and applies it automatically, routes every Claude Code tier (OPUS/SONNET/
+HAIKU/SUBAGENT) to the selected model, and uses the provider's default effort.
+Use `--apply-only` to save a model and its context without launching Claude
+— then switch to it live inside a `crouter all` session with
+`/model <provider>/<id>`. Context and effort are fixed when the Claude Code
+process starts, so gateway-mode `/model` switches change the model but keep the
+session's context/effort; for per-model auto-config, launch directly with
+`crouter <provider> --browse` or `crouter <provider> --model <id>`.
 
 `crouter all --check` builds the same configured route graph, prints only redacted
 URLs, candidate labels/auth shapes, model counts, and the chosen default, then

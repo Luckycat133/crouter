@@ -216,6 +216,8 @@ cmd_run() {
   _i=0
   _a=""
   _expect_model=0
+  _browse=0
+  _apply_only=0
   for _a in "$@"; do
     _i=$((_i + 1))
     if [ "$_expect_model" -eq 1 ]; then
@@ -237,6 +239,14 @@ cmd_run() {
         ;;
       --model)
         _expect_model=1
+        _seen_flag=1
+        ;;
+      --browse)
+        _browse=1
+        _seen_flag=1
+        ;;
+      --apply-only)
+        _apply_only=1
         _seen_flag=1
         ;;
       -*)
@@ -270,9 +280,32 @@ cmd_run() {
     _main_model=$_pos_model
   else
     _main_model=$MODEL
+    # OpenRouter: fall back to the last model picked in the model picker, so a
+    # model chosen once keeps being used without re-passing --model every time.
+    if [ "$PROVIDER_NAME" = "openrouter" ]; then
+      _state_model=$(cat "${XDG_STATE_HOME:-$HOME/.local/state}/crouter/last-model-openrouter" 2>/dev/null || true)
+      if [ -n "$_state_model" ]; then
+        _main_model=$_state_model
+      fi
+    fi
   fi
   apply_model_context_override "$_main_model"
   apply_model_self_route "$_main_model"
+
+  # OpenRouter: once a model is chosen (default, --model, positional, or picker
+  # state), route every Claude Code tier to it and apply the saved context, so
+  # switching models configures everything automatically — no manual tier or
+  # context edits needed.
+  if [ "$PROVIDER_NAME" = "openrouter" ]; then
+    MODEL_OPUS=$_main_model
+    MODEL_SONNET=$_main_model
+    MODEL_HAIKU=$_main_model
+    MODEL_SUBAGENT=$_main_model
+    _state_ctx=$(cat "${XDG_STATE_HOME:-$HOME/.local/state}/crouter/openrouter-context" 2>/dev/null || true)
+    if [ -n "$_state_ctx" ]; then
+      CONTEXT_TOKENS=$_state_ctx
+    fi
+  fi
 
   AUTH_TOKEN=""
   _bypass_auth=0
@@ -327,6 +360,77 @@ cmd_run() {
       resolve_auth
     fi
     prepare_provider_assets
+  fi
+
+  # Look up context_length for the selected model from the provider's model
+  # cache (populated by `crouter-models` from the provider's model-list API,
+  # or left empty when only static aliases are available). When found, it
+  # takes precedence over MODEL_CONTEXT_OVERRIDES and the provider default,
+  # so picking any model automatically configures its context window.
+  apply_model_context_from_cache() {
+    _macf_model=$1
+    _macf_cache="${XDG_STATE_HOME:-$HOME/.local/state}/crouter/models-${PROVIDER_NAME}.json"
+    [ -r "$_macf_cache" ] || return 0
+    [ -n "$NODE_BIN" ] || return 0
+    _macf_ctx=$("$NODE_BIN" -e "try{const c=require('$_macf_cache');const m=(c.models||[]).find(x=>x.id===process.argv[1]);process.stdout.write(m&&m.context_length?String(m.context_length):'')}catch(e){}" "$_macf_model" 2>/dev/null || true)
+    [ -n "$_macf_ctx" ] && CONTEXT_TOKENS=$_macf_ctx
+  }
+
+  # Model picker: let the user search and choose any model supported by the
+  # provider (dynamic catalog with a per-day local cache, or the declared
+  # static aliases), then re-resolve _main_model from the saved selection
+  # before launching.
+  if [ "$_browse" -eq 1 ]; then
+    [ -n "$NODE_BIN" ] || die "--browse requires Node.js; set NODE_BIN in config.sh"
+    _state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/crouter"
+    CR_PROVIDER="$PROVIDER_NAME" \
+    CR_BASE_URL="${BASE_URL:-}" \
+    CR_MODELS_API_URL="${MODELS_API_URL:-}" \
+    CR_MODELS_API_AUTH="${MODELS_API_AUTH:-none}" \
+    CR_API_KEY="${AUTH_TOKEN:-}" \
+    CR_STATIC_MODELS="${MODEL:-} ${MODEL_OPUS:-} ${MODEL_SONNET:-} ${MODEL_HAIKU:-} ${MODEL_SUBAGENT:-} ${MODEL_ALIASES:-}" \
+      "$BIN_DIR/crouter-models" --provider "$PROVIDER_NAME" || \
+      die "${PROVIDER_NAME} model picker exited with an error"
+    _main_model=$(cat "$_state_dir/last-model-${PROVIDER_NAME}" 2>/dev/null || true)
+    [ -n "$_main_model" ] || die "no ${PROVIDER_NAME} model selected"
+    # Re-apply context/tier settings for the newly picked model.
+    apply_model_context_override "$_main_model"
+    apply_model_context_from_cache "$_main_model"
+    apply_model_self_route "$_main_model"
+    MODEL_OPUS=$_main_model
+    MODEL_SONNET=$_main_model
+    MODEL_HAIKU=$_main_model
+    MODEL_SUBAGENT=$_main_model
+    _state_ctx=$(cat "$_state_dir/${PROVIDER_NAME}-context" 2>/dev/null || true)
+    [ -n "$_state_ctx" ] && CONTEXT_TOKENS=$_state_ctx
+    # Strip --browse so it is not forwarded to Claude Code.
+    _i=0; _n=$#
+    while [ $_i -lt "$_n" ]; do
+      _i=$((_i + 1))
+      case "$1" in
+        --browse) shift ;;
+        *) set -- "$@" "$1"; shift ;;
+      esac
+    done
+  fi
+
+  # --apply-only: resolve the model, apply and persist its context/tier
+  # settings, then exit without launching Claude. Intended to run alongside
+  # an active `crouter all` session: pick a model here (saved to state), then
+  # switch to it live inside Claude Code with `/model <provider>/<id>`.
+  # Context and effort are fixed when the Claude Code process starts, so they
+  # follow each model only for direct `crouter <provider>` launches and stay
+  # fixed for the session in gateway mode.
+  if [ "$_apply_only" -eq 1 ]; then
+    remember_last_selected_model "$PROVIDER_NAME" "$_main_model" || :
+    apply_model_context_from_cache "$_main_model"
+    if [ -n "${CONTEXT_TOKENS:-}" ]; then
+      _state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/crouter"
+      printf '%s\n' "$CONTEXT_TOKENS" > "$_state_dir/${PROVIDER_NAME}-context" 2>/dev/null || :
+    fi
+    _state_ctx=$(cat "$_state_dir/${PROVIDER_NAME}-context" 2>/dev/null || true)
+    info "${PROVIDER_NAME}: applied $_main_model (context=${_state_ctx:-$CONTEXT_TOKENS}, effort=${EFFORT:-unset})"
+    return 0
   fi
 
   launch_claude "$_main_model" "$_bypass_auth" "$@"
@@ -998,6 +1102,17 @@ build_all_routes() {
       # Candidate models: default first, then the tier aliases, then whatever is
       # pulled locally for ollama. route-build.js dedups and keeps this order.
       _models="${MODEL:-} ${MODEL_OPUS:-} ${MODEL_SONNET:-} ${MODEL_HAIKU:-} ${MODEL_SUBAGENT:-} ${MODEL_ALIASES:-}"
+      # OpenRouter: expose the full catalog (from the picker's per-provider
+      # cache) so that `crouter all`'s /v1/models lists every OpenRouter model
+      # and Claude Code's /model can switch to any of them live, without
+      # pre-declaring each one.
+      if [ "$PROVIDER_NAME" = "openrouter" ]; then
+        _or_cache="${XDG_STATE_HOME:-$HOME/.local/state}/crouter/models-openrouter.json"
+        if [ -r "$_or_cache" ]; then
+          _or_models=$("$NODE_BIN" -e "try{const m=require('$_or_cache').models.map(x=>x.id).filter(Boolean);process.stdout.write(m.join(' '))}catch(e){}" 2>/dev/null || true)
+          [ -n "$_or_models" ] && _models="$_models $_or_models"
+        fi
+      fi
       if [ "$PROVIDER_NAME" = "ollama" ] && command -v ollama >/dev/null 2>&1; then
         _models="$_models $(ollama list 2>/dev/null | awk 'NR>1{print $1}')"
       fi

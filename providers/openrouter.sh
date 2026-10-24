@@ -24,6 +24,12 @@ AUTH_REFERENCE="OPENROUTER_API_KEY"
 AUTH_KEYCHAIN_FALLBACK="openrouter-api-key"
 _AUTH_SCHEME="bearer"
 
+# Public model catalog for `crouter --browse`: fetched at most once per day and
+# persisted locally (24 h TTL); pass --refresh to re-fetch. Works without a key;
+# when OPENROUTER_API_KEY is configured it is sent as Bearer.
+MODELS_API_URL="https://openrouter.ai/api/v1/models"
+MODELS_API_AUTH="bearer"
+
 # OpenRouter requires ANTHROPIC_API_KEY to be empty to avoid an auth conflict.
 EXTRA_ENV="ANTHROPIC_API_KEY=
 CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1"
@@ -41,6 +47,13 @@ case "${_main_model:-$MODEL}" in
     _main_model="qwen/qwen3.8-27b"
     CONTEXT_TOKENS="262144"
     EFFORT="xhigh"
+    MODEL_OPUS="$_main_model"; MODEL_SONNET="$_main_model"; MODEL_HAIKU="$_main_model"; MODEL_SUBAGENT="$_main_model"
+    ;;
+  nvidia/nemotron-3.5-super-vl:free|nemotron-3.5-super-vl|nemotron-3.5-super|*nemotron-3.5-super*)
+    _main_model="nvidia/nemotron-3.5-super-vl:free"
+    CONTEXT_TOKENS="1000000"
+    AUTO_COMPACT_TOKENS="786432"
+    EFFORT="max"
     MODEL_OPUS="$_main_model"; MODEL_SONNET="$_main_model"; MODEL_HAIKU="$_main_model"; MODEL_SUBAGENT="$_main_model"
     ;;
 esac
