@@ -125,10 +125,12 @@ All notable changes to this local setup are documented in this file.
   it, and the session launches with those settings applied.
   `crouter <provider> --model <id>` applies settings for any model directly.
   The catalog is fetched from `MODELS_API_URL` when declared, or probed at
-  `BASE_URL/v1/models` for any Anthropic-compatible endpoint; results are
-  persisted to `~/.local/state/crouter/models-<provider>.json` and re-used for
-  up to 24 h (`--refresh` forces a re-fetch). Providers without a public list
-  fall back to their declared static aliases. When a model is selected, its
+  `BASE_URL/v1/models` for any Anthropic-compatible endpoint; each URL is
+  retried up to 3 times with backoff before falling back to the next URL or the
+  provider's declared static aliases. Results are persisted to
+  `~/.local/state/crouter/models-<provider>.json` and re-used for up to 24 h
+  (`--refresh` forces a re-fetch). Providers without a public list fall back
+  to their declared static aliases. When a model is selected, its
   `context_length` from the catalog is applied automatically, all Claude Code
   tiers route to it, and the provider's default effort is used.
   Add `--apply-only` to persist the model and context without launching Claude:
@@ -137,6 +139,10 @@ All notable changes to this local setup are documented in this file.
   and effort are fixed when the Claude Code process starts, so gateway-mode
   model switches keep the session's context/effort; use a direct
   `crouter <provider>` launch for per-model auto-config.
+- Unified gateway now retries each candidate up to 2 additional times on 5xx
+  server errors and network blips before failing over to the next candidate, so
+  transient upstream glitches no longer immediately break a request. 401/402/
+  403/429 still fail over immediately (exhausted candidate).
 
 ### Fixed
 

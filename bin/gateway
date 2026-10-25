@@ -194,8 +194,63 @@ function handleMessage(clientReq, clientRes) {
       return;
     }
     // Try candidates in order; fail over on auth/quota errors or upstream error.
+    // 5xx server errors and network blips are retried on the same candidate a few
+    // times before failing over, so transient glitches don't immediately break
+    // the request. 401/402/403/429 mean the candidate is exhausted: fail over
+    // immediately without retrying.
     const candidateOrder = route._candidateCooldown.order();
-    function tryCand(position) {
+    const MAX_CANDIDATE_RETRIES = 2;
+    const RETRY_BACKOFF_MS = 400;
+    function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+    // Returns { kind: 'retry' } to retry same candidate, { kind: 'response', res }
+    // for a final upstream response, or { kind: 'failover' } to try next candidate.
+    function attemptCand(candidateIndex, attempt) {
+      return new Promise((resolve) => {
+        const cand = route.candidates[candidateIndex];
+        // A surface may expose a provider-specific model for the same logical
+        // route (for example a plan router versus a pay-as-you-go model ID).
+        parsed.model = candidateModel(cand, realModel);
+        const newBody = Buffer.from(JSON.stringify(parsed), 'utf8');
+        const headers = buildHeaders(cand, clientReq);
+        const path = cand._pathBase + (clientReq.url || '/');
+        const options = {
+          protocol: cand._proto,
+          host: cand._host,
+          port: cand._port,
+          method: clientReq.method,
+          path: path,
+          headers: headers,
+        };
+        const transport = cand._proto === 'https:' ? https : http;
+        const up = transport.request(options, (upRes) => {
+          const status = upRes.statusCode;
+          const authFailure = isRetryableStatus(status);
+          const serverError = status >= 500 && status < 600;
+          if (authFailure || serverError) route._candidateCooldown.fail(candidateIndex, upRes.headers);
+          else route._candidateCooldown.clear(candidateIndex);
+          if (authFailure) {
+            // Exhausted candidate: fail over immediately, no retry.
+            upRes.resume();
+            resolve({ kind: 'failover' });
+            return;
+          }
+          if (serverError && attempt < MAX_CANDIDATE_RETRIES) {
+            upRes.resume(); // drain, do not pipe
+            setTimeout(() => resolve({ kind: 'retry' }), RETRY_BACKOFF_MS * (attempt + 1));
+            return;
+          }
+          resolve({ kind: 'response', res: upRes });
+        });
+        up.on('error', (e) => {
+          log('upstream error (' + prefix + ' cand ' + candidateIndex + ' attempt ' + (attempt + 1) + '): ' + e.message);
+          route._candidateCooldown.fail(candidateIndex);
+          resolve(attempt < MAX_CANDIDATE_RETRIES ? { kind: 'retry' } : { kind: 'failover' });
+        });
+        if (newBody && newBody.length) up.write(newBody);
+        up.end();
+      });
+    }
+    async function tryCand(position) {
       if (position >= candidateOrder.length) {
         if (!clientRes.headersSent) {
           clientRes.writeHead(502, { 'content-type': 'application/json' });
@@ -208,47 +263,28 @@ function handleMessage(clientReq, clientRes) {
         return;
       }
       const candidateIndex = candidateOrder[position];
-      const cand = route.candidates[candidateIndex];
-      // A surface may expose a provider-specific model for the same logical
-      // route (for example a plan router versus a pay-as-you-go model ID).
-      parsed.model = candidateModel(cand, realModel);
-      const newBody = Buffer.from(JSON.stringify(parsed), 'utf8');
-      const headers = buildHeaders(cand, clientReq);
-      const path = cand._pathBase + (clientReq.url || '/');
-      const options = {
-        protocol: cand._proto,
-        host: cand._host,
-        port: cand._port,
-        method: clientReq.method,
-        path: path,
-        headers: headers,
-      };
-      const transport = cand._proto === 'https:' ? https : http;
-      const up = transport.request(options, (upRes) => {
-        const transient = isRetryableStatus(upRes.statusCode);
-        if (transient) route._candidateCooldown.fail(candidateIndex, upRes.headers);
-        else route._candidateCooldown.clear(candidateIndex);
-        if (transient && position + 1 < candidateOrder.length) {
-          log('candidate ' + candidateIndex + ' on ' + prefix + ' got ' + upRes.statusCode + ' -> failing over');
-          upRes.resume(); // drain, do not pipe
+      for (let attempt = 0; attempt <= MAX_CANDIDATE_RETRIES; attempt++) {
+        const result = await attemptCand(candidateIndex, attempt);
+        if (result.kind === 'failover') {
           tryCand(position + 1);
           return;
         }
+        if (result.kind === 'retry') {
+          if (attempt < MAX_CANDIDATE_RETRIES) {
+            log('candidate ' + candidateIndex + ' on ' + prefix + ' transient, retry ' + (attempt + 1) + '/' + MAX_CANDIDATE_RETRIES);
+            continue;
+          }
+          // Exhausted retries on this candidate, fail over.
+          log('candidate ' + candidateIndex + ' on ' + prefix + ' exhausted retries -> failing over');
+          tryCand(position + 1);
+          return;
+        }
+        // Final upstream response: return it as-is.
+        const upRes = result.res;
         if (!clientRes.headersSent) clientRes.writeHead(upRes.statusCode, upRes.headers);
         upRes.pipe(clientRes);
-      });
-      up.on('error', (e) => {
-        log('upstream error (' + prefix + ' cand ' + candidateIndex + '): ' + e.message);
-        route._candidateCooldown.fail(candidateIndex);
-        if (position + 1 < candidateOrder.length) {
-          tryCand(position + 1);
-        } else if (!clientRes.headersSent) {
-          clientRes.writeHead(502, { 'content-type': 'application/json' });
-          clientRes.end(JSON.stringify({ error: { type: 'upstream_error', message: e.message } }));
-        }
-      });
-      if (newBody && newBody.length) up.write(newBody);
-      up.end();
+        return;
+      }
     }
     tryCand(0);
   });

@@ -544,10 +544,12 @@ SDK signers live inside Claude Code.
 Model catalog and cache. `crouter <provider> --browse` opens an interactive
 picker (search, free-only filter, Enter to select) for **any provider**. The
 catalog is fetched from `MODELS_API_URL` when declared (e.g. OpenRouter), or
-probed at `BASE_URL/v1/models` for any Anthropic-compatible endpoint; results are
-persisted to `~/.local/state/crouter/models-<provider>.json` and re-used for up
-to 24 h so the picker never hammers the network. Providers without a public list
-fall back to their declared static aliases. Pass `--refresh` to force a re-fetch.
+probed at `BASE_URL/v1/models` for any Anthropic-compatible endpoint; each URL
+is retried up to 3 times with backoff before falling back to the next URL or the
+provider's declared static aliases. Results are persisted to
+`~/.local/state/crouter/models-<provider>.json` and re-used for up to 24 h so
+the picker never hammers the network. Providers without a public list fall back
+to their declared static aliases. Pass `--refresh` to force a re-fetch.
 
 When a model is selected, crouter reads its `context_length` from the catalog
 cache and applies it automatically, routes every Claude Code tier (OPUS/SONNET/
@@ -569,6 +571,12 @@ paid account's remaining quota or live model entitlement without making a
 billable request.
 It also does not run provider `PRE_START` hooks or health probes: configured
 local routes such as Codex, Antigravity, and Ollama must already be running.
+
+Gateway request retry. The unified gateway retries each candidate up to 2
+additional times on 5xx server errors and network blips before failing over to
+the next candidate, so transient upstream glitches (OpenRouter 5xx, network
+blips) no longer immediately break a request. 401/402/403/429 still fail over
+immediately since they mark the candidate as exhausted.
 
 The unified gateway switches model traffic only. Provider MCPs and skills are
 fixed when a Claude Code process starts. By default `all` supplies a strict,

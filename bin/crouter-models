@@ -111,6 +111,23 @@ function candidateUrls() {
   return urls;
 }
 
+function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
+// Fetch one URL with retries and exponential backoff. Transient network
+// hiccups (DNS, TLS, timeout, ECONNRESET) should not kill a whole catalog
+// fetch on the first attempt.
+async function fetchOneWithRetry(url, maxAttempts = 3) {
+  let lastErr = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try { return await fetchOne(url); }
+    catch (e) {
+      lastErr = e;
+      if (attempt < maxAttempts) await sleep(300 * attempt);
+    }
+  }
+  throw lastErr;
+}
+
 function fetchModels() {
   return new Promise((resolve, reject) => {
     const urls = candidateUrls();
@@ -122,7 +139,7 @@ function fetchModels() {
         else resolve(null);
         return;
       }
-      fetchOne(urls[index]).then(resolve).catch((e) => {
+      fetchOneWithRetry(urls[index]).then(resolve).catch((e) => {
         lastError = e;
         tryNext(index + 1);
       });
