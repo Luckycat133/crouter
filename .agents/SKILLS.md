@@ -2,12 +2,13 @@
 
 This repository keeps task-specific Skills in .agents/skills. Codex and Claude entry directories point to the same project-owned copies where links are present.
 
-This table records the Skills reviewed or added by the 2026-09-11 audit; it does not remove or replace other project-owned Skills already present in the repository.
+This table records the Skills reviewed or added by the 2026-09-11 audit, with the crouter-development workflow added on 2026-10-30; it does not remove or replace other project-owned Skills already present in the repository.
 
 Load only the Skill whose trigger matches the current task. A Skill may be reused by several projects, and this project may use several Skills. Existing repository instructions and the user's current request take priority over a Skill.
 
 | Skill | Use here for |
 |---|---|
+| [crouter-development](skills/crouter-development/SKILL.md) | Claude Code-only product development: interactive UX, model switching, account/subscription/key automation, App reverse-proxy sources, staged implementation and acceptance. Load only its relevant references; reuse the focused Skills below. |
 | [crouter-runtime-diagnostics](skills/crouter-runtime-diagnostics/SKILL.md) | Existing provider/client failures, redacted route evidence, streaming/tool and local-proxy diagnosis |
 | `crouter-maintenance` | Provider contracts, auth isolation, lifecycle, gateway, portability, and releases |
 | `crouter-provider-dev` | Universal provider development across all 5 archetypes, using the relevant contract stages (docs audit, parameters, session MCP assets, routing, and verification) |

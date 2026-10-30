@@ -2,11 +2,15 @@
 
 POSIX `/bin/sh` launcher for Anthropic-compatible providers, with dependency-free Node proxies. `bin/crouter` owns dispatch; `providers/` declares provider contracts; `lib/` handles auth, assets and isolated launches. `install.sh` generates compatibility launchers from provider files.
 
+## 产品主线
+
+crouter 只服务 Claude Code：API、订阅、多 Key、本地推理和 App 反代是模型来源，不是要启动的其他客户端。下一版交互优先，让用户从 `crouter` 完成模型选择与账户管理；现有 `app` 入口仅保留兼容，不继续扩展。开发该主线时先加载 [.agents/skills/crouter-development/SKILL.md](.agents/skills/crouter-development/SKILL.md)，按需读取参考与验收；人类开发入口见 [docs/development-plan.md](docs/development-plan.md)。计划中的行为不等于当前版本已实现。
+
 ## Boundaries
 
 - Preserve POSIX portability, symlink-safe self-location and the allowlisted `env -i` launch environment.
 - Keep each credential bound to its endpoint, auth header and tier model map. Resolve secrets at launch; never log them or store user keys in provider source.
-- `crouter claude` retains native account/login behavior; subscription credentials must not enter provider proxies or the unified gateway.
+- `crouter claude` retains native account/login behavior; native Claude account subscription credentials must not enter provider proxies or the unified gateway. Explicitly authorized App reverse-proxy sources keep their own authentication boundary.
 - Managed MCP files are temporary, mode `0600`, and deleted at exit. Skills/assets are session-scoped and namespaced. Cleanup stops only processes started by that session.
 - For auth, routing, lifecycle or provider changes, read [provider and proxy contracts](docs/agent-architecture.md). Provider facts and source provenance live in [provider-audit.md](docs/provider-audit.md); recheck primary sources before changing an audit date.
 - The nested `antigravity-claude-proxy/` has its own `CLAUDE.md` and commands.

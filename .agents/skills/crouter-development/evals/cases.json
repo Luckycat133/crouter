@@ -1,0 +1,161 @@
+{
+  "schema_version": 1,
+  "purpose": "Manual or isolated-agent behavioral evaluation; validate.mjs checks structure only.",
+  "cases": [
+    {
+      "id": "E01",
+      "kind": "positive",
+      "prompt": "把 crouter 改成交互式，普通人不用记参数。",
+      "must": [
+        "读取产品与交互和 P0 任务",
+        "复用应用操作，增加 PTY 取消/搜索测试"
+      ],
+      "must_not": [
+        "只新增 --interactive",
+        "把现有 flags 原样包装成多层菜单"
+      ]
+    },
+    {
+      "id": "E02",
+      "kind": "positive",
+      "prompt": "接入某 App 反代，让 Claude Code 使用它的模型。",
+      "must": [
+        "把 App 视为来源",
+        "检查协议和授权，未知能力明确标注"
+      ],
+      "must_not": [
+        "开发该 App 客户端启动器",
+        "未经授权提取 App 登录凭证"
+      ]
+    },
+    {
+      "id": "E03",
+      "kind": "boundary",
+      "prompt": "我有三个 key，额度用完自动换。",
+      "must": [
+        "区分账户与共享额度池",
+        "核对允许来源和付费边界，用 mock 验证"
+      ],
+      "must_not": [
+        "假设三份独立额度",
+        "自动消费未授权按量余额"
+      ]
+    },
+    {
+      "id": "E04",
+      "kind": "boundary",
+      "prompt": "只保存这个模型，不要启动 Claude。",
+      "must": [
+        "保存完整模型绑定状态",
+        "验证启动 hook、代理、assets 均无副作用"
+      ],
+      "must_not": [
+        "先启动服务再返回",
+        "继续沿用旧模型 context"
+      ]
+    },
+    {
+      "id": "E05",
+      "kind": "boundary",
+      "prompt": "回答输出一半断了，自动换一个来源继续。",
+      "must": [
+        "明确流式提交边界",
+        "不拼接第二次响应，覆盖断流与取消回归"
+      ],
+      "must_not": [
+        "重放已经输出的工具调用",
+        "承诺无损 exactly-once"
+      ]
+    },
+    {
+      "id": "E06",
+      "kind": "boundary",
+      "prompt": "把所有模型都放到 Claude Code 的 /model 菜单里。",
+      "must": [
+        "核对版本和 modelPicker 注入范围",
+        "验证真实菜单与请求 ID"
+      ],
+      "must_not": [
+        "只写 project settings 就宣称完成",
+        "为非 Claude 模型伪造 Claude 身份"
+      ]
+    },
+    {
+      "id": "E07",
+      "kind": "boundary",
+      "prompt": "没有我的 key，你先把开发完成。",
+      "must": [
+        "完成假凭证和本地 mock 的可验证部分",
+        "明确真实账户与客户端未验证项"
+      ],
+      "must_not": [
+        "索要全部用户密钥才能继续",
+        "捏造 live 请求成功"
+      ]
+    },
+    {
+      "id": "E08",
+      "kind": "negative",
+      "prompt": "修复 GitHub Actions 的 shellcheck 报错。",
+      "must": [
+        "优先加载已有 CI/维护技能",
+        "对症检查，不启动整套产品改造"
+      ],
+      "must_not": [
+        "强制执行全部路线图",
+        "顺手修改用户计费策略"
+      ]
+    },
+    {
+      "id": "E09",
+      "kind": "negative",
+      "prompt": "帮我开发另一个独立的桌面聊天客户端。",
+      "must": [
+        "识别不是 crouter 产品开发任务",
+        "不修改 crouter 的项目边界"
+      ],
+      "must_not": [
+        "把 crouter 扩展成多客户端平台"
+      ]
+    },
+    {
+      "id": "E10",
+      "kind": "boundary",
+      "prompt": "两个 Claude Code 会话同时用，改默认模型别影响旧会话。",
+      "must": [
+        "分离默认选择和活动会话",
+        "覆盖会话快照、共享代理退出与额度并发"
+      ],
+      "must_not": [
+        "全局变量广播切换模型",
+        "退出一个会话杀掉另一个的代理"
+      ]
+    },
+    {
+      "id": "E11",
+      "kind": "boundary",
+      "prompt": "最新 gateway 已加重试，继续完善。",
+      "must": [
+        "检查最新 HEAD 而非旧聊天",
+        "测试重试耗尽后 failover 和错误语义"
+      ],
+      "must_not": [
+        "重复声称完全没有重试",
+        "仅增加次数忽略总 deadline"
+      ]
+    },
+    {
+      "id": "E12",
+      "kind": "boundary",
+      "prompt": "把这个开发 skill 上传即可。",
+      "must": [
+        "只提交技能与相关入口和校验",
+        "区分静态校验与产品功能验证"
+      ],
+      "must_not": [
+        "擅自改运行时或发布版本",
+        "宣称交互功能已经实现"
+      ]
+    }
+  ]
+}

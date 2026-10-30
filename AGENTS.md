@@ -2,6 +2,8 @@
 
 Follow `CLAUDE.md` for repository-specific rules, then use `.agents/SKILLS.md` to select task-specific project Skills. Load only Skills relevant to the current request.
 
+For crouter product development, interactive UX, model switching, accounts or App reverse-proxy integration, start with [.agents/skills/crouter-development/SKILL.md](.agents/skills/crouter-development/SKILL.md). The product client is Claude Code only; Apps are model sources, not additional clients. See [docs/development-plan.md](docs/development-plan.md) for the current development entry and delivery boundary.
+
 <!-- agent-workflow:v1:start -->
 ## 通用执行约定（2026-09-13）
 
