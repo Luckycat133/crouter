@@ -46,8 +46,45 @@ const BASE_URL    = process.env.CR_BASE_URL || '';
 const STATIC_MODELS = (process.env.CR_STATIC_MODELS || '').split(/\s+/).filter(Boolean);
 const FORCE_REFRESH = process.argv.includes('--refresh');
 
+// Catalog providers do not agree on the shape of a rate: OpenRouter reports
+// prompt/completion, Vercel reports input/output, NagaAI reports
+// per_input_token/per_output_token, and Requesty lists tiered rows. A rate is
+// only known when both sides can be read; a missing or half-read rate stays
+// unknown, and unknown is never zero.
+function pricingOf(m) {
+  const p = (m && m.pricing) || {};
+  const num = (v) => {
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  let prompt = num(p.prompt);
+  let completion = num(p.completion);
+  if (prompt === null && completion === null) {
+    prompt = num(p.input);
+    completion = num(p.output);
+  }
+  if (prompt === null && completion === null) {
+    prompt = num(p.per_input_token);
+    completion = num(p.per_output_token);
+  }
+  if (prompt === null && completion === null && Array.isArray(p) && p.length > 0) {
+    // Tiered pricing: the first row is the base tier (threshold 0).
+    const tier = p[0] || {};
+    prompt = num(tier.input_price);
+    completion = num(tier.output_price);
+  }
+  return { prompt, completion };
+}
+
+// A model is free only when both sides are known and free. A missing rate is
+// unknown, not free, and a free input with a charged output is not free either.
 function isFree(m) {
-  return (m.pricing && m.pricing.prompt === '0') || (m.id && m.id.endsWith(':free'));
+  const { prompt, completion } = pricingOf(m);
+  if (prompt !== null || completion !== null) {
+    return prompt === 0 && completion === 0;
+  }
+  // No rate at all: only an explicit free-tier slug says the model is free.
+  return !!(m.id && m.id.endsWith(':free'));
 }
 
 function parseModels(body) {
@@ -172,7 +209,14 @@ function setModel(modelId, contextLength) {
   try {
     fs.mkdirSync(STATE_DIR, { recursive: true });
     fs.writeFileSync(modelFile(), modelId + '\n', 'utf8');
-    if (contextLength) fs.writeFileSync(contextFile(), String(contextLength) + '\n', 'utf8');
+    const known = Number(contextLength);
+    if (Number.isFinite(known) && known > 0) {
+      fs.writeFileSync(contextFile(), String(known) + '\n', 'utf8');
+    } else {
+      // The new model has no known window: drop the previous model's window
+      // instead of letting it leak into the next launch.
+      try { fs.unlinkSync(contextFile()); } catch (_) {}
+    }
   } catch (_) {}
 }
 
@@ -182,7 +226,9 @@ async function loadModels() {
     if (cached) return cached;
   }
   let models = null;
-  if (API_URL) {
+  // A provider that declares only BASE_URL still has a catalog to read, so the
+  // BASE_URL candidates are probed as well.
+  if (API_URL || BASE_URL) {
     try { models = await fetchModels(); } catch (_) { models = null; }
   }
   if (!models || models.length === 0) {
@@ -261,7 +307,7 @@ Keys in TUI:
   ↑/↓        Navigate
   Tab        Toggle free-only filter
   Enter      Select and apply
-  Esc/q      Quit without changing
+  Esc        Cancel without changing
 
 Cache:
   ~/.local/state/crouter/models-<provider>.json — fetched at most once per day;
@@ -297,6 +343,9 @@ function showCursor() { process.stdout.write('\x1b[?25h'); }
 
 const MAX_VISIBLE = 20;
 const NAME_WIDTH  = 40;
+// Exit code that tells the caller the picker was cancelled, so the caller can
+// stop instead of starting the previously selected model.
+const CANCELLED_EXIT = 2;
 
 function truncate(s, len) {
   if (!s) return ''.padEnd(len);
@@ -332,10 +381,10 @@ function fmtContext(len) {
 
 function fmtPrice(m) {
   if (isFree(m)) return 'FREE          ';
-  const p = parseFloat(m.pricing?.prompt || 0);
-  const c = parseFloat(m.pricing?.completion || 0);
-  const pM = (p * 1_000_000).toFixed(2);
-  const cM = (c * 1_000_000).toFixed(2);
+  const { prompt, completion } = pricingOf(m);
+  if (prompt === null || completion === null) return 'unknown       ';
+  const pM = (prompt * 1_000_000).toFixed(2);
+  const cM = (completion * 1_000_000).toFixed(2);
   return `\$${pM}/\$${cM}`.padEnd(14);
 }
 
@@ -384,7 +433,7 @@ async function tui(allModels) {
     moveTo(1, 1);
     process.stdout.write(`${BOLD}${PROVIDER} Model Picker${RESET}  ${DIM}(${filtered.length} models${freeOnly ? ', free only' : ''})${RESET}\n`);
     process.stdout.write(`${DIM}Filter:${RESET} ${CYAN}${filter}${RESET}${CYAN}▎${RESET}\n`);
-    process.stdout.write(`${DIM}↑↓ navigate  Tab free-only  Enter select  Esc/q quit${RESET}\n`);
+    process.stdout.write(`${DIM}↑↓ navigate  Tab free-only  Enter select  Esc cancel${RESET}\n`);
     process.stdout.write(`${'─'.repeat(Math.min(cols, 100))}\n`);
 
     const nameW = Math.min(NAME_WIDTH, Math.max(20, cols - 32));
@@ -432,69 +481,130 @@ async function tui(allModels) {
     clearScreen();
   }
 
-  await new Promise((resolve) => {
-    process.stdin.on('data', (key) => {
-      const filtered = getFiltered();
+  function cancelPicker() {
+    cleanup();
+    process.stdout.write('Cancelled.\n');
+    process.exit(CANCELLED_EXIT);
+  }
 
-      if (key === '\x03') { // Ctrl-C
-        cleanup();
-        process.exit(0);
+  // A terminal delivers bytes, not keys: one read can carry several keys
+  // (fast typing, a paste, "q" followed by Esc), and an escape sequence can
+  // arrive in two pieces. The chunk is split into keys before anything is
+  // applied, so a multi-key chunk is not mistaken for one unknown key.
+  let pendingEscape = false;
+  let escapeTimer = null;
+  const ESC_TIMEOUT_MS = 50;
+
+  function splitKeys(chunk) {
+    let data = chunk;
+    const keys = [];
+    if (pendingEscape) {
+      pendingEscape = false;
+      if (escapeTimer) { clearTimeout(escapeTimer); escapeTimer = null; }
+      const rest = /^\[[0-9;]*[A-Za-z~]/.exec(data);
+      if (rest) {
+        keys.push('\x1b' + rest[0]);
+        data = data.slice(rest[0].length);
+      } else {
+        keys.push('\x1b');
       }
-      if (key === '\x1b' || key === 'q') { // Escape or q
-        cleanup();
-        process.stdout.write('Cancelled.\n');
-        resolve();
-        return;
+    }
+    let i = 0;
+    while (i < data.length) {
+      if (data[i] === '\x1b') {
+        const seq = /^\x1b(\[[0-9;]*[A-Za-z~])?/.exec(data.slice(i));
+        if (seq && seq[1]) { keys.push(seq[0]); i += seq[0].length; continue; }
+        if (i + 1 >= data.length) {
+          // A lone Esc at the end of a chunk may still be the start of a
+          // sequence: wait briefly for the rest before cancelling.
+          pendingEscape = true;
+          escapeTimer = setTimeout(() => {
+            if (pendingEscape) cancelPicker();
+          }, ESC_TIMEOUT_MS);
+          break;
+        }
+        keys.push('\x1b'); i += 1; continue;
       }
-      if (key === '\r' || key === '\n') { // Enter
-        if (filtered.length > 0 && filtered[cursor]) selected = filtered[cursor];
-        cleanup();
-        resolve();
-        return;
-      }
-      if (key === '\x1b[A') { // Arrow up
-        cursor = Math.max(0, cursor - 1);
-        if (cursor < scrollTop) scrollTop = cursor;
-        render();
-        return;
-      }
+      const ch = String.fromCodePoint(data.codePointAt(i));
+      keys.push(ch);
+      i += ch.length;
+    }
+    return keys;
+  }
+
+  function handleKey(key) {
+    const filtered = getFiltered();
+
+    if (key === '\x03') { // Ctrl-C cancels like Esc
+      cancelPicker();
+      return;
+    }
+    if (key === '\x1b') { // Escape cancels; "q" is an ordinary filter character
+      cancelPicker();
+      return;
+    }
+    if (key === '\r' || key === '\n') { // Enter
+      if (filtered.length > 0 && filtered[cursor]) selected = filtered[cursor];
+      cleanup();
+      resolve();
+      return;
+    }
+    if (key === '\x1b[A') { // Arrow up
+      cursor = Math.max(0, cursor - 1);
+      if (cursor < scrollTop) scrollTop = cursor;
+      render();
+      return;
+    }
       if (key === '\x1b[B') { // Arrow down
         cursor = Math.min(Math.max(0, filtered.length - 1), cursor + 1);
         if (cursor >= scrollTop + MAX_VISIBLE) scrollTop = cursor - MAX_VISIBLE + 1;
         render();
         return;
       }
-      if (key === '\x1b[5~') { // Page Up
-        cursor = Math.max(0, cursor - MAX_VISIBLE);
-        clampCursor(filtered);
-        render();
-        return;
-      }
-      if (key === '\x1b[6~') { // Page Down
-        cursor = Math.min(Math.max(0, filtered.length - 1), cursor + MAX_VISIBLE);
-        clampCursor(filtered);
-        render();
-        return;
-      }
-      if (key === '\t') { // Tab — toggle free-only
-        freeOnly = !freeOnly;
-        cursor = 0; scrollTop = 0;
-        render();
-        return;
-      }
-      if (key === '\x7f' || key === '\b') { // Backspace
-        filter = filter.slice(0, -1);
-        cursor = 0; scrollTop = 0;
-        render();
-        return;
-      }
-      if (key.length === 1 && key >= ' ') { // Printable → filter
-        filter += key;
-        cursor = 0; scrollTop = 0;
-        render();
-        return;
-      }
+    if (key === '\x1b[5~') { // Page Up
+      cursor = Math.max(0, cursor - MAX_VISIBLE);
+      clampCursor(filtered);
       render();
+      return;
+    }
+    if (key === '\x1b[6~') { // Page Down
+      cursor = Math.min(Math.max(0, filtered.length - 1), cursor + MAX_VISIBLE);
+      clampCursor(filtered);
+      render();
+      return;
+    }
+    if (key === '\t') { // Tab — toggle free-only
+      freeOnly = !freeOnly;
+      cursor = 0; scrollTop = 0;
+      render();
+      return;
+    }
+    if (key === '\x7f' || key === '\b') { // Backspace
+      filter = filter.slice(0, -1);
+      cursor = 0; scrollTop = 0;
+      render();
+      return;
+    }
+    if (key.length === 1 && key >= ' ') { // Printable → filter
+      filter += key;
+      cursor = 0; scrollTop = 0;
+      render();
+      return;
+    }
+    render();
+  }
+
+  await new Promise((resolve) => {
+    process.stdin.on('end', () => {
+      // The input stream ended without a decision: treat it as a cancel
+      // instead of waiting for a key that can no longer arrive.
+      cancelPicker();
+    });
+    // In raw mode the terminal cannot deliver an EOF; closing it arrives as
+    // a hangup instead, which means the same thing: no decision was made.
+    process.on('SIGHUP', () => cancelPicker());
+    process.stdin.on('data', (chunk) => {
+      for (const key of splitKeys(chunk)) handleKey(key);
     });
 
     process.on('SIGWINCH', render);

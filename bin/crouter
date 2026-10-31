@@ -389,8 +389,14 @@ cmd_run() {
     CR_MODELS_API_AUTH="${MODELS_API_AUTH:-none}" \
     CR_API_KEY="${AUTH_TOKEN:-}" \
     CR_STATIC_MODELS="${MODEL:-} ${MODEL_OPUS:-} ${MODEL_SONNET:-} ${MODEL_HAIKU:-} ${MODEL_SUBAGENT:-} ${MODEL_ALIASES:-}" \
-      "$BIN_DIR/crouter-models" --provider "$PROVIDER_NAME" || \
-      die "${PROVIDER_NAME} model picker exited with an error"
+      "$BIN_DIR/crouter-models" --provider "$PROVIDER_NAME"
+    _pick_rc=$?
+    if [ "$_pick_rc" -eq 2 ]; then
+      # Cancelled: keep the previous selection, but start nothing.
+      info "${PROVIDER_NAME}: model selection cancelled; nothing was started"
+      return 0
+    fi
+    [ "$_pick_rc" -eq 0 ] || die "${PROVIDER_NAME} model picker exited with an error"
     _main_model=$(cat "$_state_dir/last-model-${PROVIDER_NAME}" 2>/dev/null || true)
     [ -n "$_main_model" ] || die "no ${PROVIDER_NAME} model selected"
     # Re-apply context/tier settings for the newly picked model.
@@ -424,9 +430,13 @@ cmd_run() {
   if [ "$_apply_only" -eq 1 ]; then
     remember_last_selected_model "$PROVIDER_NAME" "$_main_model" || :
     apply_model_context_from_cache "$_main_model"
+    _state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/crouter"
     if [ -n "${CONTEXT_TOKENS:-}" ]; then
-      _state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/crouter"
       printf '%s\n' "$CONTEXT_TOKENS" > "$_state_dir/${PROVIDER_NAME}-context" 2>/dev/null || :
+    else
+      # The model has no known window: do not leave the previous model's window
+      # behind for the next launch to pick up.
+      rm -f "$_state_dir/${PROVIDER_NAME}-context" 2>/dev/null || :
     fi
     _state_ctx=$(cat "$_state_dir/${PROVIDER_NAME}-context" 2>/dev/null || true)
     info "${PROVIDER_NAME}: applied $_main_model (context=${_state_ctx:-$CONTEXT_TOKENS}, effort=${EFFORT:-unset})"

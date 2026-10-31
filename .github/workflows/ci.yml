@@ -30,7 +30,7 @@ jobs:
 
       - name: Check Node syntax
         run: |
-          for file in bin/gateway bin/keypool-proxy lib/*.js lib/*.mjs; do
+          for file in bin/gateway bin/keypool-proxy bin/crouter-models bin/openrouter-models lib/*.js lib/*.mjs; do
             node --check "$file"
           done
 

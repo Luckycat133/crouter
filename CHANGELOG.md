@@ -230,6 +230,35 @@ All notable changes to this local setup are documented in this file.
   security child spawns. A regression test proves the Keychain child argv
   stays secret-free.
 
+### Fixed
+
+- The model picker no longer shows a missing rate as a zero price. A model
+  whose fee cannot be read is displayed as `unknown` instead of `$0.00`, and a
+  model with a free input and a charged output is no longer labelled `FREE`.
+  A model counts as free only when both sides of the rate are known and zero;
+  an entry with no rate at all is free only when its id carries an explicit
+  `:free` tier.
+- Rates are now read in every shape the provider catalogs use: OpenRouter's
+  `prompt`/`completion`, Vercel's `input`/`output`, NagaAI's
+  `per_input_token`/`per_output_token`, and Requesty's tiered rows. Before
+  this, every model of those providers was displayed as `$0.00/$0.00`.
+- A provider that declares only `BASE_URL` is now probed for its catalog. The
+  catalog was loaded only when `CR_MODELS_API_URL` was set, so such a provider
+  could never list or pick a model.
+- Selecting a model whose context window is unknown now removes the previous
+  model's window instead of leaving it behind, so the old window cannot leak
+  into the next launch. `crouter run --apply-only` does the same.
+- `q` is an ordinary filter character in the picker instead of a quit key. The
+  picker reads the terminal as bytes and splits a chunk into keys, so several
+  keys in one read, a pasted string, and an escape sequence split across two
+  reads are all handled. `Esc`, `Ctrl-C`, the end of the input stream, and a
+  terminal hangup cancel the picker and exit with code `2`.
+- `crouter run --browse` no longer starts Claude Code after the picker was
+  cancelled. A cancelled selection keeps the previously selected model and
+  starts nothing.
+- The CI Node syntax check now covers `bin/crouter-models` and
+  `bin/openrouter-models`, which the picker entry points were missing.
+
 ## [0.5.3] - 2026-08-20
 
 ### Added
