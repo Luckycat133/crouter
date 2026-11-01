@@ -319,7 +319,7 @@ limit; the selected vendor model or native backend remains authoritative.
 | `moonshot` | Kimi Code membership | `k3-256k` | 262,144 | — |
 | `nagaai` | API | `claude-sonnet-4.5` | — | — |
 | `ollama` | local Ollama/MLX | `qwen3.8:27b-dflash` | 262,144 for DFlash2; explicit legacy profiles retain their caps | 60s SSE heartbeat |
-| `openrouter` | API | `nvidia/nemotron-3.5-super-vl:free` | 1,000,000 | — |
+| `openrouter` | API | `nvidia/nemotron-3-ultra-550b-a55b:free` | 1,000,000 | — |
 | `ppio` | API | `minimax/minimax-m3` | 1,000,000 | cloud OAuth MCP |
 | `qianfan` | personal Token Plan + API | `deepseek-v4-pro` | 262,144 | — |
 | `qianfan-team` | team Token Plan | `deepseek-v4-flash` | 262,144 | — |

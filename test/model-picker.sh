@@ -46,10 +46,6 @@ drive_picker() {
   printf '%s' "$_out" | strip_ansi
 }
 
-picker_env() {
-  printf '%s' "CR_PROVIDER=demo CR_BASE_URL=http://127.0.0.1:$UPSTREAM_PORT CR_MODELS_API_URL= CR_MODELS_API_AUTH=none CR_API_KEY= CR_STATIC_MODELS="
-}
-
 # --- a local catalog endpoint -----------------------------------------------
 cat > "$TMP_DIR/catalog.js" <<'EOF'
 const http = require('http');
@@ -90,8 +86,8 @@ start_catalog() {
 }
 
 run_picker() {
-  # shellcheck disable=SC2086
-  env $(picker_env) "$NODE_BIN" "$ROOT_DIR/bin/crouter-models" --provider demo "$@"
+  env CR_PROVIDER=demo "CR_BASE_URL=http://127.0.0.1:$UPSTREAM_PORT" \
+    CR_MODELS_API_URL= CR_MODELS_API_AUTH=none CR_API_KEY= CR_STATIC_MODELS= "$NODE_BIN" "$ROOT_DIR/bin/crouter-models" --provider demo "$@"
 }
 
 # --- CAT-01: a provider with only BASE_URL still gets its catalog ----------
@@ -133,9 +129,9 @@ start_catalog '[{"id":"no-price","name":"No Price","context_length":1000},
                    "pricing":{"prompt":"0","completion":"0.000002"}},
                   {"id":"real-free","name":"Real Free","context_length":1000,
                    "pricing":{"prompt":"0","completion":"0"}}]'
-# shellcheck disable=SC2086
 tui_out=$(drive_picker 'CAT-03 display' --keys "$(printf '\033')" -- \
-  env $(picker_env) "$NODE_BIN" "$ROOT_DIR/bin/crouter-models" --provider demo)
+  env CR_PROVIDER=demo "CR_BASE_URL=http://127.0.0.1:$UPSTREAM_PORT" \
+    CR_MODELS_API_URL= CR_MODELS_API_AUTH=none CR_API_KEY= CR_STATIC_MODELS= "$NODE_BIN" "$ROOT_DIR/bin/crouter-models" --provider demo)
 printf '%s' "$tui_out" | grep -q 'Cancelled\.' || fail 'CAT-03: Esc did not cancel the picker'
 line=$(printf '%s' "$tui_out" | grep 'no-price' | tail -1)
 [ -n "$line" ] || fail 'CAT-03: the picker did not render the model without pricing'
@@ -171,9 +167,9 @@ for id in tier-paid v-input n-paid empty-price; do
   printf '%s' "$free_list" | grep -q "\"$id\"" && \
     fail "CAT-03: $id was reported as free"
 done
-# shellcheck disable=SC2086
 tui_out=$(drive_picker 'CAT-03 shapes' --keys "$(printf '\033')" -- \
-  env $(picker_env) "$NODE_BIN" "$ROOT_DIR/bin/crouter-models" --provider demo)
+  env CR_PROVIDER=demo "CR_BASE_URL=http://127.0.0.1:$UPSTREAM_PORT" \
+    CR_MODELS_API_URL= CR_MODELS_API_AUTH=none CR_API_KEY= CR_STATIC_MODELS= "$NODE_BIN" "$ROOT_DIR/bin/crouter-models" --provider demo)
 line=$(printf '%s' "$tui_out" | grep 'n-paid' | tail -1)
 printf '%s' "$line" | grep -q '\$1\.00/\$5\.00' || \
   fail 'CAT-03: a per-token rate was not displayed as a price'
@@ -192,9 +188,9 @@ printf 'ok    CAT-03  rates are read in every shape the catalogs use\n'
 # "q" is typed into the filter, Esc then cancels: the picker must not treat "q"
 # as a quit key, and the filter line must show the typed character.
 start_catalog '[{"id":"quokka","name":"Quokka","context_length":1000,"pricing":{}}]'
-# shellcheck disable=SC2086
 tui_out=$(drive_picker 'UX-02' --keys "$(printf 'q\033')" -- \
-  env $(picker_env) "$NODE_BIN" "$ROOT_DIR/bin/crouter-models" --provider demo)
+  env CR_PROVIDER=demo "CR_BASE_URL=http://127.0.0.1:$UPSTREAM_PORT" \
+    CR_MODELS_API_URL= CR_MODELS_API_AUTH=none CR_API_KEY= CR_STATIC_MODELS= "$NODE_BIN" "$ROOT_DIR/bin/crouter-models" --provider demo)
 printf '%s' "$tui_out" | grep -q 'Filter: q' || \
   fail 'UX-02: typing "q" did not filter the list'
 printf '%s' "$tui_out" | grep -q 'Cancelled\.' || \
@@ -207,16 +203,16 @@ printf 'ok    UX-02  "q" is an ordinary filter character\n'
 # (raw mode cannot deliver an EOF, so it arrives as a hangup). Both must
 # cancel the picker instead of leaving it waiting for a key.
 start_catalog '[{"id":"quokka","name":"Quokka","context_length":1000,"pricing":{}}]'
-# shellcheck disable=SC2086
 tui_out=$(drive_picker 'UX-01 pipe EOF' --stdin /dev/null -- \
-  env $(picker_env) "$NODE_BIN" "$ROOT_DIR/bin/crouter-models" --provider demo)
+  env CR_PROVIDER=demo "CR_BASE_URL=http://127.0.0.1:$UPSTREAM_PORT" \
+    CR_MODELS_API_URL= CR_MODELS_API_AUTH=none CR_API_KEY= CR_STATIC_MODELS= "$NODE_BIN" "$ROOT_DIR/bin/crouter-models" --provider demo)
 printf '%s' "$tui_out" | grep -q 'Cancelled\.' || \
   fail 'UX-01: the end of the input stream did not cancel the picker'
 printf '%s' "$tui_out" | grep -q 'exit=2' || \
   fail 'UX-01: the picker did not report a cancelled exit code'
-# shellcheck disable=SC2086
 tui_out=$(drive_picker 'UX-01 terminal hangup' --hangup-after 1 -- \
-  env $(picker_env) "$NODE_BIN" "$ROOT_DIR/bin/crouter-models" --provider demo)
+  env CR_PROVIDER=demo "CR_BASE_URL=http://127.0.0.1:$UPSTREAM_PORT" \
+    CR_MODELS_API_URL= CR_MODELS_API_AUTH=none CR_API_KEY= CR_STATIC_MODELS= "$NODE_BIN" "$ROOT_DIR/bin/crouter-models" --provider demo)
 printf '%s' "$tui_out" | grep -q 'Cancelled\.' || \
   fail 'UX-01: a terminal that went away did not cancel the picker'
 printf '%s' "$tui_out" | grep -q 'exit=2' || \

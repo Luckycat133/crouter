@@ -386,10 +386,10 @@ fi
 _openrouter_show=$("$GATEWAY" provider show openrouter 2>&1)
 _openrouter_show_rc=$?
 if [ "$_openrouter_show_rc" -eq 0 ] &&
-   printf '%s\n' "$_openrouter_show" | grep -q '^default:     nvidia/nemotron-3.5-super-vl:free$' &&
+   printf '%s\n' "$_openrouter_show" | grep -q '^default:     nvidia/nemotron-3-ultra-550b-a55b:free$' &&
    printf '%s\n' "$_openrouter_show" | grep -q '^context:     1000000 tokens$' &&
    printf '%s\n' "$_openrouter_show" | grep -q '^effort:      max$'; then
-  ok "openrouter exposes the pinned Nemotron 3.5 Super free model, context and effort"
+  ok "openrouter exposes the pinned Nemotron 3 Ultra free model, context and effort"
 else
   bad "openrouter provider display is stale"
 fi
