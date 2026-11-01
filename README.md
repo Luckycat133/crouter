@@ -46,11 +46,11 @@ credentials and may incur provider charges.
 crouter list
 ```
 
-The installer creates `crouter` and one `claude-<provider>` compatibility
-shortcut per file in `providers/`. Re-run it after moving the repository or
-adding/removing providers. Reinstall prunes retired shortcuts only when they
-point to this checkout. `crouter uninstall -y` removes all shortcuts owned by
-this checkout, including retired ones, and preserves other files and links.
+The installer creates only the `crouter` command. Providers are launched with
+`crouter <provider>` (or `claude <provider>` when this script is invoked under
+the name `claude`). Re-run it after moving the repository. `crouter uninstall -y`
+removes the `crouter` shortcut owned by this checkout and preserves other files
+and links.
 
 Requirements:
 
@@ -319,7 +319,7 @@ limit; the selected vendor model or native backend remains authoritative.
 | `moonshot` | Kimi Code membership | `k3-256k` | 262,144 | — |
 | `nagaai` | API | `claude-sonnet-4.5` | — | — |
 | `ollama` | local Ollama/MLX | `qwen3.8:27b-dflash` | 262,144 for DFlash2; explicit legacy profiles retain their caps | 60s SSE heartbeat |
-| `openrouter` | API | `nvidia/nemotron-3-ultra-550b-a55b:free` | 1,000,000 | — |
+| `openrouter` | API | `nvidia/nemotron-3.5-super-vl:free` | 1,000,000 | — |
 | `ppio` | API | `minimax/minimax-m3` | 1,000,000 | cloud OAuth MCP |
 | `qianfan` | personal Token Plan + API | `deepseek-v4-pro` | 262,144 | — |
 | `qianfan-team` | team Token Plan | `deepseek-v4-flash` | 262,144 | — |
@@ -569,6 +569,10 @@ with discovered remote credentials is preferred over unprobed local proxies.
 The check proves local structure and credential discovery; it cannot prove a
 paid account's remaining quota or live model entitlement without making a
 billable request.
+To omit sources from one unified session, set a space-separated exclusion list,
+for example `CROUTER_ALL_EXCLUDE_PROVIDERS=codex crouter all`. Excluded sources
+are omitted before credential discovery and do not appear in `/v1/models`.
+This does not change direct provider launches or other sessions.
 It also does not run provider `PRE_START` hooks or health probes: configured
 local routes such as Codex, Antigravity, and Ollama must already be running.
 

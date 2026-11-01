@@ -9,7 +9,9 @@
 #   crouter claude                        Native Claude Code account/login passthrough
 #   crouter app list                      List supported native coding-agent CLIs
 #   crouter app <name> [args...]          Launch an installed CLI with its own login
-#   crouter <provider> [<model>] [claude args...]   Launch (optional positional model)
+#   crouter <provider> [<model>] [claude args...]   Launch a provider
+#   claude <provider> [<model>] [claude args...]   Same, when this script is
+#                                                   invoked under the name `claude`
 #   crouter all                           Unified gateway: one URL, switch providers via /model
 #   crouter all --check                   Print the redacted configured route graph; do not launch
 #   crouter list [--all]                  List providers that can run (--all: the full catalog)
@@ -292,19 +294,14 @@ cmd_run() {
   apply_model_context_override "$_main_model"
   apply_model_self_route "$_main_model"
 
-  # OpenRouter: once a model is chosen (default, --model, positional, or picker
-  # state), route every Claude Code tier to it and apply the saved context, so
+  # Once a model is chosen (default, --model, positional, or picker state),
+  # route every Claude Code tier to it and apply the saved context, so
   # switching models configures everything automatically — no manual tier or
   # context edits needed.
-  if [ "$PROVIDER_NAME" = "openrouter" ]; then
-    MODEL_OPUS=$_main_model
-    MODEL_SONNET=$_main_model
-    MODEL_HAIKU=$_main_model
-    MODEL_SUBAGENT=$_main_model
-    _state_ctx=$(cat "${XDG_STATE_HOME:-$HOME/.local/state}/crouter/openrouter-context" 2>/dev/null || true)
-    if [ -n "$_state_ctx" ]; then
-      CONTEXT_TOKENS=$_state_ctx
-    fi
+  apply_model_tier_settings "$_main_model"
+  _state_ctx=$(cat "${XDG_STATE_HOME:-$HOME/.local/state}/crouter/${PROVIDER_NAME}-context" 2>/dev/null || true)
+  if [ -n "$_state_ctx" ]; then
+    CONTEXT_TOKENS=$_state_ctx
   fi
 
   AUTH_TOKEN=""
@@ -403,10 +400,7 @@ cmd_run() {
     apply_model_context_override "$_main_model"
     apply_model_context_from_cache "$_main_model"
     apply_model_self_route "$_main_model"
-    MODEL_OPUS=$_main_model
-    MODEL_SONNET=$_main_model
-    MODEL_HAIKU=$_main_model
-    MODEL_SUBAGENT=$_main_model
+    apply_model_tier_settings "$_main_model"
     _state_ctx=$(cat "$_state_dir/${PROVIDER_NAME}-context" 2>/dev/null || true)
     [ -n "$_state_ctx" ] && CONTEXT_TOKENS=$_state_ctx
     # Strip --browse so it is not forwarded to Claude Code.
@@ -997,7 +991,7 @@ cmd_logs_tail() {
 }
 
 # cmd_uninstall [-y]
-#   Reverse of install.sh: remove only this checkout's crouter shortcuts.
+#   Reverse of install.sh: remove only this checkout's crouter command.
 cmd_uninstall() {
   _yes=0
   while [ $# -gt 0 ]; do
@@ -1010,23 +1004,22 @@ cmd_uninstall() {
   _dir=${INSTALL_DIR:-$HOME/.local/bin}
 
   if [ "$_yes" -eq 0 ]; then
-    printf 'remove crouter and provider shortcuts from %s? [y/N] ' "$_dir" >/dev/tty
+    printf 'remove crouter from %s? [y/N] ' "$_dir" >/dev/tty
     _ans=
     IFS= read -r _ans </dev/tty || _ans=
     case "$_ans" in y|Y|yes|YES) ;; *) info "aborted"; return 0 ;; esac
   fi
 
-  for _shortcut in "$_dir/crouter" "$_dir"/claude-*; do
-    if [ -L "$_shortcut" ]; then
-      case $(readlink "$_shortcut" 2>/dev/null) in
-        "$ROOT_DIR/bin/crouter"|"$ROOT_DIR/bin/crouter-compat")
-          rm -f "$_shortcut" && info "removed $_shortcut" ;;
-        *) info "skipped non-crouter symlink: $_shortcut" ;;
-      esac
-    elif [ -e "$_shortcut" ]; then
-      info "skipped non-crouter file: $_shortcut"
-    fi
-  done
+  _shortcut=$_dir/crouter
+  if [ -L "$_shortcut" ]; then
+    case $(readlink "$_shortcut" 2>/dev/null) in
+      "$ROOT_DIR/bin/crouter")
+        rm -f "$_shortcut" && info "removed $_shortcut" ;;
+      *) info "skipped non-crouter symlink: $_shortcut" ;;
+    esac
+  elif [ -e "$_shortcut" ]; then
+    info "skipped non-crouter file: $_shortcut"
+  fi
 }
 
 # ---------------------------------------------------------------------------
@@ -1046,6 +1039,11 @@ build_all_routes() {
   _routes_dest=$1
   _rt=$2
   for _n in $(provider_names); do
+    # Session-scoped exclusions apply before credential discovery. Direct
+    # provider launches remain available and other sessions are unaffected.
+    case " ${CROUTER_ALL_EXCLUDE_PROVIDERS:-} " in
+      *" $_n "*) continue ;;
+    esac
     if ! (
       load_provider "$_n"
       # Native Bedrock/Vertex integrations sign requests inside Claude Code and
@@ -1316,7 +1314,17 @@ case $cmd in
       *) die "logs: unknown argument '$1' (try: crouter logs list|tail)" ;;
     esac ;;
   uninstall)       cmd_uninstall "$@" ;;
-  claude)          cmd_claude "$@" ;;
+  claude)
+    # `claude <provider>` routes to the provider directly (same as
+    # `crouter <provider>`). `crouter claude` with no provider arg falls
+    # through to the native Claude Code passthrough below.
+    if [ "$(basename -- "$0")" = claude ] && [ $# -ge 1 ] && [ -f "$PROVIDERS_DIR/$1.sh" ]; then
+      _p=$1; shift
+      cmd_run "$_p" "$@"
+    else
+      cmd_claude "$@"
+    fi
+    ;;
   all)            cmd_all "$@" ;;
   *)              cmd_run "$cmd" "$@" ;;
 esac

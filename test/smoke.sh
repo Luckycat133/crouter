@@ -43,17 +43,6 @@ export CLAUDE_BIN="$MOCK_CLAUDE"
 ok()  { printf 'ok    %s\n' "$1"; }
 bad() { printf 'FAIL  %s\n' "$1"; fail=1; }
 
-# Legacy command names remain available as local compatibility launchers.
-for legacy in claude-minimax claude-antigravity claude-antigravity-claude claude-anthropic claude-openrouter; do
-  _out=$("$ROOT_DIR/bin/$legacy" --version 2>&1)
-  _rc=$?
-  if [ "$_rc" -eq 0 ] && printf '%s\n' "$_out" | grep -qE '[0-9]+\.[0-9]+\.[0-9]+'; then
-    ok "$legacy compatibility launcher forwards --version (exit 0)"
-  else
-    bad "$legacy compatibility launcher is unavailable (rc=$_rc, output: $_out)"
-  fi
-done
-
 # --version prints a semver
 if "$GATEWAY" --version 2>/dev/null | grep -qE '[0-9]+\.[0-9]+\.[0-9]+'; then
   ok "--version prints a semver"
@@ -397,10 +386,10 @@ fi
 _openrouter_show=$("$GATEWAY" provider show openrouter 2>&1)
 _openrouter_show_rc=$?
 if [ "$_openrouter_show_rc" -eq 0 ] &&
-   printf '%s\n' "$_openrouter_show" | grep -q '^default:     nvidia/nemotron-3-ultra-550b-a55b:free$' &&
+   printf '%s\n' "$_openrouter_show" | grep -q '^default:     nvidia/nemotron-3.5-super-vl:free$' &&
    printf '%s\n' "$_openrouter_show" | grep -q '^context:     1000000 tokens$' &&
    printf '%s\n' "$_openrouter_show" | grep -q '^effort:      max$'; then
-  ok "openrouter exposes the pinned Nemotron 3 Ultra free model, context and effort"
+  ok "openrouter exposes the pinned Nemotron 3.5 Super free model, context and effort"
 else
   bad "openrouter provider display is stale"
 fi

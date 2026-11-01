@@ -8,59 +8,26 @@ INSTALL_DIR=${INSTALL_DIR:-$HOME/.local/bin}
 
 mkdir -p "$INSTALL_DIR"
 
-# All compatibility shortcuts are symlinks to the single shared launcher, which
-# derives the provider from the invoked name (strips the "claude-" prefix).
-# The list is derived from providers/ so adding a provider needs no edit here.
-SHORTCUTS=""
-for f in "$ROOT_DIR"/providers/*.sh; do
-  [ -f "$f" ] || continue
-  name=$(basename -- "$f" .sh)
-  SHORTCUTS="$SHORTCUTS claude-$name"
-done
-SHORTCUTS=$(echo "$SHORTCUTS" | sed 's/^ *//')
-
+# The only command installed is `crouter` itself. Providers are launched with
+# `crouter <provider>`; there are no per-provider compatibility shortcuts.
 # Refuse command-name collisions before changing anything. Re-running crouter
 # may replace links from another/moved crouter checkout, but never a regular
 # file or an unrelated symlink.
 _crouter_owned_link() {
   [ -L "$1" ] || return 1
   case $(readlink "$1" 2>/dev/null) in
-    */bin/crouter|*/bin/crouter-compat) return 0 ;;
+    */bin/crouter) return 0 ;;
     *) return 1 ;;
   esac
 }
-_collisions=""
-for target in crouter $SHORTCUTS; do
-  destination="$INSTALL_DIR/$target"
-  if { [ -e "$destination" ] || [ -L "$destination" ]; } && ! _crouter_owned_link "$destination"; then
-    _collisions="${_collisions}${_collisions:+
-}$destination"
-  fi
-done
-if [ -n "$_collisions" ]; then
-  printf 'crouter: install refused; these paths are not crouter-owned:\n%s\n' "$_collisions" >&2
+destination="$INSTALL_DIR/crouter"
+if { [ -e "$destination" ] || [ -L "$destination" ]; } && ! _crouter_owned_link "$destination"; then
+  printf 'crouter: install refused; this path is not crouter-owned:\n%s\n' "$destination" >&2
   exit 1
 fi
 
-chmod +x "$ROOT_DIR/bin/crouter" "$ROOT_DIR/bin/crouter-compat"
+chmod +x "$ROOT_DIR/bin/crouter"
 ln -sf "$ROOT_DIR/bin/crouter" "$INSTALL_DIR/crouter"
-for target in $SHORTCUTS; do
-  ln -sf "$ROOT_DIR/bin/crouter-compat" "$INSTALL_DIR/$target"
-done
-
-# A provider can disappear between installs. Remove only this checkout's
-# compatibility links whose provider declaration no longer exists; leave
-# shortcuts belonging to another checkout or tool untouched.
-for shortcut in "$INSTALL_DIR"/claude-*; do
-  [ -L "$shortcut" ] || continue
-  case $(readlink "$shortcut" 2>/dev/null) in
-    "$ROOT_DIR/bin/crouter"|"$ROOT_DIR/bin/crouter-compat") ;;
-    *) continue ;;
-  esac
-  provider=${shortcut##*/}
-  provider=${provider#claude-}
-  [ -f "$ROOT_DIR/providers/$provider.sh" ] || rm -f "$shortcut"
-done
 
 if [ ! -f "$ROOT_DIR/config.sh" ]; then
   cp "$ROOT_DIR/config.example.sh" "$ROOT_DIR/config.sh"
