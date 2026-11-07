@@ -1,0 +1,258 @@
+{
+  "baseline": "fdcaf9120b9b4d0bb6c811d0ce75f935435e754d",
+  "reviewed_at": "2026-11-07",
+  "providers": {
+    "302ai": {
+      "sources": [
+        "https://302.ai/search"
+      ],
+      "decision": "Use exact 302 Claude IDs; do not infer upstream IDs for unrelated gateways.",
+      "verification": "primary-docs; no authenticated inference"
+    },
+    "anthropic": {
+      "sources": [
+        "https://platform.claude.com/docs/en/models/overview"
+      ],
+      "decision": "Refresh current Claude family; leave native client context authority intact.",
+      "verification": "primary-docs; no authenticated inference"
+    },
+    "aihubmix": {
+      "sources": [
+        "https://docs.aihubmix.com/en/blogs/free-ai-models"
+      ],
+      "decision": "Retain documented free default. Source page is dated May 2026, not proof of current account availability; use authenticated catalog refresh.",
+      "verification": "primary-docs; no authenticated inference"
+    },
+    "dashscope": {
+      "sources": [
+        "https://help.aliyun.com/zh/model-studio/token-plan-personal-overview"
+      ],
+      "decision": "Keep explicit main model instead of switching user to auto routing. Remove unlisted qwen3.8-plus from Token Plan. API contract remains distinct.",
+      "verification": "primary-docs; no authenticated inference"
+    },
+    "dashscope-coding": {
+      "sources": [
+        "https://help.aliyun.com/zh/model-studio/claude-code"
+      ],
+      "decision": "Current Coding Plan example uses qwen3.7-plus, not Token Plan qwen3.8-max. Do not inherit an unverified 983616 context for every model.",
+      "verification": "primary-docs; no authenticated inference"
+    },
+    "deepseek": {
+      "sources": [
+        "https://api-docs.deepseek.com/quick_start/pricing"
+      ],
+      "decision": "Use official Flash service alias; former V4 Flash routes now resolve to V4.1 Flash 1017. Remove unsupported guessed V4.1 IDs.",
+      "verification": "primary-docs; no authenticated inference"
+    },
+    "fireworks": {
+      "sources": [
+        "https://docs.fireworks.ai/getting-started/quickstart"
+      ],
+      "decision": "Retain current GLM 5.3 Flash quickstart default; serverless/deployment catalog is account-dependent.",
+      "verification": "primary-docs; no authenticated inference"
+    },
+    "huawei": {
+      "sources": [
+        "https://support.huaweicloud.com/Token-Plan-maas/tokenplan-maas-0003.html"
+      ],
+      "decision": "Restrict plan seed list to current documented model names. Preserve conservative context cap; do not infer the API or regional entitlement from upstream maxima.",
+      "verification": "primary-docs; no authenticated inference"
+    },
+    "infini": {
+      "sources": [
+        "https://docs.infini-ai.com/shared/gen-studio/coding-tools/gs-use-claude-code.html"
+      ],
+      "decision": "Keep documented glm-5.1 example; live catalog required for exact Claude-compatible account choices. Do not restore retired Coding Plan.",
+      "verification": "primary-docs; no authenticated inference"
+    },
+    "longcat": {
+      "sources": [
+        "https://longcat.chat/platform/docs/ClaudeCode.html"
+      ],
+      "decision": "Replace preview/default and old 2.0 seed with current stable 2.5 model.",
+      "verification": "primary-docs; no authenticated inference"
+    },
+    "meta": {
+      "sources": [
+        "https://dev.meta.ai/docs/models"
+      ],
+      "decision": "Add Wonder 1.0 as explicit premium/preview Opus choice; retain Spark main default to avoid an unrequested price/preview jump. No Muse Code subscription keys.",
+      "verification": "primary-docs; no authenticated inference"
+    },
+    "minimax": {
+      "sources": [
+        "https://platform.minimax.cn/docs/m-plan/claude-code"
+      ],
+      "decision": "Update M3.1 Flash and documented 512K compaction. Separate subscription and pay-as-you-go keys.",
+      "verification": "primary-docs; no authenticated inference"
+    },
+    "moonshot": {
+      "sources": [
+        "https://www.kimi.com/code/docs/en/kimi-code/models.html"
+      ],
+      "decision": "Use Kimi Code raw IDs, recommended 256K client budget; optional larger context must be deliberate and entitlement verified.",
+      "verification": "primary-docs; no authenticated inference"
+    },
+    "nagaai": {
+      "sources": [
+        "https://docs.naga.ac/integrations/agents/claude-code"
+      ],
+      "decision": "Use Naga dot-separated versions, not Anthropic spellings. Public metadata is not entitlement; newer IDs require live catalog.",
+      "verification": "primary-docs; no authenticated inference"
+    },
+    "ppio": {
+      "sources": [
+        "https://ppio.com/model/minimax/minimax-m3.1-flash"
+      ],
+      "decision": "Upgrade to documented M3.1 Flash Messages model; keep per-model metadata separate from other PPIO catalog entries.",
+      "verification": "primary-docs; no authenticated inference"
+    },
+    "qianfan": {
+      "sources": [
+        "https://cloud.baidu.com/doc/qianfan/s/Dmrabu8b6"
+      ],
+      "decision": "Current personal-plan catalog; 1017 may require points plan. Exclude soon-retiring dated IDs from recommended seeds; preserve API surface model separately.",
+      "verification": "primary-docs; no authenticated inference"
+    },
+    "qianfan-team": {
+      "sources": [
+        "https://cloud.baidu.com/doc/qianfan/s/ymq8wwch2"
+      ],
+      "decision": "Use current enterprise model-parameter table rather than stale tool example. Team credentials remain isolated from personal plan.",
+      "verification": "primary-docs; no authenticated inference"
+    },
+    "qianfan-coding": {
+      "sources": [
+        "https://cloud.baidu.com/doc/qianfan/s/imlg0beiu"
+      ],
+      "decision": "Legacy subscriptions only; current exact custom IDs documented are deepseek-v4-pro and glm-5.1. Keep control-panel router explicit.",
+      "verification": "primary-docs; no authenticated inference"
+    },
+    "qiniu": {
+      "sources": [
+        "https://developer.qiniu.com/aitokenapi/13330/subscription-introduction"
+      ],
+      "decision": "Refresh to current subscription list; per-tier entitlements still apply. Remove old V3.2 default not in current plan coverage.",
+      "verification": "primary-docs; no authenticated inference"
+    },
+    "requesty": {
+      "sources": [
+        "https://www.requesty.ai/models/anthropic/claude-sonnet-5-5"
+      ],
+      "decision": "Exact Requesty deployment IDs; do not infer dot/dash naming from another gateway.",
+      "verification": "primary-docs; no authenticated inference"
+    },
+    "siliconflow": {
+      "sources": [
+        "https://api-docs.siliconflow.cn/docs/usercases/use-siliconcloud-in-ccswitch"
+      ],
+      "decision": "Keep existing server-specific Pro model IDs; refresh account catalog instead of manufacturing new K3 IDs from upstream releases.",
+      "verification": "primary-docs; no authenticated inference"
+    },
+    "stepfun": {
+      "sources": [
+        "https://platform.stepfun.com/docs/zh/guides/developer/integrations/claude-code"
+      ],
+      "decision": "Current four documented Messages model IDs. Keep fast tier choice; no undocumented router alias. Same API key may be usable on both paths but user must explicitly assign each billing surface.",
+      "verification": "primary-docs; no authenticated inference"
+    },
+    "tencent": {
+      "sources": [
+        "https://cloud.tencent.com/document/product/1823/130060"
+      ],
+      "decision": "Move only Token Plan to new TokenHub domain. Current plan seeds include Hy4; stop recommending MiniMax M2.7 scheduled for retirement 2026-11-17. Preserve explicit legacy aliases via manual entry, not silent rewriting.",
+      "verification": "primary-docs; no authenticated inference"
+    },
+    "tencent-coding": {
+      "sources": [
+        "https://cloud.tencent.com/document/product/1823/130092"
+      ],
+      "decision": "Retain legacy Coding Plan endpoint and router; never migrate its credentials to TokenHub Token Plan automatically.",
+      "verification": "primary-docs; no authenticated inference"
+    },
+    "vercel": {
+      "sources": [
+        "https://ai-gateway.vercel.sh/v1/models"
+      ],
+      "decision": "Use current public catalog exact IDs and per-model limits; exclude batch/media-only entries from picker.",
+      "verification": "primary-docs; no authenticated inference"
+    },
+    "xiaomi": {
+      "sources": [
+        "https://mimo.mi.com/docs/zh-CN/quick-start/summary/model"
+      ],
+      "decision": "Remove V2.5 IDs retired on 2026-10-21. UltraSpeed is custom entitlement, not assumed available. Preserve [1m] logical-to-raw map.",
+      "verification": "primary-docs; no authenticated inference"
+    },
+    "z-ai": {
+      "sources": [
+        "https://docs.z.ai/devpack/tool/claude"
+      ],
+      "decision": "Retain current documented manual tier mapping; source summary and sample differ, so do not force all tiers to Flash. Remove API-to-plan credential inference.",
+      "verification": "primary-docs; no authenticated inference"
+    },
+    "openrouter": {
+      "sources": [
+        "https://openrouter.ai/api/v1/models"
+      ],
+      "decision": "Use current Super 3.5 VL free default; public dynamic catalog supplies the wider list. Refuse retired free Qwen -> paid substitution.",
+      "verification": "public catalog; no authenticated inference"
+    },
+    "bedrock": {
+      "sources": [
+        "https://code.claude.com/docs/en/amazon-bedrock"
+      ],
+      "decision": "保留原生 SDK 的 opus/sonnet/haiku 别名与 AWS 认证链；不猜账户/区域 deployment。",
+      "verification": "repository-contract retained; local inventory / native account not inspected"
+    },
+    "vertex": {
+      "sources": [
+        "https://code.claude.com/docs/en/google-vertex-ai"
+      ],
+      "decision": "保留原生 SDK 别名、项目/区域与 ADC；不把公开 Anthropic ID 当作所有项目可用部署。",
+      "verification": "repository-contract retained; local inventory / native account not inspected"
+    },
+    "foundry": {
+      "sources": [
+        "https://code.claude.com/docs/en/microsoft-foundry"
+      ],
+      "decision": "保留原生 SDK 别名和 Azure 认证链，部署名由用户实际资源决定。",
+      "verification": "repository-contract retained; local inventory / native account not inspected"
+    },
+    "ollama": {
+      "sources": [
+        "https://github.com/Luckycat133/crouter/blob/fdcaf9120b9b4d0bb6c811d0ce75f935435e754d/providers/ollama.sh"
+      ],
+      "decision": "保留已安装的 DFlash/MLX 路径；从本机 Ollama /v1/models 读取目录，不下载或替换模型。",
+      "verification": "repository-contract retained; local inventory / native account not inspected"
+    },
+    "bonsai": {
+      "sources": [
+        "https://github.com/Luckycat133/crouter/blob/fdcaf9120b9b4d0bb6c811d0ce75f935435e754d/providers/bonsai.sh"
+      ],
+      "decision": "保留固定 Bonsai 适配器及静态目录；上游模型路径仍是机器特定配置，不能声称可移植。",
+      "verification": "repository-contract retained; local inventory / native account not inspected"
+    },
+    "codex": {
+      "sources": [
+        "https://github.com/Luckycat133/crouter/blob/fdcaf9120b9b4d0bb6c811d0ce75f935435e754d/providers/codex.sh"
+      ],
+      "decision": "保留本地反代的 gpt-5.6-sol/terra/luna 映射；目录来自该反代 /v1/models，不拿官方 API 型号冒充反代支持。",
+      "verification": "repository-contract retained; local inventory / native account not inspected"
+    },
+    "antigravity": {
+      "sources": [
+        "https://github.com/Luckycat133/crouter/blob/fdcaf9120b9b4d0bb6c811d0ce75f935435e754d/providers/antigravity.sh"
+      ],
+      "decision": "保留 Gemini 3.8 本地映射与生命周期；目录从正在运行的反代读取，浏览不会启动反代。",
+      "verification": "repository-contract retained; local inventory / native account not inspected"
+    },
+    "antigravity-claude": {
+      "sources": [
+        "https://github.com/Luckycat133/crouter/blob/fdcaf9120b9b4d0bb6c811d0ce75f935435e754d/providers/antigravity-claude.sh"
+      ],
+      "decision": "保留本地 Claude 4.6/GPT-OSS 映射；不能把官方 Claude 5.5 ID 硬塞进旧反代。",
+      "verification": "repository-contract retained; local inventory / native account not inspected"
+    }
+  }
+}

@@ -1,33 +1,42 @@
 #!/bin/sh
-# Qiniu subscription and pay-as-you-go keys share an Anthropic Messages URL.
-PROVIDER_NAME="qiniu"
-PROVIDER_DESC="Qiniu AI multi-model subscription and API"
-
-BASE_URL="https://api.qnaigc.com"
-MODEL="deepseek/deepseek-v3.2-251201"
-CONTEXT_TOKENS=""
-MODEL_OPUS="deepseek/deepseek-v3.2-251201"
-MODEL_SONNET="deepseek/deepseek-v3.2-251201"
-MODEL_HAIKU="deepseek/deepseek-v3.2-251201"
-MODEL_SUBAGENT="deepseek/deepseek-v3.2-251201"
-MODEL_ALIASES="z-ai/glm-4.6 z-ai/glm-4.7 z-ai/glm-5 z-ai/glm-5.1 minimax/minimax-m2.5 minimax/minimax-m2.5-highspeed minimax/minimax-m2.7 minimax/minimax-m3 moonshotai/kimi-k2.5 moonshotai/kimi-k2.6 deepseek/deepseek-v4-pro deepseek/deepseek-v4-flash"
-EFFORT="high"
-
-AUTH_MODE="surfaces"
-PLAN_URL="https://api.qnaigc.com"
-PLAN_AUTH_TYPE="bearer"
-PLAN_KEY_ENV="QINIU_SUBSCRIPTION_KEY"
-PLAN_KEYS="qiniu-subscription"
-PLAN_MODEL="deepseek/deepseek-v3.2-251201"
-
-API_URL="https://api.qnaigc.com"
-API_AUTH_TYPE="bearer"
-API_KEY_ENV="QINIU_API_KEY"
-API_KEYS="qiniu-api-key"
-API_MODEL="deepseek/deepseek-v3.2-251201"
-
-ASSET_PROFILE="qiniu"
-EXTRA_ENV="CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1"
-PRE_START=""
-POST_STOP=""
-HEALTH_CHECK_URL=""
+# Catalog/config review: 2026-11-07. See docs/provider-refresh-2026-11-07.md.
+# https://developer.qiniu.com/aitokenapi/13330/subscription-introduction
+# Credentials are explicitly assigned to billing surfaces; never infer a plan key.
+PROVIDER_NAME='qiniu'
+PROVIDER_DESC='Qiniu AI multi-model subscription and API'
+BASE_URL='https://api.qnaigc.com'
+MODEL='deepseek/deepseek-v4.1-flash'
+CONTEXT_TOKENS=''
+MODEL_OPUS='deepseek/deepseek-v4.1-flash'
+MODEL_SONNET='deepseek/deepseek-v4.1-flash'
+MODEL_HAIKU='deepseek/deepseek-v4.1-flash'
+MODEL_SUBAGENT='deepseek/deepseek-v4.1-flash'
+MODEL_ALIASES='z-ai/glm-5 z-ai/glm-5.1 z-ai/glm-5.2 z-ai/glm-5.3 z-ai/glm-5.3-flash minimax/minimax-m2.7 minimax/minimax-m3 moonshotai/kimi-k2.6 moonshotai/kimi-k2.7-code moonshotai/kimi-k3 deepseek/deepseek-v4-pro-0813 deepseek/deepseek-v4-flash-20260731 deepseek/deepseek-v4.1-flash'
+EFFORT='high'
+AUTH_MODE='surfaces'
+PLAN_URL='https://api.qnaigc.com'
+PLAN_AUTH_TYPE='bearer'
+PLAN_KEY_ENV='QINIU_SUBSCRIPTION_KEY'
+PLAN_KEYS='qiniu-subscription'
+PLAN_MODEL='deepseek/deepseek-v4.1-flash'
+API_URL='https://api.qnaigc.com'
+API_AUTH_TYPE='bearer'
+API_KEY_ENV='QINIU_API_KEY'
+API_KEYS='qiniu-api-key'
+API_MODEL='deepseek/deepseek-v4.1-flash'
+ASSET_PROFILE='qiniu'
+EXTRA_ENV='CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1'
+PRE_START=''
+POST_STOP=''
+HEALTH_CHECK_URL=''
+MODELS_DISCOVERY='static'
+PLAN_MODELS='deepseek/deepseek-v4.1-flash z-ai/glm-5 z-ai/glm-5.1 z-ai/glm-5.2 z-ai/glm-5.3 z-ai/glm-5.3-flash minimax/minimax-m2.7 minimax/minimax-m3 moonshotai/kimi-k2.6 moonshotai/kimi-k2.7-code moonshotai/kimi-k3 deepseek/deepseek-v4-pro-0813 deepseek/deepseek-v4-flash-20260731'
+API_MODELS='deepseek/deepseek-v4.1-flash'
+PLAN_MODEL_OPUS='deepseek/deepseek-v4.1-flash'
+PLAN_MODEL_SONNET='deepseek/deepseek-v4.1-flash'
+PLAN_MODEL_HAIKU='deepseek/deepseek-v4.1-flash'
+PLAN_MODEL_SUBAGENT='deepseek/deepseek-v4.1-flash'
+API_MODEL_OPUS='deepseek/deepseek-v4.1-flash'
+API_MODEL_SONNET='deepseek/deepseek-v4.1-flash'
+API_MODEL_HAIKU='deepseek/deepseek-v4.1-flash'
+API_MODEL_SUBAGENT='deepseek/deepseek-v4.1-flash'

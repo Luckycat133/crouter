@@ -1,30 +1,35 @@
 #!/bin/sh
-# NagaAI Claude Code Messages route; use an inference API key, not a provisioning key.
-PROVIDER_NAME="nagaai"
-PROVIDER_DESC="NagaAI Anthropic-compatible Messages API"
-
-BASE_URL="https://api.naga.ac"
-MODEL="claude-sonnet-4.5"
-CONTEXT_TOKENS=""
-MODEL_OPUS="claude-opus-4.5"
-MODEL_SONNET="claude-sonnet-4.5"
-MODEL_HAIKU="claude-haiku-4.5"
-MODEL_SUBAGENT="claude-haiku-4.5"
-EFFORT=""
-
-AUTH_MODE="surfaces"
-API_URL="https://api.naga.ac"
-API_AUTH_TYPE="bearer"
-API_KEY_ENV="NAGAAI_API_KEY"
-API_KEYS="nagaai-api-key"
-API_MODEL="claude-sonnet-4.5"
-API_MODEL_OPUS="claude-opus-4.5"
-API_MODEL_SONNET="claude-sonnet-4.5"
-API_MODEL_HAIKU="claude-haiku-4.5"
-API_MODEL_SUBAGENT="claude-haiku-4.5"
-
-EXTRA_ENV="CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
-ANTHROPIC_API_KEY="
-PRE_START=""
-POST_STOP=""
-HEALTH_CHECK_URL=""
+# Catalog/config review: 2026-11-07. See docs/provider-refresh-2026-11-07.md.
+# https://docs.naga.ac/integrations/agents/claude-code
+# Credentials are explicitly assigned to billing surfaces; never infer a plan key.
+PROVIDER_NAME='nagaai'
+PROVIDER_DESC='NagaAI Anthropic-compatible Messages API'
+BASE_URL='https://api.naga.ac'
+MODEL='claude-sonnet-5'
+CONTEXT_TOKENS=''
+MODEL_OPUS='claude-opus-5.5'
+MODEL_SONNET='claude-sonnet-5'
+MODEL_HAIKU='claude-haiku-4.5'
+MODEL_SUBAGENT='claude-sonnet-5'
+MODEL_ALIASES='claude-fable-5.1 claude-opus-5.5 claude-sonnet-5 claude-haiku-4.5'
+EFFORT=''
+AUTH_MODE='surfaces'
+API_URL='https://api.naga.ac'
+API_AUTH_TYPE='bearer'
+API_KEY_ENV='NAGAAI_API_KEY'
+API_KEYS='nagaai-api-key'
+API_MODEL='claude-sonnet-5'
+API_MODEL_OPUS='claude-opus-5.5'
+API_MODEL_SONNET='claude-sonnet-5'
+API_MODEL_HAIKU='claude-haiku-4.5'
+API_MODEL_SUBAGENT='claude-sonnet-5'
+EXTRA_ENV='CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
+ANTHROPIC_API_KEY='
+PRE_START=''
+POST_STOP=''
+HEALTH_CHECK_URL=''
+MODELS_DISCOVERY='remote'
+MODELS_API_URL='https://api.naga.ac/v1/models'
+MODELS_API_AUTH='none'
+MODELS_API_SURFACE='public'
+API_MODELS='claude-sonnet-5 claude-opus-5.5 claude-haiku-4.5 claude-fable-5.1'

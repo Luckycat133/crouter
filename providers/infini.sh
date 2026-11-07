@@ -1,25 +1,35 @@
 #!/bin/sh
-# InfiniAI GenStudio exposes a pay-as-you-go Anthropic Messages endpoint.
-PROVIDER_NAME="infini"
-PROVIDER_DESC="InfiniAI GenStudio API"
-
-BASE_URL="https://cloud.infini-ai.com/maas"
-MODEL="glm-5.1"
-CONTEXT_TOKENS=""
-MODEL_OPUS="glm-5.1"
-MODEL_SONNET="glm-5.1"
-MODEL_HAIKU="glm-5.1"
-MODEL_SUBAGENT="glm-5.1"
-EFFORT=""
-
-AUTH_MODE="surfaces"
-API_URL="https://cloud.infini-ai.com/maas"
-API_AUTH_TYPE="bearer"
-API_KEY_ENV="INFINI_API_KEY"
-API_KEYS="infini-api-key"
-API_MODEL="glm-5.1"
-
-EXTRA_ENV="CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1"
-PRE_START=""
-POST_STOP=""
-HEALTH_CHECK_URL=""
+# Catalog/config review: 2026-11-07. See docs/provider-refresh-2026-11-07.md.
+# https://docs.infini-ai.com/shared/gen-studio/coding-tools/gs-use-claude-code.html
+# Credentials are explicitly assigned to billing surfaces; never infer a plan key.
+PROVIDER_NAME='infini'
+PROVIDER_DESC='InfiniAI GenStudio API'
+BASE_URL='https://cloud.infini-ai.com/maas'
+MODEL='glm-5.1'
+CONTEXT_TOKENS=''
+MODEL_OPUS='glm-5.1'
+MODEL_SONNET='glm-5.1'
+MODEL_HAIKU='glm-5.1'
+MODEL_SUBAGENT='glm-5.1'
+MODEL_ALIASES=''
+EFFORT=''
+AUTH_MODE='surfaces'
+API_URL='https://cloud.infini-ai.com/maas'
+API_AUTH_TYPE='bearer'
+API_KEY_ENV='INFINI_API_KEY'
+API_KEYS='infini-api-key'
+API_MODEL='glm-5.1'
+EXTRA_ENV='CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
+ANTHROPIC_API_KEY='
+PRE_START=''
+POST_STOP=''
+HEALTH_CHECK_URL=''
+MODELS_DISCOVERY='remote'
+MODELS_API_URL='https://cloud.infini-ai.com/maas/v1/models'
+MODELS_API_AUTH='bearer'
+MODELS_API_SURFACE='api'
+API_MODELS='glm-5.1'
+API_MODEL_OPUS='glm-5.1'
+API_MODEL_SONNET='glm-5.1'
+API_MODEL_HAIKU='glm-5.1'
+API_MODEL_SUBAGENT='glm-5.1'

@@ -1,29 +1,27 @@
 #!/bin/sh
-# Provider: Anthropic's official API. Native Claude account login is `crouter claude`.
-PROVIDER_NAME="anthropic"
-PROVIDER_DESC="Anthropic Claude API (Console API key)"
-
-BASE_URL="https://api.anthropic.com"
-MODEL="claude-sonnet-5"
-# The catalog mixes 1M Opus/Sonnet/Fable with 200K Haiku. Do not force one
-# global Claude Code compact window across models with different limits.
-CONTEXT_TOKENS=""
-
-MODEL_OPUS="claude-opus-5-5"
-MODEL_SONNET="claude-sonnet-5"
-MODEL_HAIKU="claude-haiku-4-5"
-MODEL_SUBAGENT="claude-sonnet-5"
-MODEL_ALIASES="claude-fable-5-1"
-
-EFFORT=""
-
-AUTH_MODE="env"
-AUTH_REFERENCE="ANTHROPIC_API_KEY"
-AUTH_KEYCHAIN_FALLBACK="anthropic-api-key"
-_AUTH_SCHEME="x-api-key"
-
-EXTRA_ENV="CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1"
-
-PRE_START=""
-POST_STOP=""
-HEALTH_CHECK_URL=""
+# Catalog/config review: 2026-11-07. See docs/provider-refresh-2026-11-07.md.
+# https://platform.claude.com/docs/en/models/overview
+# Credentials are explicitly assigned to billing surfaces; never infer a plan key.
+PROVIDER_NAME='anthropic'
+PROVIDER_DESC='Anthropic Claude API (Console API key)'
+BASE_URL='https://api.anthropic.com'
+MODEL='claude-sonnet-5-5'
+CONTEXT_TOKENS=''
+MODEL_OPUS='claude-opus-5-5'
+MODEL_SONNET='claude-sonnet-5-5'
+MODEL_HAIKU='claude-haiku-5-5'
+MODEL_SUBAGENT='claude-sonnet-5-5'
+MODEL_ALIASES='claude-fable-5-1 claude-opus-5-5 claude-sonnet-5-5 claude-haiku-5-5'
+EFFORT=''
+AUTH_MODE='env'
+EXTRA_ENV='CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1'
+PRE_START=''
+POST_STOP=''
+HEALTH_CHECK_URL=''
+AUTH_REFERENCE='ANTHROPIC_API_KEY'
+AUTH_KEYCHAIN_FALLBACK='anthropic-api-key'
+_AUTH_SCHEME='x-api-key'
+MODELS_DISCOVERY='remote'
+MODELS_API_URL='https://api.anthropic.com/v1/models'
+MODELS_API_AUTH='x-api-key'
+MODELS_API_SURFACE='auth'

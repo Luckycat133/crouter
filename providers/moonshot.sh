@@ -1,39 +1,37 @@
 #!/bin/sh
-# Kimi Code membership API; Moonshot pay-as-you-go is not mixed into this route.
-PROVIDER_NAME="moonshot"
-PROVIDER_DESC="Kimi Code membership (K3 256K recommended)"
-
-# Fallback to common Moonshot env vars
-if [ -z "${KIMI_CODE_KEY:-}" ]; then
-  if [ -n "${MOONSHOT_API_KEY:-}" ]; then
-    export KIMI_CODE_KEY="$MOONSHOT_API_KEY"
-  fi
-fi
-
-BASE_URL="https://api.kimi.com/coding/"
-MODEL="k3-256k"
-CONTEXT_TOKENS="262144"
-MODEL_OPUS="k3-256k"
-MODEL_SONNET="k3-256k"
-MODEL_HAIKU="k3-256k"
-MODEL_SUBAGENT="k3-256k"
-MODEL_ALIASES="k3[1m] kimi-for-coding kimi-for-coding-highspeed"
-MODEL_CONTEXT_OVERRIDES="k3[1m]=1000000"
-EFFORT="high"
-
-AUTH_MODE="surfaces"
-PLAN_URL="https://api.kimi.com/coding/"
-PLAN_AUTH_TYPE="x-api-key"
-PLAN_KEY_ENV="KIMI_CODE_KEY"
-PLAN_KEYS="moonshot-coding-1"
-PLAN_MODEL="k3-256k"
-PLAN_MODEL_OPUS="k3-256k"
-PLAN_MODEL_SONNET="k3-256k"
-PLAN_MODEL_HAIKU="k3-256k"
-PLAN_MODEL_SUBAGENT="k3-256k"
-
-ASSET_PROFILE="empty"
-EXTRA_ENV="CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1"
-PRE_START=""
-POST_STOP=""
-HEALTH_CHECK_URL=""
+# Catalog/config review: 2026-11-07. See docs/provider-refresh-2026-11-07.md.
+# https://www.kimi.com/code/docs/en/kimi-code/models.html
+# Credentials are explicitly assigned to billing surfaces; never infer a plan key.
+PROVIDER_NAME='moonshot'
+PROVIDER_DESC='Kimi Code membership (K3.1 Pro; 256K client budget)'
+BASE_URL='https://api.kimi.com/coding/'
+MODEL='k3.1-pro'
+CONTEXT_TOKENS='262144'
+MODEL_OPUS='k3.1-pro'
+MODEL_SONNET='k3.1-pro'
+MODEL_HAIKU='k3.1-pro'
+MODEL_SUBAGENT='k3.1-pro'
+MODEL_ALIASES='k3.1-pro k3.1-pro-highspeed k3 k3-256k kimi-for-coding kimi-for-coding-highspeed'
+EFFORT='high'
+AUTH_MODE='surfaces'
+PLAN_URL='https://api.kimi.com/coding/'
+PLAN_AUTH_TYPE='x-api-key'
+PLAN_KEY_ENV='KIMI_CODE_KEY'
+PLAN_KEYS='moonshot-coding-1'
+PLAN_MODEL='k3.1-pro'
+PLAN_MODEL_OPUS='k3.1-pro'
+PLAN_MODEL_SONNET='k3.1-pro'
+PLAN_MODEL_HAIKU='k3.1-pro'
+PLAN_MODEL_SUBAGENT='k3.1-pro'
+ASSET_PROFILE='empty'
+EXTRA_ENV='CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1'
+PRE_START=''
+POST_STOP=''
+HEALTH_CHECK_URL=''
+MODEL_CONTEXT_OVERRIDES='k3.1-pro=262144 k3.1-pro-highspeed=262144 k3-256k=262144 k3[1m]=1048576 k3.1-pro[1m]=1048576'
+AUTO_COMPACT_TOKENS='262144'
+MODELS_DISCOVERY='remote'
+MODELS_API_URL='https://api.kimi.com/coding/v1/models'
+MODELS_API_AUTH='x-api-key'
+MODELS_API_SURFACE='plan'
+PLAN_MODELS='k3.1-pro k3.1-pro-highspeed k3 k3-256k kimi-for-coding kimi-for-coding-highspeed'

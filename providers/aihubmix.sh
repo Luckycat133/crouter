@@ -1,27 +1,35 @@
 #!/bin/sh
-# AIHubMix exposes its multi-model catalog through Anthropic Messages.
-PROVIDER_NAME="aihubmix"
-PROVIDER_DESC="AIHubMix multi-model API"
-
-BASE_URL="https://aihubmix.com"
-MODEL="coding-glm-5.1-free"
-CONTEXT_TOKENS=""
-MODEL_OPUS="coding-glm-5.1-free"
-MODEL_SONNET="coding-glm-5.1-free"
-MODEL_HAIKU="coding-glm-5.1-free"
-MODEL_SUBAGENT="coding-glm-5.1-free"
-MODEL_ALIASES="kimi-for-coding-free gpt-4.1-free xiaomi-mimo-v2-pro-free"
-EFFORT=""
-
-AUTH_MODE="surfaces"
-API_URL="https://aihubmix.com"
-API_AUTH_TYPE="bearer"
-API_KEY_ENV="AIHUBMIX_API_KEY"
-API_KEYS="aihubmix-api-key"
-API_MODEL="coding-glm-5.1-free"
-
-ASSET_PROFILE="aihubmix"
-EXTRA_ENV="CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1"
-PRE_START=""
-POST_STOP=""
-HEALTH_CHECK_URL=""
+# Catalog/config review: 2026-11-07. See docs/provider-refresh-2026-11-07.md.
+# https://docs.aihubmix.com/en/blogs/free-ai-models
+# Credentials are explicitly assigned to billing surfaces; never infer a plan key.
+PROVIDER_NAME='aihubmix'
+PROVIDER_DESC='AIHubMix multi-model API'
+BASE_URL='https://aihubmix.com'
+MODEL='coding-glm-5.1-free'
+CONTEXT_TOKENS=''
+MODEL_OPUS='coding-glm-5.1-free'
+MODEL_SONNET='coding-glm-5.1-free'
+MODEL_HAIKU='coding-glm-5.1-free'
+MODEL_SUBAGENT='coding-glm-5.1-free'
+MODEL_ALIASES='coding-glm-5.1-free coding-glm-5-turbo-free kimi-for-coding-free k2.6-code-preview-free gpt-5.5-free gpt-4.1-free step-3.5-flash-free xiaomi-mimo-v2-pro-free'
+EFFORT=''
+AUTH_MODE='surfaces'
+API_URL='https://aihubmix.com'
+API_AUTH_TYPE='bearer'
+API_KEY_ENV='AIHUBMIX_API_KEY'
+API_KEYS='aihubmix-api-key'
+API_MODEL='coding-glm-5.1-free'
+ASSET_PROFILE='aihubmix'
+EXTRA_ENV='CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1'
+PRE_START=''
+POST_STOP=''
+HEALTH_CHECK_URL=''
+MODELS_DISCOVERY='remote'
+MODELS_API_URL='https://aihubmix.com/v1/models'
+MODELS_API_AUTH='bearer'
+MODELS_API_SURFACE='api'
+API_MODELS='coding-glm-5.1-free coding-glm-5-turbo-free kimi-for-coding-free k2.6-code-preview-free gpt-5.5-free gpt-4.1-free step-3.5-flash-free xiaomi-mimo-v2-pro-free'
+API_MODEL_OPUS='coding-glm-5.1-free'
+API_MODEL_SONNET='coding-glm-5.1-free'
+API_MODEL_HAIKU='coding-glm-5.1-free'
+API_MODEL_SUBAGENT='coding-glm-5.1-free'

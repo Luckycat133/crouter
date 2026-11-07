@@ -1,27 +1,32 @@
 #!/bin/sh
-# PPIO exposes a pay-as-you-go Anthropic Messages endpoint and OAuth MCP.
-PROVIDER_NAME="ppio"
-PROVIDER_DESC="PPIO multi-model API"
-
-BASE_URL="https://api.ppio.com/anthropic"
-MODEL="minimax/minimax-m3"
-CONTEXT_TOKENS="1000000"
-MODEL_OPUS="minimax/minimax-m3"
-MODEL_SONNET="minimax/minimax-m3"
-MODEL_HAIKU="minimax/minimax-m3"
-MODEL_SUBAGENT="minimax/minimax-m3"
-MODEL_ALIASES="zai-org/glm-5.2"
-EFFORT=""
-
-AUTH_MODE="surfaces"
-API_URL="https://api.ppio.com/anthropic"
-API_AUTH_TYPE="bearer"
-API_KEY_ENV="PPIO_API_KEY"
-API_KEYS="ppio-api-key"
-API_MODEL="minimax/minimax-m3"
-
-ASSET_PROFILE="ppio"
-EXTRA_ENV="CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1"
-PRE_START=""
-POST_STOP=""
-HEALTH_CHECK_URL=""
+# Catalog/config review: 2026-11-07. See docs/provider-refresh-2026-11-07.md.
+# https://ppio.com/model/minimax/minimax-m3.1-flash
+# Credentials are explicitly assigned to billing surfaces; never infer a plan key.
+PROVIDER_NAME='ppio'
+PROVIDER_DESC='PPIO multi-model API'
+BASE_URL='https://api.ppio.com/anthropic'
+MODEL='minimax/minimax-m3.1-flash'
+CONTEXT_TOKENS='1000000'
+MODEL_OPUS='minimax/minimax-m3.1-flash'
+MODEL_SONNET='minimax/minimax-m3.1-flash'
+MODEL_HAIKU='minimax/minimax-m3.1-flash'
+MODEL_SUBAGENT='minimax/minimax-m3.1-flash'
+MODEL_ALIASES='minimax/minimax-m3.1-flash zai-org/glm-5.2'
+EFFORT=''
+AUTH_MODE='surfaces'
+API_URL='https://api.ppio.com/anthropic'
+API_AUTH_TYPE='bearer'
+API_KEY_ENV='PPIO_API_KEY'
+API_KEYS='ppio-api-key'
+API_MODEL='minimax/minimax-m3.1-flash'
+ASSET_PROFILE='ppio'
+EXTRA_ENV='CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1'
+PRE_START=''
+POST_STOP=''
+HEALTH_CHECK_URL=''
+MODELS_DISCOVERY='static'
+API_MODELS='minimax/minimax-m3.1-flash zai-org/glm-5.2'
+API_MODEL_OPUS='minimax/minimax-m3.1-flash'
+API_MODEL_SONNET='minimax/minimax-m3.1-flash'
+API_MODEL_HAIKU='minimax/minimax-m3.1-flash'
+API_MODEL_SUBAGENT='minimax/minimax-m3.1-flash'

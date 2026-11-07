@@ -1,63 +1,58 @@
 ---
 name: crouter-development
-description: Develop and review crouter, the interactive model and account router for Claude Code. Use for roadmap implementation or updates, TUI simplification, model switching, subscription and multi-key automation, App reverse-proxy sources, and acceptance planning. 中文触发：开发 crouter、更新开发 skill、交互改造、切换模型、管理订阅和 Key、接入 App 反代。Not a multi-client launcher skill.
+description: Develop and validate crouter, an interactive model and account router exclusively for Claude Code. Use for provider catalog refresh, TUI simplification, model switching, multi-key and subscription automation, App reverse-proxy sources, session isolation, regression repair and acceptance. 中文触发：开发 crouter、更新模型、交互改造、管理订阅和 Key、接入反代、按 skill 跑测试。Not a multi-client launcher skill.
 ---
 
 # crouter 项目开发
 
 ## 产品边界
 
-使用端只有 **Claude Code**。官方 API、订阅、多 Key、本地推理和 App 反代都是模型来源。目标是用户方便选模型，程序处理接入、凭证和授权范围内的切换，不是启动不同 App 客户端。
+使用端只有 Claude Code。API、订阅、多 Key、本地推理与 App 反代是来源，不是其他客户端。日常操作以裸 `crouter` 交互为主，脚本保留 `run` 等接口。不要另造多客户端平台、强制 Profile 或大型 Web 控制台；现有 app 只保留兼容。只安装 crouter，不复活已退役的连字符快捷入口，也不覆盖用户的 claude。
 
-目标主入口是裸 `crouter` 的交互首页，不是再加 `--interactive` 或逐项包装 flags。不强制 Profile、不扩展大型 Web 控制台。现有 `app` 入口冻结为兼容功能。保留当前有效 CLI 契约，但不要恢复已经主动移除的 `claude-<provider>` 或 `bin/crouter-compat`。
+## 当前接续
 
-这里的目标契约不等于已实现功能。当前事实和证据放在基线参考，任务状态只在路线图维护；不要把易变状态复制到所有入口。
+本轮用户授权全 provider 更新与继续开发，并指定拉取后由本地 agent 按 skill 跑测试。**先读 [本轮交接](references/implementation-handoff.md)，核对实际 HEAD 与工作树，然后验证已落地切片；不要重新按旧“只有文档、没有首页”的假设开发。** 全量集成、真实客户端与账户验收仍未完成，不因代码提交而标 DONE。
+
+基线/任务状态分别只在参考中维护，主文件不复制不断变化的模型清单。最新源记录在 `docs/provider-review-2026-11-07.json`；每个更新必须有准确日期、来源与验证等级。模型 ID、价格、订阅额度不从记忆补全。
 
 ## 工作流程
 
-1. 先读 `AGENTS.md`、`CLAUDE.md` 和 `.agents/SKILLS.md`。记录 HEAD、工作树和本次授权范围，保留用户改动。只更新 skill 时，不顺手修运行时、CI 或发布版本。
-2. 读 [基线与来源](references/baseline-and-sources.md) 和 [路线图](references/roadmap.md)。比较审阅基线与当前 HEAD，再查看受影响源码、测试及对应 SHA 的 CI。旧提交的绿灯、提交标题、历史交付记录都不能替代当前验证。
-3. 选一个有依赖依据的纵向切片，不机械选择最小任务编号。基线阻塞先按路线图处理；已修复行为保留为回归，不重复开发。CI 失败、代码缺口和待复现风险分别记录，后续步骤 skipped 不算通过。
-4. 把切片写成用户动作、可见结果、失败恢复、副作用边界和验收 ID。先建立或复用失败回归，再实现最小闭环。纯技能维护只检查技能相关结构和行为，不启动全套产品改造。
-5. 按风险运行纯逻辑、mock HTTP、PTY、离线整合或真实客户端验证。测试使用隔离 HOME/XDG/STATE 和假凭证；有 shell 矩阵时设置 `TEST_SHELL`，不把 `sh -n a b` 当作检查两个文件。
-6. 更新相应证据和任务状态。提交前重查远端 HEAD，合并并发改动后再验证；不 force push、不覆盖别人的工作。未指定的一般细节沿用保守默认值，不反复要求确认；缺账号仍继续完成可验证的离线部分。
+1. 读 AGENTS.md、CLAUDE.md 和 .agents/SKILLS.md；记录 HEAD、工作树、环境和当前授权。保留用户修改。旧交付报告只证明其当时范围，不代表当前集成。
+2. 根据任务只加载下表相关参考。供应商变更另用 crouter-provider-dev；认证/生命周期先读 docs/agent-architecture.md。发现旧参考与已更新来源冲突时记录差异，不复制旧 Key fallback 模板。
+3. 定义用户流程、输入输出、取消/失败恢复、禁止副作用和验收 ID。先读对应代码和测试，复现缺陷再做最小修复。
+4. 当前测试任务先跑本轮新增用例和 provider 矩阵，再跑旧集成；严格区分缺依赖的 fixture、过时型号预期与真正实现回归。不得用自动重建 golden、删除负例、跳过失败或降低 CI 级别来消红。
+5. 缺真实凭证时完成隔离 mock/PTY 部分，报告未验证项目。没有新必要信息不反复问是否继续，不自动读取 Keychain、登录、安装反代或付费验证。
 
 ## 按需加载
 
 | 本次任务 | 参考 |
 | --- | --- |
-| 首页、模型列表、账户向导、TTY 行为 | [产品与交互](references/product-and-ux.md) |
-| 计划解析、状态、凭证、调度、流式与会话 | [运行时契约](references/runtime-contracts.md) |
-| App 反代和 Claude 原生模型菜单 | [适配器与 Claude Code](references/adapters-and-claude.md) |
-| 优先级、依赖、任务状态与历史交付 | [路线图](references/roadmap.md) |
-| 用户流程、CLI 兼容、测试分层与完成定义 | [验收矩阵](references/acceptance.md) |
-| 已落地行为、剩余缺口、当前 CI、官方来源 | [基线与来源](references/baseline-and-sources.md) |
-| 技能触发、边界和过时状态处理 | [行为评测案例](evals/cases.json) |
-| 技能结构及校验器自身回归 | [校验器](scripts/validate.mjs)、[校验器测试](scripts/validate.test.mjs) |
-
-认证/路由/生命周期改动另读 `docs/agent-architecture.md`；provider、故障诊断或单独 CI 修复按任务复用现有专项技能，不一次加载全部内容。
+| 本次提交后的验证、回归与剩余开发 | [本轮交接](references/implementation-handoff.md) |
+| 首页、模型选择、账户向导、终端体验 | [产品与交互](references/product-and-ux.md) |
+| 解析、状态、凭证、调度与并发 | [运行时契约](references/runtime-contracts.md) |
+| App 反代与 Claude 原生菜单 | [适配器与 Claude](references/adapters-and-claude.md) |
+| 任务顺序与状态 | [路线图](references/roadmap.md) |
+| 测试层级、反例与完成定义 | [验收矩阵](references/acceptance.md) |
+| 历史基线、当前代码定位和一手资料 | [基线与来源](references/baseline-and-sources.md) |
+| 技能行为评测 | [案例](evals/cases.json) |
+| 技能包结构检查 | [校验器](scripts/validate.mjs) |
 
 ## 不可破坏的契约
 
-- **先选模型并解析完整配置，再启动。** 取消不启动 Claude 只是其中一层，还要验证 hooks、认证代理、MCP/插件和推理请求均无副作用。目录读取是独立、可取消的操作。
-- TUI/CLI 复用应用操作；跨语言用结构化输入输出，不拼 shell、不解析菜单文本。先保留 shell 外壳和 Node 核心，禁止为重构重写全部 provider。
-- 每个候选绑定来源、账户、额度池、CredentialRef、计费面、endpoint、认证头和 model map；不交叉组合、不把 API key 自动当订阅 key。
-- 同模型换凭证、跨来源、按量兜底、跨模型是不同授权。未授权的后两项默认关闭；新增来源和迁移不扩大旧授权。
-- 请求采用不可变快照；默认选择不广播到活动会话。严格处理冷却、总重试预算、客户端取消；响应提交后不拼接另一候选、不重放工具调用。
-- context、output、compact、effort 和 tier 必须绑定真实模型。删除旧状态文件不等于清空已加载的内存值。未知不是免费或支持，不能伪装 Claude 身份来解锁能力。
-- 保留 POSIX sh/dash、符号链接定位、隔离的 env、原生 Claude 登录、临时 MCP 和进程归属。可选 `claude` 包装入口必须识别真正的 Claude 可执行文件，不能递归调用自身或覆盖用户原生 CLI。
-- 不把秘密放到源码、argv、日志、截图、测试产物或评测提示词；离线验证不读真实凭证。技能本身不授予 push、安装、登录、付费验证或发布权限。
+- 选择与纯解析先于启动。目录读取可以按需取专用凭证；浏览、取消、save-only 不运行 PRE_START、推理代理或 MCP。既有 hook 中的模型归一化要提取或测试，不能机械移动导致选错本地后端。
+- TUI/CLI 复用应用操作。shell/Node 间用明确 argv、结构化数据和退出码；不 eval 用户输入，不解析菜单文字。模型 ID 不拼进源码或文件路径。
+- 凭证引用、计费面、endpoint、认证头、model_map 绑定；普通 API key 不自动升级成套餐 key。来源等价、费用授权与跨模型授权是独立约束。
+- 当前实现仅对显式 surfaces 加入初步付费/跨模型候选门禁，不能宣称旧 dual-source、Keychain 锁定语义或上游自身计费已经全部受控。
+- 模型窗口、输出、压缩、effort 和模态按实际能力及来源解析；未知不等于免费或支持。不得通过伪造 Claude 身份来宣称兼容。
+- 每个会话/请求使用稳定路由；默认选择改变不广播给活动会话。流式提交后不换候选拼接或重放工具调用。只停止本会话仍拥有的进程。
+- 保留 POSIX sh/dash、符号链接定位、隔离 env -i、原生 Claude 登录、临时 MCP/插件隔离；其他 App 自己拥有登录边界。
+- 不把秘密放入源码、argv、日志、截图、fixture、报告；离线测试必须使用临时 HOME/XDG、stub 凭证与 loopback，不 source 用户 config.sh。
+- 技能不是无限授权。按当前任务提交；不自动发布、升级 VERSION 或扩大付费/安装/账户操作范围。
 
 ## 验证与交付
 
-```sh
-node .agents/skills/crouter-development/scripts/validate.mjs
-node .agents/skills/crouter-development/scripts/validate.test.mjs
-TEST_SHELL=sh sh test/development-skill.sh
-TEST_SHELL=dash dash test/development-skill.sh
-git diff --check
-```
+技能包：`node .agents/skills/crouter-development/scripts/validate.mjs`、`node .agents/skills/crouter-development/scripts/validate.test.mjs`，再在 sh/dash 下运行 `test/development-skill.sh`。这不是 LLM 行为评测。
 
-以上是技能结构与校验器回归，不是 LLM 行为评测、产品回归或真实 Claude 验证。行为评测用 `evals/cases.json`，检查实际读取、计划、工具调用及结果，不只看关键词。未运行的层级写未执行。
+运行时：先读本轮交接中的实际通过/未执行清单，再跑受影响用例及当前 CI 完整门禁。使用 `TEST_SHELL="$shell" "$shell" "$file"`，syntax 逐个文件检查，覆盖 bin/crouter-models、bin/openrouter-models 与所有新增 lib/*.js。没有 ShellCheck/真实平台就准确记录缺失。
 
-交付分开报告改动、实际通过、失败/未执行、剩余风险，附文件与 commit/PR。任务 DONE 必须有该范围的证据；历史 DONE 可以保留，但不能据此宣称新 HEAD 全绿。到达授权范围内的可验证结果即停止。
+交付分别报告已改、实际运行的命令/环境/结果、失败与 skipped、真实客户端/账号未验证、commit 和剩余任务。只在声明范围证据完整时更新 DONE；不得把生成文件、HTTP 目录可读或 CI 排队当成端到端成功。

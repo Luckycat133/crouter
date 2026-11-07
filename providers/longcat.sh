@@ -1,26 +1,34 @@
 #!/bin/sh
-# LongCat Token Pack and pay-as-you-go share one platform key and API route.
-PROVIDER_NAME="longcat"
-PROVIDER_DESC="LongCat API Platform Anthropic Messages"
-
-BASE_URL="https://api.longcat.chat/anthropic"
-MODEL="LongCat-2.5-Preview"
-CONTEXT_TOKENS="1000000"
-MODEL_OPUS="LongCat-2.5-Preview"
-MODEL_SONNET="LongCat-2.5-Preview"
-MODEL_HAIKU="LongCat-2.5-Preview"
-MODEL_SUBAGENT="LongCat-2.5-Preview"
-MODEL_ALIASES="LongCat-2.0"
-EFFORT=""
-
-AUTH_MODE="surfaces"
-API_URL="https://api.longcat.chat/anthropic"
-API_AUTH_TYPE="bearer"
-API_KEY_ENV="LONGCAT_API_KEY"
-API_KEYS="longcat-api-key"
-API_MODEL="LongCat-2.5-Preview"
-
-EXTRA_ENV="CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1"
-PRE_START=""
-POST_STOP=""
-HEALTH_CHECK_URL=""
+# Catalog/config review: 2026-11-07. See docs/provider-refresh-2026-11-07.md.
+# https://longcat.chat/platform/docs/ClaudeCode.html
+# Credentials are explicitly assigned to billing surfaces; never infer a plan key.
+PROVIDER_NAME='longcat'
+PROVIDER_DESC='LongCat API Platform Anthropic Messages'
+BASE_URL='https://api.longcat.chat/anthropic'
+MODEL='LongCat-2.5'
+CONTEXT_TOKENS='1000000'
+MODEL_OPUS='LongCat-2.5'
+MODEL_SONNET='LongCat-2.5'
+MODEL_HAIKU='LongCat-2.5'
+MODEL_SUBAGENT='LongCat-2.5'
+MODEL_ALIASES='LongCat-2.5'
+EFFORT=''
+AUTH_MODE='surfaces'
+API_URL='https://api.longcat.chat/anthropic'
+API_AUTH_TYPE='bearer'
+API_KEY_ENV='LONGCAT_API_KEY'
+API_KEYS='longcat-api-key'
+API_MODEL='LongCat-2.5'
+EXTRA_ENV='CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1'
+PRE_START=''
+POST_STOP=''
+HEALTH_CHECK_URL=''
+MODELS_DISCOVERY='remote'
+MODELS_API_URL='https://api.longcat.chat/anthropic/v1/models'
+MODELS_API_AUTH='bearer'
+MODELS_API_SURFACE='api'
+API_MODELS='LongCat-2.5'
+API_MODEL_OPUS='LongCat-2.5'
+API_MODEL_SONNET='LongCat-2.5'
+API_MODEL_HAIKU='LongCat-2.5'
+API_MODEL_SUBAGENT='LongCat-2.5'

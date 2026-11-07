@@ -1,1330 +1,295 @@
 #!/bin/sh
-# crouter - unified launcher for Claude Code against multiple providers.
+# crouter - Claude Code model and credential routing.
 #
 # Usage:
-#   crouter                               Launch the selected provider or native app
-#   crouter run [args...]                 Launch the selected target with arguments
-#   crouter use [<provider>|app/<name>]   Show or select a persistent target
+#   crouter                               Interactive home (TTY); selected target (pipes)
+#   crouter run [args...]                 Launch the selected target without a menu
+#   crouter use [<provider>|app/<name>]    Show or select a persistent target
 #   crouter use --clear                   Clear the persistent target
-#   crouter claude                        Native Claude Code account/login passthrough
-#   crouter app list                      List supported native coding-agent CLIs
-#   crouter app <name> [args...]          Launch an installed CLI with its own login
-#   crouter <provider> [<model>] [claude args...]   Launch a provider
-#   claude <provider> [<model>] [claude args...]   Same, when this script is
-#                                                   invoked under the name `claude`
-#   crouter all                           Unified gateway: one URL, switch providers via /model
-#   crouter all --check                   Print the redacted configured route graph; do not launch
-#   crouter list [--all]                  List providers that can run (--all: the full catalog)
-#   crouter list keys <provider>          List keys registered for a provider
-#   crouter doctor [provider]             Run environment diagnostics
-#   crouter add [<provider>]              Add a key (no provider: pick from a menu)
-#   crouter add <provider> --surface plan|api --name <service> --stdin
+#   crouter claude [args...]              Native Claude Code login/passthrough
+#   crouter <provider> [<model>] [args...] Launch with the provider
+#   crouter <provider> --browse           Choose a model, then launch
+#   crouter <provider> --apply-only       Save selection without starting services
+#   crouter models <provider> [--list|--refresh|--set <id>]
+#                                         Read/select models without launching Claude
+#   crouter all [--check]                 Unified gateway / redacted route proof
+#   crouter list [--all]                  Configured providers / full catalog
+#   crouter list keys <provider>          Registered keys (never secret values)
+#   crouter doctor [provider]             Diagnostics without starting services
+#   crouter add [provider]                Interactive key setup
 #   crouter remove <provider> --name <service> [--surface plan|api]
-#                                         Remove a key from the keypool (and Keychain)
-#   crouter provider show <provider>      Show full provider config (secrets redacted)
-#   crouter migrate export|import|verify <file>  Move/check encrypted configuration and keys
-#   crouter config show                   Show effective configuration
-#   crouter config path                   Show path to config.sh
-#   crouter logs list                     List files under the log directory
-#   crouter logs tail <provider>          tail -f the provider's log file
-#   crouter uninstall [-y]                Remove symlinks from $INSTALL_DIR
-#   crouter help                          Show this help
-#   crouter <command> -h|--help           Show usage for one command
-#   crouter --version                     Show version
+#   crouter provider show <provider>     Provider configuration
+#   crouter migrate export|import|verify <file>
+#   crouter config show|path              Configuration metadata
+#   crouter logs list|tail <provider>     Logs
+#   crouter uninstall [-y]                Remove this checkout's installed command
+#   crouter app <name> [args...]          Frozen legacy native-CLI compatibility
+#   crouter --version                     Version
+#   crouter <command> --help              Command usage
 #
-# Providers live in providers/<name>.sh and only declare "how to connect".
-# This entry point owns "how to launch safely and portably".
-
 set -u
-
-# ---------------------------------------------------------------------------
-# Locate ourselves (follow symlinks so a ~/.local/bin link still finds ROOT_DIR)
-# ---------------------------------------------------------------------------
 SELF=$0
 while [ -h "$SELF" ]; do
   self_dir=$(CDPATH= cd -- "$(dirname -- "$SELF")" && pwd)
   link=$(readlink "$SELF")
-  case $link in
-    /*) SELF=$link ;;
-    *)  SELF=$self_dir/$link ;;
-  esac
+  case $link in /*) SELF=$link ;; *) SELF=$self_dir/$link ;; esac
 done
 BIN_DIR=$(CDPATH= cd -- "$(dirname -- "$SELF")" && pwd)
 ROOT_DIR=$(CDPATH= cd -- "$BIN_DIR/.." && pwd)
 PROVIDERS_DIR=$ROOT_DIR/providers
 LIB_DIR=$ROOT_DIR/lib
 
-# Migration reads configuration as bytes, before any user shell source runs.
-if [ "${1:-}" = migrate ]; then
-    shift
-    _migration_node=${NODE_BIN:-$(command -v node 2>/dev/null || true)}
-    [ -n "$_migration_node" ] || { printf 'crouter: migration requires Node.js\n' >&2; exit 1; }
-    exec "$_migration_node" "$LIB_DIR/device-migration.js" "$ROOT_DIR" "$@"
+# A deliberately installed optional claude wrapper routes only a real provider
+# name. Every other argument belongs to the actual Claude CLI, not crouter.
+if [ "${0##*/}" = claude ]; then
+  case ${1:-} in
+    ''|-*) set -- claude "$@" ;;
+    *) [ -f "$PROVIDERS_DIR/$1.sh" ] || set -- claude "$@" ;;
+  esac
 fi
-
-# Native coding agents own their login and environment. Handle this path before
-# sourcing config.sh or any provider helper so local configuration cannot add
-# endpoint variables, credentials, or side effects to an unrelated CLI.
+# Migration must inspect bytes without evaluating imported configuration.
+if [ "${1:-}" = migrate ]; then
+  shift
+  _migration_node=${NODE_BIN:-$(command -v node 2>/dev/null || true)}
+  [ -n "$_migration_node" ] || { printf 'crouter: migration requires Node.js\n' >&2; exit 1; }
+  exec "$_migration_node" "$LIB_DIR/device-migration.js" "$ROOT_DIR" "$@"
+fi
 if [ "${1:-}" = app ]; then
   . "$LIB_DIR/native-apps.sh"
   shift
   native_app_dispatch "$@"
   exit $?
 fi
-
-# Selection is read as data and validated before either launch path. Native
-# apps are dispatched here, before local configuration or provider helpers.
+# Bare crouter is interactive only when BOTH streams are terminals. Never eat
+# stdin belonging to a piped Claude prompt, and never change crouter run.
+if [ $# -eq 0 ] && [ -t 0 ] && [ -t 1 ]; then set -- home; fi
 case ${1:-} in
   use|run|'')
     . "$LIB_DIR/native-apps.sh"
     . "$LIB_DIR/selection.sh"
-    if [ "${1:-}" = use ]; then
-      shift
-      selection_dispatch "$@"
-      exit $?
-    fi
+    if [ "${1:-}" = use ]; then shift; selection_dispatch "$@"; exit $?; fi
     [ "${1:-}" = run ] && shift
     selection_require || exit $?
-    if [ "$CROUTER_SELECTION_KIND" = app ]; then
-      native_app_run "$CROUTER_SELECTION_NAME" "$@"
-      exit $?
-    fi
+    if [ "$CROUTER_SELECTION_KIND" = app ]; then native_app_run "$CROUTER_SELECTION_NAME" "$@"; exit $?; fi
     set -- "$CROUTER_SELECTION_NAME" "$@"
     ;;
 esac
-
-# ---------------------------------------------------------------------------
-# Version (single source of truth: $ROOT_DIR/VERSION)
-# ---------------------------------------------------------------------------
-VERSION=$(cat "$ROOT_DIR/VERSION" 2>/dev/null || printf 'unknown')
-
-# ---------------------------------------------------------------------------
-# Config (optional, gitignored). config.example.sh documents the knobs.
-# ---------------------------------------------------------------------------
+VERSION=$(cat "$ROOT_DIR/VERSION" 2>/dev/null || printf unknown)
 CLAUDE_BIN=${CLAUDE_BIN:-}
 LOG_DIR=${LOG_DIR:-$ROOT_DIR/logs}
 STATE_DIR=${STATE_DIR:-$ROOT_DIR/.state}
-if [ -f "$ROOT_DIR/.state/migration-env.sh" ]; then
-  . "$ROOT_DIR/.state/migration-env.sh"
-fi
-if [ -f "$ROOT_DIR/config.sh" ]; then
-  . "$ROOT_DIR/config.sh"
-fi
-if [ -z "$CLAUDE_BIN" ]; then
-  CLAUDE_BIN=$(command -v claude 2>/dev/null || true)
-fi
+[ ! -f "$ROOT_DIR/.state/migration-env.sh" ] || . "$ROOT_DIR/.state/migration-env.sh"
+[ ! -f "$ROOT_DIR/config.sh" ] || . "$ROOT_DIR/config.sh"
+if [ -z "$CLAUDE_BIN" ]; then CLAUDE_BIN=$(command -v claude 2>/dev/null || true); fi
 NODE_BIN=${NODE_BIN:-$(command -v node 2>/dev/null || true)}
-
 die() { printf 'crouter: %s\n' "$*" >&2; exit 1; }
 info() { printf '%s\n' "$*"; }
-
-usage() {
-  sed -n '/^# Usage:/,/^#$/p' "$SELF" | sed 's/^# \{0,1\}//'
-}
-
-# Per-command usage. Every command that takes arguments answers -h/--help here,
-# so a help request can never fall through to a provider launch or a diagnostic
-# run. Keep these in step with the Usage block above.
-usage_list() {
-  info "usage: crouter list [--all]"
-  info "       crouter list keys <provider>"
-  info "       crouter list <provider>"
-}
-usage_list_keys() {
-  info "usage: crouter list keys <provider>"
-  info "       crouter list <provider>"
-}
-usage_doctor() {
-  info "usage: crouter doctor [<provider>]"
-  info ""
-  info "With no provider, crouter checks the local environment and reports every"
-  info "provider, listing the ones that need attention first. With a provider, it"
-  info "reports that provider only and prints the next check to make."
-}
+usage() { sed -n '/^# Usage:/,/^#$/p' "$SELF" | sed 's/^# \{0,1\}//'; }
+usage_list() { info 'usage: crouter list [--all]'; info '       crouter list keys <provider>'; info '       crouter list <provider>'; }
+usage_list_keys() { info 'usage: crouter list keys <provider>'; info '       crouter list <provider>'; }
+usage_doctor() { info 'usage: crouter doctor [<provider>]'; }
 usage_add() {
-  info "usage: crouter add [<provider> [--surface plan|api] [--name <service>] [--stdin]]"
-  info "       crouter add [--all] [--stdin]"
-  info ""
-  info "With no provider, crouter lists the providers that still need a key and"
-  info "asks which one to configure. --all widens the menu to every provider, for"
-  info "adding or rotating a key. --stdin reads the secret from stdin instead of"
-  info "the terminal, for password managers and CI."
+  info 'usage: crouter add [<provider> [--surface plan|api] [--name <service>] [--stdin]]'
+  info '       crouter add [--all] [--stdin]'
 }
-usage_remove() {
-  info "usage: crouter remove <provider> --name <service> [--surface plan|api] [-y]"
-  info ""
-  info "Deletes the Keychain item and, for a pooled key, its registry entry."
-}
-usage_provider() {
-  info "usage: crouter provider show <provider>"
-  info "       crouter provider <provider>"
-}
-usage_config() {
-  info "usage: crouter config show"
-  info "       crouter config path"
-}
-usage_logs() {
-  info "usage: crouter logs list"
-  info "       crouter logs tail <provider>"
-}
+usage_remove() { info 'usage: crouter remove <provider> --name <service> [--surface plan|api] [-y]'; }
+usage_provider() { info 'usage: crouter provider show <provider>'; info '       crouter provider <provider>'; }
+usage_config() { info 'usage: crouter config show'; info '       crouter config path'; }
+usage_logs() { info 'usage: crouter logs list'; info '       crouter logs tail <provider>'; }
+for _mod in provider auth key-mgmt assets launch catalog; do . "$LIB_DIR/$_mod.sh"; done
 
-# ---------------------------------------------------------------------------
-# Modular helpers (sourced after core globals are set). Each lib is a set of
-# POSIX functions that read globals only at call time.
-# ---------------------------------------------------------------------------
-for _mod in provider auth key-mgmt assets launch; do
-  . "$LIB_DIR/$_mod.sh"
-done
-
-
-# ---------------------------------------------------------------------------
-# Hooks
-# ---------------------------------------------------------------------------
-run_pre_start() {
-  [ -n "$PRE_START" ] || return 0
-  eval "$PRE_START" || die "PRE_START hook failed for '$PROVIDER_NAME'"
+# Resolving our optional wrapper as CLAUDE_BIN must fail before any hook runs.
+# Physical-file equality catches a symlink as well as the direct checkout path.
+check_claude_binary() {
+  [ -n "$CLAUDE_BIN" ] && [ -x "$CLAUDE_BIN" ] || die 'claude binary not found; set CLAUDE_BIN in config.sh'
+  _ccb_path=$CLAUDE_BIN _ccb_count=0
+  while [ -L "$_ccb_path" ]; do
+    _ccb_count=$((_ccb_count + 1)); [ "$_ccb_count" -lt 40 ] || die 'Claude executable symlink loop'
+    _ccb_link=$(readlink "$_ccb_path")
+    case $_ccb_link in /*) _ccb_path=$_ccb_link ;; *) _ccb_path=$(dirname "$_ccb_path")/$_ccb_link ;; esac
+  done
+  _ccb_real=$(CDPATH= cd -- "$(dirname -- "$_ccb_path")" && pwd)/${_ccb_path##*/}
+  [ "$_ccb_real" != "$BIN_DIR/crouter" ] || die 'CLAUDE_BIN resolves to crouter itself; set it to the real Claude executable'
 }
-
-# ---------------------------------------------------------------------------
-# Commands
-# ---------------------------------------------------------------------------
-cmd_claude() {
-  [ -n "$CLAUDE_BIN" ] || die "claude binary not found; set CLAUDE_BIN in config.sh"
-  [ -x "$CLAUDE_BIN" ] || die "claude binary is not executable: $CLAUDE_BIN"
-  # Deliberately preserve Claude Code's own environment and credential store.
-  # This is the supported path for /login, `claude auth login`, and
-  # CLAUDE_CODE_OAUTH_TOKEN. No crouter endpoint or proxy is inserted.
-  exec "$CLAUDE_BIN" "$@"
-}
+run_pre_start() { [ -n "$PRE_START" ] || return 0; eval "$PRE_START" || die "PRE_START hook failed for '$PROVIDER_NAME'"; }
+cmd_claude() { check_claude_binary; exec "$CLAUDE_BIN" "$@"; }
 
 cmd_run() {
   _p=$1; shift
   load_provider "$_p"
-
-  # Resolve the primary model with this precedence:
-  #   --model <x>  >  first bare positional (short form)  >  provider MODEL
-  # A bare positional model is only taken if it appears BEFORE any flag, so it
-  # never collides with a flag's own value (e.g. `crouter ollama -p "prompt"`).
-  # An ANTHROPIC_MODEL exported in the shell (e.g. from ~/.zshrc as a leftover
-  # MiniMax default) is a leftover we deliberately ignore here: launch.sh's
-  # `env -i` keeps it out of the Claude child, and the chosen provider's MODEL
-  # is authoritative. Pass --model to override explicitly.
-  _main_model=""
-  _model_set=0
-  _pos_model=""
-  _pos_idx=0
-  _seen_flag=0
-  _n=$#
-  _i=0
-  _a=""
-  _expect_model=0
-  _browse=0
-  _apply_only=0
+  _default_model=$MODEL _default_context=$CONTEXT_TOKENS _default_compact=$AUTO_COMPACT_TOKENS
+  _main_model= _model_set=0 _pos_model= _pos_idx=0 _seen_flag=0
+  _n=$# _i=0 _expect_model=0 _browse=0 _apply_only=0 _refresh=0 _bypass_auth=0 _passthrough=0
   for _a in "$@"; do
     _i=$((_i + 1))
+    [ "$_passthrough" -eq 0 ] || continue
     if [ "$_expect_model" -eq 1 ]; then
-      case $_a in
-        ''|-*) die "--model requires a non-empty model value" ;;
-      esac
-      _main_model=$_a
-      _model_set=1
-      _seen_flag=1
-      _expect_model=0
+      case $_a in ''|-*) die '--model requires a non-empty model value' ;; esac
+      _main_model=$_a _model_set=1 _seen_flag=1 _expect_model=0
       continue
     fi
-    case "$_a" in
-      --model=*)
-        _main_model=${_a#--model=}
-        [ -n "$_main_model" ] || die "--model requires a non-empty model value"
-        _model_set=1
-        _seen_flag=1
-        ;;
-      --model)
-        _expect_model=1
-        _seen_flag=1
-        ;;
-      --browse)
-        _browse=1
-        _seen_flag=1
-        ;;
-      --apply-only)
-        _apply_only=1
-        _seen_flag=1
-        ;;
-      -*)
-        _seen_flag=1 ;;
-      *)
-        if [ "$_seen_flag" -eq 0 ] && [ -z "$_pos_model" ]; then
-          _pos_model=$_a; _pos_idx=$_i
-        fi
-        ;;
+    case $_a in
+      --) _passthrough=1; _seen_flag=1 ;;
+      --model=*) _main_model=${_a#--model=}; [ -n "$_main_model" ] || die '--model requires a non-empty model value'; _model_set=1; _seen_flag=1 ;;
+      --model) _expect_model=1; _seen_flag=1 ;;
+      --browse) _browse=1; _seen_flag=1 ;;
+      --apply-only) _apply_only=1; _seen_flag=1 ;;
+      --refresh) _refresh=1; _seen_flag=1 ;;
+      --version|-V|--help|-h) _bypass_auth=1; _seen_flag=1 ;;
+      -*) _seen_flag=1 ;;
+      *) if [ "$_seen_flag" -eq 0 ] && [ -z "$_pos_model" ]; then _pos_model=$_a; _pos_idx=$_i; fi ;;
     esac
   done
-  [ "$_expect_model" -eq 0 ] || die "--model requires a non-empty model value"
-
-  # Rebuild $@ with the positional model removed so it isn't forwarded to Claude.
-  if [ "$_pos_idx" -gt 0 ]; then
-    _i=0
-    while [ $_i -lt $_n ]; do
-      _i=$((_i + 1))
-      if [ $_i -eq $_pos_idx ]; then
-        shift
-      else
-        _first=$1; shift
-        set -- "$@" "$_first"
-      fi
-    done
-  fi
-
-  if [ "$_model_set" -eq 1 ] && [ -n "$_main_model" ]; then
-    : # explicit --model wins
-  elif [ -n "$_pos_model" ]; then
-    _main_model=$_pos_model
+  [ "$_expect_model" -eq 0 ] || die '--model requires a non-empty model value'
+  if [ "$_browse" -eq 1 ] && { [ "$_model_set" -eq 1 ] || [ -n "$_pos_model" ]; }; then die 'choose either a model or --browse, not both'; fi
+  # Remove only router-owned flags and the positional model. Claude arguments
+  # (including their values) keep their order and byte boundaries.
+  _i=0 _skip_model_value=0 _passthrough=0
+  while [ "$_i" -lt "$_n" ]; do
+    _i=$((_i + 1)); _first=$1; shift
+    if [ "$_passthrough" -eq 1 ]; then set -- "$@" "$_first"; continue; fi
+    if [ "$_skip_model_value" -eq 1 ]; then _skip_model_value=0; continue; fi
+    if [ "$_i" -eq "$_pos_idx" ]; then continue; fi
+    case $_first in
+      --) _passthrough=1 ;;
+      --model) _skip_model_value=1 ;;
+      --model=*|--browse|--apply-only|--refresh) ;;
+      *) set -- "$@" "$_first" ;;
+    esac
+  done
+  if [ "$_model_set" -eq 1 ]; then :
+  elif [ -n "$_pos_model" ]; then _main_model=$_pos_model
   else
     _main_model=$MODEL
-    # OpenRouter: fall back to the last model picked in the model picker, so a
-    # model chosen once keeps being used without re-passing --model every time.
-    if [ "$PROVIDER_NAME" = "openrouter" ]; then
-      _state_model=$(cat "${XDG_STATE_HOME:-$HOME/.local/state}/crouter/last-model-openrouter" 2>/dev/null || true)
-      if [ -n "$_state_model" ]; then
-        _main_model=$_state_model
-      fi
-    fi
+    _remembered=$(load_last_selected_model "$PROVIDER_NAME")
+    [ -z "$_remembered" ] || _main_model=$_remembered
+  fi
+  if [ "$_browse" -eq 1 ] && [ "$_bypass_auth" -eq 0 ]; then
+    # Directory access may resolve a directory credential, but it never starts
+    # PRE_START, inference proxies, MCP servers or Claude.
+    if [ "$_refresh" -eq 1 ]; then catalog_run --refresh --list >/dev/null || return $?; fi
+    catalog_run
+    _pick_rc=$?
+    if [ "$_pick_rc" -eq 2 ]; then info "$PROVIDER_NAME: model selection cancelled; nothing was started"; return 0; fi
+    [ "$_pick_rc" -eq 0 ] || return "$_pick_rc"
+    _main_model=$(load_last_selected_model "$PROVIDER_NAME")
+    [ -n "$_main_model" ] || die 'no model selected'
+  fi
+  _main_model=$(resolve_model_id "$_main_model") || return 1
+  # A non-default model never inherits an unrelated default/previous context.
+  if [ "$_main_model" = "$_default_model" ]; then
+    CONTEXT_TOKENS=$_default_context AUTO_COMPACT_TOKENS=$_default_compact
+  else
+    CONTEXT_TOKENS= AUTO_COMPACT_TOKENS=
+  fi
+  _bound_context=$(model_state_context "$PROVIDER_NAME" "$_main_model")
+  if [ -n "$_bound_context" ]; then
+    if [ -z "$CONTEXT_TOKENS" ] || [ "$_bound_context" -lt "$CONTEXT_TOKENS" ]; then CONTEXT_TOKENS=$_bound_context; fi
   fi
   apply_model_context_override "$_main_model"
-  apply_model_self_route "$_main_model"
-
-  # Once a model is chosen (default, --model, positional, or picker state),
-  # route every Claude Code tier to it and apply the saved context, so
-  # switching models configures everything automatically — no manual tier or
-  # context edits needed.
   apply_model_tier_settings "$_main_model"
-  _state_ctx=$(cat "${XDG_STATE_HOME:-$HOME/.local/state}/crouter/${PROVIDER_NAME}-context" 2>/dev/null || true)
-  if [ -n "$_state_ctx" ]; then
-    CONTEXT_TOKENS=$_state_ctx
+  apply_model_self_route "$_main_model"
+  if [ -n "$CONTEXT_TOKENS" ]; then
+    case $CONTEXT_TOKENS in *[!0-9]*|?????????*|'') die 'invalid model context' ;; esac
+    case $AUTO_COMPACT_TOKENS in *[!0-9]*|?????????*) die 'invalid compaction window' ;; esac
+    if [ -n "$AUTO_COMPACT_TOKENS" ] && [ "$AUTO_COMPACT_TOKENS" -gt "$CONTEXT_TOKENS" ]; then AUTO_COMPACT_TOKENS=; fi
   fi
-
-  AUTH_TOKEN=""
-  _bypass_auth=0
-  for _arg in "$@"; do
-    case "$_arg" in
-      --version|-V|--help|-h) _bypass_auth=1 ;;
-    esac
-  done
-
+  if [ "$_apply_only" -eq 1 ] && [ "$_bypass_auth" -eq 0 ]; then
+    [ -n "$NODE_BIN" ] || die 'saving a model selection requires Node.js'
+    "$NODE_BIN" "$LIB_DIR/model-state.js" write "$PROVIDER_NAME" "$_main_model" "$CONTEXT_TOKENS" || return $?
+    info "$PROVIDER_NAME: applied $_main_model (context=${CONTEXT_TOKENS:-unknown}, effort=${EFFORT:-unset}); no services started"
+    return 0
+  fi
+  check_claude_binary
+  AUTH_TOKEN=
   if [ "$_bypass_auth" -eq 0 ]; then
-    # Own lifecycle resources from the first prelaunch hook onward. launch_claude
-    # replaces these traps once it starts the Claude child; until then, any auth
-    # or asset failure must reap a newly started local proxy and partial assets.
     _crouter_prelaunch_cleanup_done=0
     _crouter_prelaunch_cleanup() {
       [ "${_crouter_prelaunch_cleanup_done:-0}" -eq 0 ] || return 0
       _crouter_prelaunch_cleanup_done=1
       [ -n "${POST_STOP:-}" ] && eval "$POST_STOP" || true
-      if [ -n "${KEYPOOL_PID:-}" ]; then
-        kill "$KEYPOOL_PID" 2>/dev/null || true
-        wait "$KEYPOOL_PID" 2>/dev/null || true
-      fi
+      if [ -n "${KEYPOOL_PID:-}" ]; then kill "$KEYPOOL_PID" 2>/dev/null || true; wait "$KEYPOOL_PID" 2>/dev/null || true; fi
       cleanup_provider_assets || true
       return 0
     }
     trap '_crouter_prelaunch_cleanup' EXIT
     trap '_crouter_prelaunch_cleanup; exit 130' INT
     trap '_crouter_prelaunch_cleanup; exit 143' TERM
-
     run_pre_start
-    if is_dual_source; then
-      # Preferred custom/default credential first; when the API key is also
-      # configured, front both with the local proxy so 401/402/403/429 rotates live.
-      resolve_dual_source
-      start_dual_failover
-    elif [ "${AUTH_MODE:-}" = "surfaces" ]; then
-      start_surface_pool
-    elif [ "${AUTH_MODE:-}" = "keypool" ]; then
-      # Auto-degrade: if AUTH_KEYS has exactly one key and there's no PLUS_KEYS,
-      # bypass the keypool-proxy and use the single key directly. Avoids spinning
-      # up a Node proxy for what is effectively a single-key session.
+    if is_dual_source; then resolve_dual_source; start_dual_failover
+    elif [ "${AUTH_MODE:-}" = surfaces ]; then start_surface_pool
+    elif [ "${AUTH_MODE:-}" = keypool ]; then
       _main_count=$(set -- $AUTH_KEYS; echo $#)
       _plus_count=$(set -- ${PLUS_KEYS:-}; echo $#)
       if [ "$_main_count" -eq 1 ] && [ "$_plus_count" -eq 0 ]; then
-        AUTH_REFERENCE=$(set -- $AUTH_KEYS; printf '%s' "$1")
-        AUTH_MODE=keychain
-        resolve_auth
-      else
-        start_keypool
-      fi
-    else
-      resolve_auth
-    fi
+        AUTH_REFERENCE=$(set -- $AUTH_KEYS; printf '%s' "$1"); AUTH_MODE=keychain; resolve_auth
+      else start_keypool; fi
+    else resolve_auth; fi
     prepare_provider_assets
   fi
-
-  # Look up context_length for the selected model from the provider's model
-  # cache (populated by `crouter-models` from the provider's model-list API,
-  # or left empty when only static aliases are available). When found, it
-  # takes precedence over MODEL_CONTEXT_OVERRIDES and the provider default,
-  # so picking any model automatically configures its context window.
-  apply_model_context_from_cache() {
-    _macf_model=$1
-    _macf_cache="${XDG_STATE_HOME:-$HOME/.local/state}/crouter/models-${PROVIDER_NAME}.json"
-    [ -r "$_macf_cache" ] || return 0
-    [ -n "$NODE_BIN" ] || return 0
-    _macf_ctx=$("$NODE_BIN" -e "try{const c=require('$_macf_cache');const m=(c.models||[]).find(x=>x.id===process.argv[1]);process.stdout.write(m&&m.context_length?String(m.context_length):'')}catch(e){}" "$_macf_model" 2>/dev/null || true)
-    [ -n "$_macf_ctx" ] && CONTEXT_TOKENS=$_macf_ctx
-  }
-
-  # Model picker: let the user search and choose any model supported by the
-  # provider (dynamic catalog with a per-day local cache, or the declared
-  # static aliases), then re-resolve _main_model from the saved selection
-  # before launching.
-  if [ "$_browse" -eq 1 ]; then
-    [ -n "$NODE_BIN" ] || die "--browse requires Node.js; set NODE_BIN in config.sh"
-    _state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/crouter"
-    CR_PROVIDER="$PROVIDER_NAME" \
-    CR_BASE_URL="${BASE_URL:-}" \
-    CR_MODELS_API_URL="${MODELS_API_URL:-}" \
-    CR_MODELS_API_AUTH="${MODELS_API_AUTH:-none}" \
-    CR_API_KEY="${AUTH_TOKEN:-}" \
-    CR_STATIC_MODELS="${MODEL:-} ${MODEL_OPUS:-} ${MODEL_SONNET:-} ${MODEL_HAIKU:-} ${MODEL_SUBAGENT:-} ${MODEL_ALIASES:-}" \
-      "$BIN_DIR/crouter-models" --provider "$PROVIDER_NAME"
-    _pick_rc=$?
-    if [ "$_pick_rc" -eq 2 ]; then
-      # Cancelled: keep the previous selection, but start nothing.
-      info "${PROVIDER_NAME}: model selection cancelled; nothing was started"
-      return 0
-    fi
-    [ "$_pick_rc" -eq 0 ] || die "${PROVIDER_NAME} model picker exited with an error"
-    _main_model=$(cat "$_state_dir/last-model-${PROVIDER_NAME}" 2>/dev/null || true)
-    [ -n "$_main_model" ] || die "no ${PROVIDER_NAME} model selected"
-    # Re-apply context/tier settings for the newly picked model.
-    apply_model_context_override "$_main_model"
-    apply_model_context_from_cache "$_main_model"
-    apply_model_self_route "$_main_model"
-    apply_model_tier_settings "$_main_model"
-    _state_ctx=$(cat "$_state_dir/${PROVIDER_NAME}-context" 2>/dev/null || true)
-    [ -n "$_state_ctx" ] && CONTEXT_TOKENS=$_state_ctx
-    # Strip --browse so it is not forwarded to Claude Code.
-    _i=0; _n=$#
-    while [ $_i -lt "$_n" ]; do
-      _i=$((_i + 1))
-      case "$1" in
-        --browse) shift ;;
-        *) set -- "$@" "$1"; shift ;;
-      esac
-    done
-  fi
-
-  # --apply-only: resolve the model, apply and persist its context/tier
-  # settings, then exit without launching Claude. Intended to run alongside
-  # an active `crouter all` session: pick a model here (saved to state), then
-  # switch to it live inside Claude Code with `/model <provider>/<id>`.
-  # Context and effort are fixed when the Claude Code process starts, so they
-  # follow each model only for direct `crouter <provider>` launches and stay
-  # fixed for the session in gateway mode.
-  if [ "$_apply_only" -eq 1 ]; then
-    remember_last_selected_model "$PROVIDER_NAME" "$_main_model" || :
-    apply_model_context_from_cache "$_main_model"
-    _state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/crouter"
-    if [ -n "${CONTEXT_TOKENS:-}" ]; then
-      printf '%s\n' "$CONTEXT_TOKENS" > "$_state_dir/${PROVIDER_NAME}-context" 2>/dev/null || :
-    else
-      # The model has no known window: do not leave the previous model's window
-      # behind for the next launch to pick up.
-      rm -f "$_state_dir/${PROVIDER_NAME}-context" 2>/dev/null || :
-    fi
-    _state_ctx=$(cat "$_state_dir/${PROVIDER_NAME}-context" 2>/dev/null || true)
-    info "${PROVIDER_NAME}: applied $_main_model (context=${_state_ctx:-$CONTEXT_TOKENS}, effort=${EFFORT:-unset})"
-    return 0
-  fi
-
   launch_claude "$_main_model" "$_bypass_auth" "$@"
 }
 
-# The Auth column keeps reporting how a route authenticates (api/plan/none/...),
-# so it is computed the same way for every provider before status is applied.
-provider_auth_mode() {
-  if is_dual_source; then
-    if [ -n "${DEFAULT_TOKEN_ENV:-}" ]; then printf 'dual'; else printf 'apikey'; fi
-  elif is_surface_provider; then
-    if [ -n "${PLAN_URL:-}" ] && [ -n "${API_URL:-}" ]; then
-      printf 'plan+api'
-    elif [ -n "${PLAN_URL:-}" ]; then
-      printf 'plan'
-    else
-      printf 'api'
-    fi
-  else
-    printf '%s' "$AUTH_MODE"
-  fi
-}
-
-# STATUS answers "can I launch this right now", which is the question the
-# catalog list exists to answer:
-#   ready  - a credential is present (env, Keychain, or key pool)
-#   local  - the route needs no credential, only a local service on this Mac
-#   native - Claude Code's own cloud backend owns the login
-#   no-key - a credential is missing, so the route cannot run yet
-provider_status() {
-  case ${NATIVE_BACKEND:-} in
-    ?*) printf 'native'; return 0 ;;
-  esac
-  case ${AUTH_MODE:-} in
-    static|none) printf 'local'; return 0 ;;
-  esac
-  if check_auth; then printf 'ready'; else printf 'no-key'; fi
-}
-
-# provider_scan <outdir> <list|doctor>
-#   Report every provider into one file per provider, concurrently. A status
-#   costs a `security find-generic-password` per credential reference, and that
-#   process is ~80 ms, so a serial pass over the catalog takes seconds where the
-#   parallel pass takes one. Callers read the files back in `provider_names`
-#   order, which keeps the output deterministic regardless of finish order.
-provider_scan() {
-  _ps_dir=$1
-  _ps_kind=$2
-  for _ps_n in $(provider_names); do
-    (
-      load_provider "$_ps_n" || exit 0
-      case $_ps_kind in
-        list)
-          printf '%s\t%s\t%s\t%s\t%s\n' \
-            "$_ps_n" "$(provider_status)" "$(provider_auth_mode)" "$MODEL" "$BASE_URL" \
-            > "$_ps_dir/$_ps_n" ;;
-        doctor)
-          status_one "$_ps_n" > "$_ps_dir/$_ps_n" ;;
-      esac
-    ) &
-  done
-  wait
-}
-
-# crouter list [--all]
-#   Default output is the set of providers that can run right now; --all adds
-#   the ones that still need a credential.
-cmd_list() {
-  _all=0
-  for _arg in "$@"; do
-    case $_arg in
-      --all|-a) _all=1 ;;
-      -h|--help) usage_list; return 0 ;;
-      *) die "list: unknown argument '$_arg' (try: crouter list [--all])" ;;
-    esac
-  done
-
-  _rows=$(mktemp -d "${TMPDIR:-/tmp}/crouter-list.XXXXXX") || die "list: cannot create a temporary directory"
-  provider_scan "$_rows" list
-
-  printf '%-22s %-7s %-11s %-30s %s\n' 'PROVIDER' 'STATUS' 'AUTH' 'DEFAULT MODEL' 'ENDPOINT'
-  _shown=0
-  _total=0
-  for _n in $(provider_names); do
-    [ -f "$_rows/$_n" ] || continue
-    _total=$((_total + 1))
-    IFS='	' read -r _n _st _mode _model _url < "$_rows/$_n" || continue
-    [ -n "${_st:-}" ] || continue
-    if [ "$_all" -eq 0 ] && [ "$_st" = no-key ]; then continue; fi
-    printf '%-22s %-7s %-11s %-30s %s\n' "$_n" "$_st" "$_mode" "$_model" "$_url"
-    _shown=$((_shown + 1))
-  done
-  rm -rf "$_rows"
-  _rows=
-
-  if [ "$_shown" -eq 0 ]; then
-    info ""
-    info "no provider is configured yet — run 'crouter add' to set one up, or 'crouter list --all' to see the full catalog"
-  elif [ "$_all" -eq 0 ]; then
-    info ""
-    info "$((_total - _shown)) of $_total providers have no credential yet — 'crouter list --all' to show them all, 'crouter add <provider>' to configure one"
-  fi
-}
-
-status_one() {
-  (
-    load_provider "$1"
-    if check_auth; then
-      _auth=ok
-      # Dual-source: surface which credential(s) are live (default / api / both).
-      if is_dual_source; then _auth="ok($(dual_source_state))"; fi
-      if is_surface_provider; then _auth="ok($(surface_state))"; fi
-    else
-      _auth=MISSING
-    fi
-    case ${NATIVE_BACKEND:-} in
-      bedrock|vertex) _auth=UNVERIFIED ;;
-      foundry)
-        if [ -n "${ANTHROPIC_FOUNDRY_AUTH_TOKEN:-}" ] ||
-           [ -n "${ANTHROPIC_FOUNDRY_API_KEY:-}" ]; then
-          _auth=ok
-        else
-          # Azure CLI is only one path in the SDK default credential chain.
-          # A local diagnostic cannot prove or disprove service principals,
-          # managed identity, or a previously authenticated CLI session.
-          _auth=UNVERIFIED
-        fi
-        ;;
-    esac
-    if [ -n "$HEALTH_CHECK_URL" ]; then
-      if check_health; then _health=up; else _health=DOWN; fi
-    else
-      _health='-'
-    fi
-    printf '%-22s auth:%-9s health:%-6s %s\n' "$1" "$_auth" "$_health" "$BASE_URL"
-    _status=0
-    if [ "$_auth" = UNVERIFIED ] && [ "${2:-0}" -eq 1 ]; then
-      case ${NATIVE_BACKEND:-} in
-        bedrock) info "note  AWS credential chain is unverified; doctor cannot check Bedrock account or model access" ;;
-        vertex) info "note  Google ADC is unverified; doctor cannot check Vertex project or model access" ;;
-        foundry) info "note  Azure credential chain is unverified; doctor cannot check Foundry account or model access" ;;
-      esac
-    fi
-    if [ "${NATIVE_BACKEND:-}" = foundry ] &&
-       [ -z "${ANTHROPIC_FOUNDRY_RESOURCE:-}" ] &&
-       [ -z "${ANTHROPIC_FOUNDRY_BASE_URL:-}" ]; then
-      if [ "${2:-0}" -eq 1 ]; then
-        info "note  Foundry endpoint not visible to crouter; check ANTHROPIC_FOUNDRY_RESOURCE or ANTHROPIC_FOUNDRY_BASE_URL in the shell, config.sh, or Claude settings"
-      fi
-    fi
-    if [ "${NATIVE_BACKEND:-}" = vertex ] &&
-       [ -z "${ANTHROPIC_VERTEX_PROJECT_ID:-}" ]; then
-      if [ "${2:-0}" -eq 1 ]; then
-        info "note  Vertex project not visible to crouter; check ANTHROPIC_VERTEX_PROJECT_ID in the shell, config.sh, or Claude settings"
-      fi
-    fi
-    # Match the launch paths that need Node, including managed MCP rendering.
-    _needs_node=0
-    case "$AUTH_MODE" in
-      surfaces) _needs_node=1 ;;
-      keypool)
-        _doctor_key_count=$(set -- ${AUTH_KEYS:-}; printf '%s' "$#")
-        if [ "$_doctor_key_count" -ne 1 ] || [ -n "${PLUS_KEYS:-}" ]; then _needs_node=1; fi
-        ;;
-    esac
-    if [ "${CROUTER_PROVIDER_ASSETS:-1}" != 0 ] && [ -n "${ASSET_PROFILE:-}" ]; then
-      _needs_node=1
-    fi
-    case "$PROVIDER_NAME" in ollama|antigravity|antigravity-claude) _needs_node=1 ;; esac
-    if [ "${2:-0}" -eq 1 ] && [ "$_needs_node" -eq 1 ]; then
-      _doctor_node=$(command -v "$NODE_BIN" 2>/dev/null || true)
-      if [ -z "$_doctor_node" ] || [ ! -f "$_doctor_node" ] || [ ! -x "$_doctor_node" ]; then
-        _status=1
-        info "FAIL  node unavailable; install Node.js or set NODE_BIN in config.sh to an executable Node binary, then retry crouter doctor '$1'"
-      fi
-    fi
-    if [ "$_auth" = MISSING ]; then
-      _status=1
-      if [ "${2:-0}" -eq 1 ]; then
-        if [ "${NATIVE_BACKEND:-}" = foundry ]; then
-          info "next: set ANTHROPIC_FOUNDRY_AUTH_TOKEN or ANTHROPIC_FOUNDRY_API_KEY, or configure Azure SDK credentials, then retry crouter doctor '$1'"
-        elif is_surface_provider; then
-          if [ -n "${PLAN_URL:-}" ]; then _doctor_surface=plan; else _doctor_surface=api; fi
-          info "next: run crouter add '$1' --surface $_doctor_surface to configure a credential"
-        elif is_dual_source; then
-          if [ -n "${API_KEY_REF:-}" ]; then
-            info "next: run crouter add '$1' to configure an API credential"
-          else
-            info "next: set ${DEFAULT_TOKEN_ENV:-${DEFAULT_TOKEN_ENV_FALLBACK:-${API_KEY_ENV:-the provider credential environment variable}}} and retry crouter doctor '$1'"
-          fi
-        else
-          case "$AUTH_MODE" in
-            keychain|keypool) info "next: run crouter add '$1' to configure a credential" ;;
-            env)
-              info "next: export $AUTH_REFERENCE with your provider credential and retry crouter doctor '$1'"
-              [ -z "${AUTH_KEYCHAIN_FALLBACK:-}" ] || info "      or store it in Keychain with crouter add '$1'"
-              ;;
-            command) info "next: check the configured authentication command for '$1'; it must return a nonempty credential" ;;
-            *) info "next: check AUTH_MODE in providers/$1.sh" ;;
-          esac
-        fi
-      fi
-    fi
-    if [ "$_health" = DOWN ]; then
-      _status=1
-      if [ "${2:-0}" -eq 1 ]; then
-        info "next: check the configured health URL and service connectivity, then retry crouter doctor '$1'"
-        [ -z "$PRE_START" ] || info "      doctor does not start the service; crouter '$1' runs its startup hook"
-      fi
-    fi
-    exit "$_status"
-  )
-}
-
-cmd_doctor() {
-  case ${1:-} in
-    -h|--help) usage_doctor; return 0 ;;
-  esac
-  case ${1:-} in
-    -*) die "doctor: unknown argument '$1' (try: crouter doctor [<provider>])" ;;
-  esac
-
-  _fail=0
-
-  info "Environment"
-  if [ -n "$CLAUDE_BIN" ] && [ -x "$CLAUDE_BIN" ]; then
-    info "ok    claude binary: $CLAUDE_BIN"
-  else
-    info "FAIL  claude binary not found (set CLAUDE_BIN in config.sh)"; _fail=1
-  fi
-
-  if [ -f "$ROOT_DIR/config.sh" ]; then
-    info "ok    config: $ROOT_DIR/config.sh"
-  else
-    info "note  no config.sh (using defaults; copy config.example.sh if needed)"
-  fi
-
-  if command -v curl >/dev/null 2>&1; then
-    info "ok    curl available"
-  else
-    info "FAIL  curl missing"; _fail=1
-  fi
-  if command -v security >/dev/null 2>&1; then
-    info "ok    macOS keychain (security) available"
-  else
-    info "note  'security' missing (keychain providers unavailable)"
-  fi
-
-  info ""
-  if [ -n "${1:-}" ]; then
-    status_one "$1" 1 || _fail=1
-  else
-    cmd_doctor_overview
-  fi
-  return $_fail
-}
-
-# cmd_doctor_overview
-#   Every provider, with the ones that need attention first. A missing optional
-#   credential is expected, so it never decides the command's exit status: the
-#   overview is a map, not a verdict. `crouter doctor <provider>` is the
-#   precise, exit-code-bearing form.
-cmd_doctor_overview() {
-  _dr=$(mktemp -d "${TMPDIR:-/tmp}/crouter-doctor.XXXXXX") || {
-    info "note  cannot create a temporary directory; printing providers unsorted"
-    for _n in $(provider_names); do status_one "$_n" || :; done
-    return 0
-  }
-  provider_scan "$_dr" doctor
-
-  _pending=$(mktemp "${TMPDIR:-/tmp}/crouter-doctor-rows.XXXXXX") || {
-    for _n in $(provider_names); do
-      [ -f "$_dr/$_n" ] || continue
-      IFS= read -r _line < "$_dr/$_n" || continue
-      [ -n "$_line" ] && info "$_line"
-    done
-    rm -rf "$_dr"
-    return 0
-  }
-  _total=0
-  _missing=0
-  _down=0
-  for _n in $(provider_names); do
-    [ -f "$_dr/$_n" ] || continue
-    IFS= read -r _line < "$_dr/$_n" || continue
-    [ -n "$_line" ] || continue
-    _total=$((_total + 1))
-    case $_line in
-      *auth:MISSING*)               _key=0; _missing=$((_missing + 1)) ;;
-      *health:DOWN*)                _key=1; _down=$((_down + 1)) ;;
-      *)                            _key=2 ;;
-    esac
-    printf '%s\t%s\n' "$_key" "$_line" >> "$_pending"
-  done
-  rm -rf "$_dr"
-  _dr=
-
-  _summary="$_total total"
-  [ "$_missing" -eq 0 ] || _summary="$_summary — $_missing without a credential"
-  [ "$_down" -eq 0 ]    || _summary="$_summary, $_down with a failing health check"
-  info "Providers ($_summary)"
-  sort -k1,1n -k2,2 "$_pending" | cut -f2-
-  rm -f "$_pending"
-  _pending=
-
-  if [ "$_missing" -gt 0 ] || [ "$_down" -gt 0 ]; then
-    info ""
-    info "next: 'crouter doctor <provider>' explains one in detail"
-    if [ "$_down" -gt 0 ]; then
-      info "      'crouter <provider>' runs the startup hook that health checks do not start"
-    fi
-  fi
-}
-
-
-# ---------------------------------------------------------------------------
-# Dispatch
-# ---------------------------------------------------------------------------
+. "$LIB_DIR/commands.sh"
+. "$LIB_DIR/unified.sh"
+# Configuration can supply explicit policy without exporting arbitrary vars.
+CROUTER_ALLOW_PAID_FALLBACK=${CROUTER_SESSION_PAID_FALLBACK:-${CROUTER_ALLOW_PAID_FALLBACK:-0}}
+CROUTER_ALLOW_CROSS_MODEL_FALLBACK=${CROUTER_SESSION_CROSS_MODEL_FALLBACK:-${CROUTER_ALLOW_CROSS_MODEL_FALLBACK:-0}}
+export CROUTER_ALLOW_PAID_FALLBACK CROUTER_ALLOW_CROSS_MODEL_FALLBACK
 cmd=$1; shift
-
-# cmd_provider_show <provider>
-#   Print the full provider configuration with secrets redacted.
-cmd_provider_show() {
-  case ${1:-} in
-    -h|--help) usage_provider; return 0 ;;
-    '')        die "provider: name a provider (try: crouter list)" ;;
-  esac
-  _p=$1
-  load_provider "$_p"
-  apply_model_context_override "$MODEL"
-  _file=$(provider_file "$_p")
-
-  printf 'provider:    %s\n' "$_p"
-  printf 'description: %s\n' "${PROVIDER_DESC:-<none>}"
-  printf 'config file: %s\n' "$_file"
-  printf '\n'
-  printf 'endpoint:    %s\n' "$BASE_URL"
-  printf 'default:     %s\n' "$MODEL"
-  printf 'context:     %s tokens\n' "${CONTEXT_TOKENS:-<unset>}"
-  if [ -n "${AUTO_COMPACT_TOKENS:-}" ]; then
-    printf 'auto compact: %s tokens\n' "$AUTO_COMPACT_TOKENS"
-  else
-    printf 'auto compact: <unset>\n'
-  fi
-  printf 'effort:      %s\n' "${EFFORT:-<unset>}"
-  printf '\n'
-  printf 'aliases:\n'
-  printf '  opus:      %s\n'    "$MODEL_OPUS"
-  printf '  sonnet:    %s\n'    "$MODEL_SONNET"
-  printf '  haiku:     %s\n'    "$MODEL_HAIKU"
-  printf '  subagent:  %s\n'    "$MODEL_SUBAGENT"
-  if [ -n "${MODEL_ALIASES:-}" ]; then
-    printf '  extras:    %s\n' "$MODEL_ALIASES"
-  fi
-  printf '\n'
-  if is_surface_provider; then
-    printf 'auth:        Token Plan / API key surfaces\n'
-    if [ -n "${PLAN_URL:-}" ]; then
-      printf '  plan URL:  %s\n' "$PLAN_URL"
-      printf '    type:    %s\n' "${PLAN_AUTH_TYPE:-bearer}"
-      printf '    key env: %s\n' "${PLAN_KEY_ENV:-<unset>}"
-      printf '    keychain:%s\n' "${PLAN_KEYS:+ }${PLAN_KEYS:-<none>}"
-      printf '    model:   %s\n' "${PLAN_MODEL:-$MODEL}"
-      printf '    tiers:   opus=%s sonnet=%s haiku=%s subagent=%s\n' \
-        "${PLAN_MODEL_OPUS:-${PLAN_MODEL:-$MODEL_OPUS}}" \
-        "${PLAN_MODEL_SONNET:-${PLAN_MODEL:-$MODEL_SONNET}}" \
-        "${PLAN_MODEL_HAIKU:-${PLAN_MODEL:-$MODEL_HAIKU}}" \
-        "${PLAN_MODEL_SUBAGENT:-${PLAN_MODEL:-$MODEL_SUBAGENT}}"
-    fi
-    if [ -n "${API_URL:-}" ]; then
-      printf '  API URL:   %s\n' "$API_URL"
-      printf '    type:    %s\n' "${API_AUTH_TYPE:-bearer}"
-      printf '    key env: %s\n' "${API_KEY_ENV:-<unset>}"
-      printf '    keychain:%s\n' "${API_KEYS:+ }${API_KEYS:-<none>}"
-      printf '    model:   %s\n' "${API_MODEL:-$MODEL}"
-      printf '    tiers:   opus=%s sonnet=%s haiku=%s subagent=%s\n' \
-        "${API_MODEL_OPUS:-${API_MODEL:-$MODEL_OPUS}}" \
-        "${API_MODEL_SONNET:-${API_MODEL:-$MODEL_SONNET}}" \
-        "${API_MODEL_HAIKU:-${API_MODEL:-$MODEL_HAIKU}}" \
-        "${API_MODEL_SUBAGENT:-${API_MODEL:-$MODEL_SUBAGENT}}"
-    fi
-    printf '  live now:  %s\n' "$(_s=$(surface_state); printf '%s' "${_s:-<none configured>}")"
-    _skip_auth_case=1
-  elif is_dual_source; then
-    if [ -n "${DEFAULT_TOKEN_ENV:-}" ]; then
-      printf 'auth:        dual-source (default account first, API key on 401/402/403/429)\n'
-      printf '  default:   %s\n' "${DEFAULT_URL:-$BASE_URL}"
-      printf '    type:    %s\n' "${DEFAULT_AUTH_TYPE:-bearer}"
-      printf '    token:   $%s%s\n' "$DEFAULT_TOKEN_ENV" \
-        "$([ -n "${DEFAULT_TOKEN_ENV_FALLBACK:-}" ] && printf ' (or $%s)' "$DEFAULT_TOKEN_ENV_FALLBACK")"
-    else
-      printf 'auth:        api key\n'
-    fi
-    printf '  api:       %s\n' "${API_URL:-$BASE_URL}"
-    printf '    type:    %s\n' "${API_AUTH_TYPE:-x-api-key}"
-    printf '    key:     $%s%s\n' "${API_KEY_ENV:-<unset>}" \
-      "$([ -n "${API_KEY_REF:-}" ] && printf ' (or keychain %s)' "$API_KEY_REF")"
-    printf '  live now:  %s\n' "$(_s=$(dual_source_state); printf '%s' "${_s:-<none configured>}")"
-    _skip_auth_case=1
-  else
-    _skip_auth_case=0
-    if [ "$AUTH_MODE" = native ]; then
-      printf 'auth:        native Claude Code backend\n'
-    else
-      printf 'auth:        %s\n' "$AUTH_MODE"
-    fi
-  fi
-  [ "$_skip_auth_case" -eq 1 ] || case "$AUTH_MODE" in
-    keychain) printf '  reference: %s\n' "$AUTH_REFERENCE" ;;
-    env)
-      printf '  reference: %s\n' "$AUTH_REFERENCE"
-      [ -n "${AUTH_KEYCHAIN_FALLBACK:-}" ] &&
-        printf '  keychain fallback: %s\n' "$AUTH_KEYCHAIN_FALLBACK"
-      ;;
-    command)  printf '  reference: <configured command>\n' ;;
-    static)   printf '  reference: <redacted>\n' ;;
-    none)     ;;
-    native)
-      printf '  backend:   %s\n' "${NATIVE_BACKEND:-<unset>}"
-      printf '  passthrough: %s\n' "${PASSTHROUGH_ENV:-<none>}"
-      ;;
-    keypool)
-      printf '  AUTH_KEYS:      %s\n' "${AUTH_KEYS:-<empty>}"
-      if [ -n "${PLUS_URL:-}" ]; then
-        printf '  PLUS_URL: %s\n' "$PLUS_URL"
-        printf '  PLUS_KEYS:     %s\n' "${PLUS_KEYS:-<empty>}"
-      fi
-      ;;
-  esac
-  if [ -n "${ASSET_PROFILE:-}" ] || [ -n "${ASSET_PLUGIN_DIRS:-}${ASSET_PLAN_PLUGIN_DIRS:-}${ASSET_API_PLUGIN_DIRS:-}" ]; then
-    printf '\nassets:      MCP profile %s' "${ASSET_PROFILE:-empty}"
-    [ -n "${ASSET_PLUGIN_DIRS:-}${ASSET_PLAN_PLUGIN_DIRS:-}${ASSET_API_PLUGIN_DIRS:-}" ] && printf ' + session skills'
-    printf '\n'
-    printf '  isolation: session-only%s\n' "$([ "${CROUTER_STRICT_PROVIDER_MCP:-1}" = 1 ] && printf ', strict MCP' || true)"
-  fi
-  if [ -n "$EXTRA_ENV" ]; then
-    printf '\nextra env:\n'
-    _old_ifs=$IFS; IFS='
-'
-    for _pair in $EXTRA_ENV; do
-      case $_pair in
-        *=*) printf '  %s=<redacted>\n' "${_pair%%=*}" ;;
-        *) printf '  <invalid entry>\n' ;;
-      esac
-    done
-    IFS=$_old_ifs
-  fi
-  if [ -n "$PRE_START" ] || [ -n "$POST_STOP" ] || [ -n "$HEALTH_CHECK_URL" ]; then
-    printf '\nhooks:\n'
-    [ -n "$PRE_START" ]       && printf '  PRE_START:        <configured>\n'
-    [ -n "$POST_STOP" ]       && printf '  POST_STOP:        <configured>\n'
-    [ -n "$HEALTH_CHECK_URL" ] && printf '  HEALTH_CHECK_URL: <configured>\n'
-  fi
-  return 0
-}
-
-# cmd_config_path
-#   Print the absolute path to the active config.sh (or note its absence).
-cmd_config_path() {
-  if [ -f "$ROOT_DIR/config.sh" ]; then
-    printf '%s\n' "$ROOT_DIR/config.sh"
-  else
-    printf 'no config.sh (using built-in defaults; copy %s/config.example.sh to %s/config.sh to override)\n' "$ROOT_DIR" "$ROOT_DIR"
-    return 1
-  fi
-}
-
-# cmd_config_show
-#   Print an allowlist of effective non-secret settings, never config source.
-cmd_config_show() {
-  # Paths and binary names can contain arbitrary user-supplied values. Report
-  # presence only; the explicit config-path command locates the file for editing.
-  printf 'ROOT_DIR:      <repository>\n'
-  printf 'VERSION:       <use crouter --version>\n'
-  if [ -f "$ROOT_DIR/config.sh" ]; then
-    printf 'CONFIG_FILE:   <present; use crouter config path>\n'
-  else
-    printf 'CONFIG_FILE:   <none; using built-in defaults>\n'
-  fi
-  if [ -n "${INSTALL_DIR:-}" ]; then
-    printf 'INSTALL_DIR:   <configured>\n'
-  else
-    printf 'INSTALL_DIR:   <default: ~/.local/bin>\n'
-  fi
-  [ "${LOG_DIR:-}" = "$ROOT_DIR/logs" ] && _config_path_state='<default: repository logs>' || _config_path_state='<configured>'
-  printf 'LOG_DIR:       %s\n' "$_config_path_state"
-  [ "${STATE_DIR:-}" = "$ROOT_DIR/.state" ] && _config_path_state='<default: repository .state>' || _config_path_state='<configured>'
-  printf 'STATE_DIR:     %s\n' "$_config_path_state"
-  [ -z "$CLAUDE_BIN" ] && _config_path_state='<not found>' || _config_path_state='<configured>'
-  printf 'CLAUDE_BIN:    %s\n' "$_config_path_state"
-  [ -z "$NODE_BIN" ] && _config_path_state='<not found>' || _config_path_state='<configured>'
-  printf 'NODE_BIN:      %s\n' "$_config_path_state"
-  # Normalize switches instead of echoing arbitrary config values.
-  _config_bypass=0; [ "${BYPASS_PERMISSIONS:-0}" != 1 ] || _config_bypass=1
-  _config_assets=1; [ "${CROUTER_PROVIDER_ASSETS:-1}" != 0 ] || _config_assets=0
-  _config_strict=0; [ "${CROUTER_STRICT_PROVIDER_MCP:-1}" != 1 ] || _config_strict=1
-  printf 'BYPASS_PERMISSIONS: %s\n' "$_config_bypass"
-  printf 'CROUTER_PROVIDER_ASSETS: %s\n' "$_config_assets"
-  printf 'CROUTER_STRICT_PROVIDER_MCP: %s\n' "$_config_strict"
-}
-
-# cmd_logs_list
-#   Print each entry under $LOG_DIR with size and mtime.
-cmd_logs_list() {
-  _ld=${LOG_DIR:-$ROOT_DIR/logs}
-  if [ ! -d "$_ld" ]; then
-    info "no logs directory: $_ld"; return 0
-  fi
-  _any=0
-  for _f in "$_ld"/*; do
-    [ -e "$_f" ] || continue
-    _any=1
-    break
-  done
-  if [ "$_any" -eq 0 ]; then info "(no logs yet)"; return 0; fi
-
-  printf '%10s  %-16s  %s\n' 'SIZE' 'MODIFIED' 'FILE'
-  for _f in "$_ld"/*; do
-    [ -e "$_f" ] || continue
-    # Fields 5/6/7 of ls -l are size and mtime; field 8 is the filename, which
-    # is printed separately below, so reading field 8 here duplicated the path
-    # at the end of every line.
-    _meta=$(ls -l "$_f" 2>/dev/null | awk 'NR==1{print $5, $6, $7}')
-    if [ -n "$_meta" ]; then
-      _size=${_meta%% *}
-      _when=${_meta#* }
-    else
-      _size='?'
-      _when='unknown'
-    fi
-    printf '%10s  %-16s  %s\n' "$_size" "$_when" "$_f"
-  done
-}
-
-# cmd_logs_tail <provider>
-#   tail -f the most likely log file for that provider.
-cmd_logs_tail() {
-  case ${1:-} in
-    -h|--help) usage_logs; return 0 ;;
-    '')        die "logs: name a provider (try: crouter logs list)" ;;
-    -*)        die "logs: unknown argument '$1' (try: crouter logs tail <provider>)" ;;
-  esac
-  _p=$1
-  _ld=${LOG_DIR:-$ROOT_DIR/logs}
-  _found=
-  for _candidate in "$_ld/$_p.log" "$_ld/keypool-$_p.log" "$_ld/$_p-proxy.log"; do
-    if [ -f "$_candidate" ]; then _found=$_candidate; break; fi
-  done
-  if [ -z "$_found" ]; then
-    die "no log file for provider '$_p' under $_ld"
-  fi
-  info "tailing $_found (Ctrl-C to exit)"
-  tail -n 50 -F "$_found"
-}
-
-# cmd_uninstall [-y]
-#   Reverse of install.sh: remove only this checkout's crouter command.
-cmd_uninstall() {
-  _yes=0
-  while [ $# -gt 0 ]; do
-    case $1 in
-      -y|--yes) _yes=1; shift ;;
-      -h|--help) info "usage: crouter uninstall [-y]"; return 0 ;;
-      *) die "uninstall: unknown argument '$1'" ;;
-    esac
-  done
-  _dir=${INSTALL_DIR:-$HOME/.local/bin}
-
-  if [ "$_yes" -eq 0 ]; then
-    printf 'remove crouter from %s? [y/N] ' "$_dir" >/dev/tty
-    _ans=
-    IFS= read -r _ans </dev/tty || _ans=
-    case "$_ans" in y|Y|yes|YES) ;; *) info "aborted"; return 0 ;; esac
-  fi
-
-  _shortcut=$_dir/crouter
-  if [ -L "$_shortcut" ]; then
-    case $(readlink "$_shortcut" 2>/dev/null) in
-      "$ROOT_DIR/bin/crouter")
-        rm -f "$_shortcut" && info "removed $_shortcut" ;;
-      *) info "skipped non-crouter symlink: $_shortcut" ;;
-    esac
-  elif [ -e "$_shortcut" ]; then
-    info "skipped non-crouter file: $_shortcut"
-  fi
-}
-
-# ---------------------------------------------------------------------------
-# Unified gateway: crouter all
-# Starts a single local Anthropic-protocol gateway that fronts every provider.
-# Claude Code points at one fixed URL; the model name carries a "<provider>/"
-# prefix and the gateway routes to the right backend with that backend's auth.
-# GET /v1/models returns the combined, namespaced catalog so /model can switch
-# providers live. Each provider's separate command (crouter ollama, etc.) is
-# untouched and still launches directly.
-# ---------------------------------------------------------------------------
-
-# Build a routes JSON file covering every provider into a caller-owned file.
-# Credential discovery lives here (shell owns Keychain/env); the JSON shapes
-# live in lib/route-build.js.
-build_all_routes() {
-  _routes_dest=$1
-  _rt=$2
-  for _n in $(provider_names); do
-    # Session-scoped exclusions apply before credential discovery. Direct
-    # provider launches remain available and other sessions are unaffected.
-    case " ${CROUTER_ALL_EXCLUDE_PROVIDERS:-} " in
-      *" $_n "*) continue ;;
-    esac
-    if ! (
-      load_provider "$_n"
-      # Native Bedrock/Vertex integrations sign requests inside Claude Code and
-      # cannot be represented by the local HTTP gateway.
-      [ -z "${NATIVE_BACKEND:-}" ] || exit 0
-
-      _surface_candidates=""
-      if is_surface_provider; then
-        resolve_surface_tokens 1
-        _surface_candidates=$(build_surface_candidates) || exit 1
-      fi
-      # Compatibility keypools retain endpoint ownership: PLUS keys never get
-      # paired with BASE_URL and main keys never get paired with PLUS_URL.
-      if [ "${AUTH_MODE:-}" = "keypool" ]; then
-        _plus_pool=""
-        for _ref in ${PLUS_KEYS:-}; do
-          _t=$(kc_get "$_ref")
-          [ -n "$_t" ] && _plus_pool="${_plus_pool:+$_plus_pool }$_t"
-        done
-        _main_pool=""
-        for _ref in ${AUTH_KEYS:-}; do
-          _t=$(kc_get "$_ref")
-          [ -n "$_t" ] && _main_pool="${_main_pool:+$_main_pool }$_t"
-        done
-        _surface_candidates=$(build_legacy_keypool_candidates) || exit 1
-      fi
-      # API-surface credential (env var, then keychain service, then legacy AUTH_*).
-      _api_key=""
-      if [ -n "${API_KEY_ENV:-}" ] && [ -n "$(printenv "$API_KEY_ENV" 2>/dev/null)" ]; then
-        _api_key=$(printenv "$API_KEY_ENV")
-      elif [ -n "${API_KEY_REF:-}" ]; then
-        _api_key=$(kc_get "$API_KEY_REF")
-      else
-        case "${AUTH_MODE:-}" in
-          keychain) [ -n "${AUTH_REFERENCE:-}" ] && _api_key=$(kc_get "$AUTH_REFERENCE") ;;
-          env)
-            [ -n "${AUTH_REFERENCE:-}" ] && _api_key=$(printenv "$AUTH_REFERENCE" 2>/dev/null)
-            if [ -z "$_api_key" ] && [ -n "${AUTH_KEYCHAIN_FALLBACK:-}" ]; then
-              _api_key=$(kc_get "$AUTH_KEYCHAIN_FALLBACK")
-            fi
-            ;;
-          command)  [ -n "${AUTH_REFERENCE:-}" ] && _api_key=$(eval "$AUTH_REFERENCE" 2>/dev/null) ;;
-          static)   _api_key="${AUTH_REFERENCE:-}" ;;
-        esac
-      fi
-      # Legacy/custom DEFAULT-surface token (for example, a gateway token).
-      _def_token=""
-      if [ -n "${DEFAULT_TOKEN_ENV:-}" ] && [ -n "$(printenv "$DEFAULT_TOKEN_ENV" 2>/dev/null)" ]; then
-        _def_token=$(printenv "$DEFAULT_TOKEN_ENV")
-      elif [ -n "${DEFAULT_TOKEN_ENV_FALLBACK:-}" ] && [ -n "$(printenv "$DEFAULT_TOKEN_ENV_FALLBACK" 2>/dev/null)" ]; then
-        _def_token=$(printenv "$DEFAULT_TOKEN_ENV_FALLBACK")
-      fi
-      # none-mode dummy token(s) from EXTRA_ENV (ollama), split on newline OR ';'.
-      _te=""
-      if [ "${AUTH_MODE:-}" = "none" ]; then
-        _ifs="$IFS"; IFS='
-;'
-        for _kv in ${EXTRA_ENV:-}; do
-          [ -n "$_kv" ] || continue
-          case "$_kv" in ANTHROPIC_AUTH_TOKEN=*) _te=${_kv#ANTHROPIC_AUTH_TOKEN=} ;; esac
-        done
-        IFS="$_ifs"
-      fi
-      # Candidate models: default first, then the tier aliases, then whatever is
-      # pulled locally for ollama. route-build.js dedups and keeps this order.
-      _models="${MODEL:-} ${MODEL_OPUS:-} ${MODEL_SONNET:-} ${MODEL_HAIKU:-} ${MODEL_SUBAGENT:-} ${MODEL_ALIASES:-}"
-      # OpenRouter: expose the full catalog (from the picker's per-provider
-      # cache) so that `crouter all`'s /v1/models lists every OpenRouter model
-      # and Claude Code's /model can switch to any of them live, without
-      # pre-declaring each one.
-      if [ "$PROVIDER_NAME" = "openrouter" ]; then
-        _or_cache="${XDG_STATE_HOME:-$HOME/.local/state}/crouter/models-openrouter.json"
-        if [ -r "$_or_cache" ]; then
-          _or_models=$("$NODE_BIN" -e "try{const m=require('$_or_cache').models.map(x=>x.id).filter(Boolean);process.stdout.write(m.join(' '))}catch(e){}" 2>/dev/null || true)
-          [ -n "$_or_models" ] && _models="$_models $_or_models"
-        fi
-      fi
-      if [ "$PROVIDER_NAME" = "ollama" ] && command -v ollama >/dev/null 2>&1; then
-        _models="$_models $(ollama list 2>/dev/null | awk 'NR>1{print $1}')"
-      fi
-
-      CR_PREFIX="$PROVIDER_NAME" CR_MODELS="$_models" CR_KEYPOOL_KEYS="" \
-      CR_SURFACE_CANDIDATES="$_surface_candidates" \
-      CR_DEFAULT_URL="${DEFAULT_URL:-$BASE_URL}" CR_DEFAULT_TYPE="${DEFAULT_AUTH_TYPE:-}" CR_DEFAULT_TOKEN="$_def_token" \
-      CR_API_URL="${API_URL:-$BASE_URL}" CR_API_TYPE="${API_AUTH_TYPE:-}" CR_API_KEY="$_api_key" \
-      CR_AUTH_MODE="${AUTH_MODE:-}" CR_AUTH_SCHEME="${_AUTH_SCHEME:-}" \
-      CR_NONE_TOKEN="$_te" \
-        "$NODE_BIN" "$LIB_DIR/route-build.js" candidates
-    ) >> "$_rt"; then
-      die "failed to build unified routes for provider '$_n'"
-    fi
-  done
-  "$NODE_BIN" "$LIB_DIR/route-build.js" combine "$_rt" "$_routes_dest" || \
-    die "failed to combine unified provider routes"
-}
-
-_default_namespaced_model() {
-  "$NODE_BIN" "$LIB_DIR/route-build.js" default-model "$1"
-}
-
-cmd_all() {
-  [ -n "$NODE_BIN" ] || die "node not found; unified gateway cannot start"
-  _check=0
-  case ${1:-} in
-    --check) _check=1; shift ;;
-    -h|--help)
-      info "usage: crouter all [--check] [claude args...]"
-      return 0 ;;
-  esac
-  [ "$_check" -eq 0 ] || [ $# -eq 0 ] || die "all --check does not accept Claude arguments"
-  _gwpid=""
-  _routes_file=""
-  _build_routes_file=""
-  _out=""
-  _all_cleanup_done=0
-  _all_cleanup() {
-    [ "${_all_cleanup_done:-0}" -eq 0 ] || return 0
-    _all_cleanup_done=1
-    if [ -n "${_gwpid:-}" ]; then
-      kill "$_gwpid" 2>/dev/null || true
-      wait "$_gwpid" 2>/dev/null || true
-    fi
-    [ -z "${_out:-}" ] || rm -f "$_out"
-    [ -z "${_build_routes_file:-}" ] || rm -f "$_build_routes_file"
-    [ -z "${_routes_file:-}" ] || rm -f "$_routes_file"
-    cleanup_provider_assets || true
-    return 0
-  }
-  trap '_all_cleanup' EXIT
-  trap '_all_cleanup; exit 130' INT
-  trap '_all_cleanup; exit 143' TERM
-  _routes_file=$(mktemp "${TMPDIR:-/tmp}/call-routes-arr.XXXXXX") || \
-    die "failed to create unified route file"
-  _build_routes_file=$(mktemp "${TMPDIR:-/tmp}/call-routes.XXXXXX") || \
-    die "failed to create unified route build file"
-  build_all_routes "$_routes_file" "$_build_routes_file" || \
-    die "failed to build unified provider routes"
-  rm -f "$_build_routes_file"
-  _build_routes_file=""
-  [ -s "$_routes_file" ] || die "no providers found to build the gateway"
-  if [ "$_check" -eq 1 ]; then
-    if "$NODE_BIN" "$LIB_DIR/route-build.js" inspect "$_routes_file"; then
-      _check_rc=0
-    else
-      _check_rc=$?
-    fi
-    _all_cleanup
-    trap - EXIT INT TERM
-    return "$_check_rc"
-  fi
-  _out=$(mktemp "${TMPDIR:-/tmp}/call-gw.XXXXXX") || \
-    die "failed to create unified gateway output file"
-  _gateway_token=$("$NODE_BIN" -e "process.stdout.write(require('crypto').randomBytes(32).toString('hex'))") || \
-    die "failed to generate a local gateway token"
-  CROUTER_ROUTES_FILE="$_routes_file" CROUTER_GATEWAY_PORT="${CROUTER_GATEWAY_PORT:-18799}" \
-    CROUTER_GATEWAY_TOKEN="$_gateway_token" \
-    CROUTER_CANDIDATE_COOLDOWN_MS="${CROUTER_CANDIDATE_COOLDOWN_MS:-300000}" \
-    "$NODE_BIN" "$BIN_DIR/gateway" > "$_out" 2>/dev/null &
-  _gwpid=$!
-  _port=""
-  _i=0
-  while [ $_i -lt 50 ]; do
-    _port=$(grep -m1 '^CROUTER_GATEWAY_LISTENING_PORT=' "$_out" 2>/dev/null | cut -d= -f2)
-    [ -n "$_port" ] && break
-    kill -0 "$_gwpid" 2>/dev/null || break
-    sleep 0.1
-    _i=$((_i + 1))
-  done
-  if [ -z "$_port" ]; then
-    die "unified gateway failed to start"
-  fi
-  rm -f "$_out"
-  _out=""
-  info "crouter all: unified gateway on http://127.0.0.1:$_port — switch providers with /model <provider>/<model>"
-  # Launch Claude Code pointed at the gateway (single fixed URL).
-  GATEWAY_PID="$_gwpid"
-  POST_STOP='kill "$GATEWAY_PID" 2>/dev/null; rm -f "$_routes_file" 2>/dev/null'
-  _def=$(_default_namespaced_model "$_routes_file")
-  BASE_URL="http://127.0.0.1:$_port"
-  MODEL="$_def"; MODEL_OPUS="$_def"; MODEL_SONNET="$_def"; MODEL_HAIKU="$_def"; MODEL_SUBAGENT="$_def"
-  AUTH_MODE="none"
-  AUTH_TOKEN=""
-  CONTEXT_TOKENS=""
-  EXTRA_ENV="ANTHROPIC_AUTH_TOKEN=$_gateway_token"
-  _bypass_auth=0
-  # A unified process cannot hot-swap provider-owned plugins as /model changes.
-  # Start it with an empty strict MCP profile so stale plan tools/credentials do
-  # not cross providers. Explicit Claude MCP flags still override this profile.
-  PROVIDER_MCP_CONFIG=""
-  PROVIDER_PLUGIN_DIRS=""
-  if [ "${CROUTER_PROVIDER_ASSETS:-1}" != 0 ] &&
-     [ "${CROUTER_STRICT_PROVIDER_MCP:-1}" = 1 ]; then
-    ASSET_PROFILE=empty
-    prepare_provider_assets
-  fi
-  launch_claude "$_def" "$_bypass_auth" "$@"
-}
-
 case $cmd in
+  home)
+    case ${1:-} in -h|--help) info 'usage: crouter (interactive terminal)'; exit 0 ;; esac
+    [ $# -eq 0 ] || die 'home does not accept arguments'
+    [ -n "$NODE_BIN" ] || die 'interactive home requires Node.js'
+    exec "$NODE_BIN" "$LIB_DIR/home.js" "$ROOT_DIR" ;;
+  _inventory) [ $# -eq 0 ] || die 'inventory does not accept arguments'; cmd_inventory ;;
+  models)
+    case ${1:-} in ''|-h|--help) info 'usage: crouter models <provider> [--list|--list-free|--current|--set <id>] [--refresh]'; exit 0 ;; esac
+    load_provider "$1"; shift; catalog_run "$@" ;;
   help|-h|--help) usage ;;
   version|-V|--version) info "crouter $VERSION"; exit 0 ;;
   list)
-    case "${1:-}" in
-      ""|--all|-a|-h|--help) cmd_list "$@" ;;
-      keys)  # back-compat: crouter list keys <provider>
-        case "${2:-}" in
+    case ${1:-} in
+      ''|--all|-a|-h|--help) cmd_list "$@" ;;
+      keys)
+        case ${2:-} in
           -h|--help) usage_list_keys ;;
           -*) die "list keys: unknown argument '$2' (try: crouter list keys <provider>)" ;;
-          *)  [ $# -ge 2 ] || die "usage: crouter list keys <provider>"
-              cmd_list_keys "$2" ;;
+          *) [ $# -eq 2 ] || die 'usage: crouter list keys <provider>'; cmd_list_keys "$2" ;;
         esac ;;
-      -*) die "list: unknown argument '${1}' (try: crouter list [--all])" ;;
-      *)      cmd_list_keys "$1" ;;
-    esac
-    ;;
-  doctor)         cmd_doctor "${1:-}" ;;
+      -*) die "list: unknown argument '$1' (try: crouter list [--all])" ;;
+      *) [ $# -eq 1 ] || die 'usage: crouter list keys <provider>'; cmd_list_keys "$1" ;;
+    esac ;;
+  doctor) [ $# -le 1 ] || die 'usage: crouter doctor [provider]'; cmd_doctor "${1:-}" ;;
   add)
-    case "${1:-}" in
-      "")       cmd_add_interactive ;;
-      -h|--help) usage_add ;;
-      -*)       cmd_add_interactive "$@" ;;
-      *)        cmd_add_key "$@" ;;
-    esac
-    ;;
-  remove)         cmd_remove_key "$@" ;;
+    case ${1:-} in '') cmd_add_interactive ;; -h|--help) usage_add ;; -*) cmd_add_interactive "$@" ;; *) cmd_add_key "$@" ;; esac ;;
+  remove) cmd_remove_key "$@" ;;
   provider)
-    # Accept both `crouter provider <name>` and the documented
-    # `crouter provider show <name>`.
-    case "${1:-}" in
-      -h|--help) usage_provider ;;
-      "")        die "provider: name a provider (try: crouter list)" ;;
-    esac
+    case ${1:-} in -h|--help) usage_provider; exit 0 ;; '') die 'provider: name a provider (try: crouter list)' ;; esac
     [ "${1:-}" = show ] && shift
-    case "${1:-}" in
-      -h|--help) usage_provider ;;
-      "")        die "provider: name a provider (try: crouter list)" ;;
-    esac
+    case ${1:-} in -h|--help) usage_provider; exit 0 ;; '') die 'provider: name a provider (try: crouter list)' ;; esac
+    [ $# -eq 1 ] || die 'usage: crouter provider show <provider>'
     cmd_provider_show "$1" ;;
   config)
-    case "${1:-}" in
-      ""|show)
-        case "${2:-}" in
-          -h|--help) usage_config ;;
-          "")        cmd_config_show ;;
-          *) die "config: unexpected argument '${2}' (try: crouter config show|path)" ;;
-        esac ;;
+    case ${1:-} in
+      ''|show)
+        case ${2:-} in -h|--help) usage_config ;; '') cmd_config_show ;; *) die "config: unexpected argument '$2' (try: crouter config show|path)" ;; esac ;;
       path)
-        case "${2:-}" in
-          -h|--help) usage_config ;;
-          "")        cmd_config_path ;;
-          *) die "config: unexpected argument '${2}' (try: crouter config show|path)" ;;
-        esac ;;
+        case ${2:-} in -h|--help) usage_config ;; '') cmd_config_path ;; *) die "config: unexpected argument '$2' (try: crouter config show|path)" ;; esac ;;
       -h|--help) usage_config ;;
       *) die "config: unknown argument '$1' (try: crouter config show|path)" ;;
     esac ;;
   logs)
-    case "${1:-}" in
-      ""|list)
-        case "${2:-}" in
-          -h|--help) usage_logs ;;
-          "")        cmd_logs_list ;;
-          *) die "logs: unexpected argument '${2}' (try: crouter logs list|tail)" ;;
-        esac ;;
-      tail)
-        [ $# -ge 2 ] || die "usage: crouter logs tail <provider>"
-        cmd_logs_tail "$2" ;;
+    case ${1:-} in
+      ''|list)
+        case ${2:-} in -h|--help) usage_logs ;; '') cmd_logs_list ;; *) die "logs: unexpected argument '$2' (try: crouter logs list|tail)" ;; esac ;;
+      tail) [ $# -eq 2 ] || die 'usage: crouter logs tail <provider>'; cmd_logs_tail "$2" ;;
       -h|--help) usage_logs ;;
       *) die "logs: unknown argument '$1' (try: crouter logs list|tail)" ;;
     esac ;;
-  uninstall)       cmd_uninstall "$@" ;;
-  claude)
-    # `claude <provider>` routes to the provider directly (same as
-    # `crouter <provider>`). `crouter claude` with no provider arg falls
-    # through to the native Claude Code passthrough below.
-    if [ "$(basename -- "$0")" = claude ] && [ $# -ge 1 ] && [ -f "$PROVIDERS_DIR/$1.sh" ]; then
-      _p=$1; shift
-      cmd_run "$_p" "$@"
-    else
-      cmd_claude "$@"
-    fi
-    ;;
-  all)            cmd_all "$@" ;;
-  *)              cmd_run "$cmd" "$@" ;;
+  uninstall) cmd_uninstall "$@" ;;
+  claude) cmd_claude "$@" ;;
+  all) cmd_all "$@" ;;
+  *) cmd_run "$cmd" "$@" ;;
 esac

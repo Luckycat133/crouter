@@ -1,29 +1,34 @@
 #!/bin/sh
-# Requesty's Claude Code Messages route. The OpenAI-compatible /v1 URL differs.
-PROVIDER_NAME="requesty"
-PROVIDER_DESC="Requesty Claude Code Anthropic Messages gateway"
-
-BASE_URL="https://router.requesty.ai"
-MODEL="anthropic/claude-sonnet-5"
-CONTEXT_TOKENS=""
-MODEL_OPUS="anthropic/claude-opus-5-5"
-MODEL_SONNET="anthropic/claude-sonnet-5"
-MODEL_HAIKU="anthropic/claude-haiku-4-5"
-MODEL_SUBAGENT="anthropic/claude-haiku-4-5"
-EFFORT=""
-
-AUTH_MODE="surfaces"
-API_URL="https://router.requesty.ai"
-API_AUTH_TYPE="bearer"
-API_KEY_ENV="REQUESTY_API_KEY"
-API_KEYS="requesty-api-key"
-API_MODEL="anthropic/claude-sonnet-5"
-API_MODEL_OPUS="anthropic/claude-opus-5-5"
-API_MODEL_SONNET="anthropic/claude-sonnet-5"
-API_MODEL_HAIKU="anthropic/claude-haiku-4-5"
-API_MODEL_SUBAGENT="anthropic/claude-haiku-4-5"
-
-EXTRA_ENV="CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1"
-PRE_START=""
-POST_STOP=""
-HEALTH_CHECK_URL=""
+# Catalog/config review: 2026-11-07. See docs/provider-refresh-2026-11-07.md.
+# https://www.requesty.ai/models/anthropic/claude-sonnet-5-5
+# Credentials are explicitly assigned to billing surfaces; never infer a plan key.
+PROVIDER_NAME='requesty'
+PROVIDER_DESC='Requesty Claude Code Anthropic Messages gateway'
+BASE_URL='https://router.requesty.ai'
+MODEL='anthropic/claude-sonnet-5-5'
+CONTEXT_TOKENS=''
+MODEL_OPUS='anthropic/claude-opus-5-5'
+MODEL_SONNET='anthropic/claude-sonnet-5-5'
+MODEL_HAIKU='anthropic/claude-haiku-5-5'
+MODEL_SUBAGENT='anthropic/claude-haiku-5-5'
+MODEL_ALIASES='anthropic/claude-fable-5.1 anthropic/claude-opus-5-5 anthropic/claude-sonnet-5-5 anthropic/claude-haiku-5-5'
+EFFORT=''
+AUTH_MODE='surfaces'
+API_URL='https://router.requesty.ai'
+API_AUTH_TYPE='bearer'
+API_KEY_ENV='REQUESTY_API_KEY'
+API_KEYS='requesty-api-key'
+API_MODEL='anthropic/claude-sonnet-5-5'
+API_MODEL_OPUS='anthropic/claude-opus-5-5'
+API_MODEL_SONNET='anthropic/claude-sonnet-5-5'
+API_MODEL_HAIKU='anthropic/claude-haiku-5-5'
+API_MODEL_SUBAGENT='anthropic/claude-haiku-5-5'
+EXTRA_ENV='CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1'
+PRE_START=''
+POST_STOP=''
+HEALTH_CHECK_URL=''
+MODELS_DISCOVERY='remote'
+MODELS_API_URL='https://router.requesty.ai/v1/models'
+MODELS_API_AUTH='bearer'
+MODELS_API_SURFACE='api'
+API_MODELS='anthropic/claude-sonnet-5-5 anthropic/claude-opus-5-5 anthropic/claude-haiku-5-5 anthropic/claude-fable-5.1'

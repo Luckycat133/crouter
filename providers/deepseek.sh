@@ -1,31 +1,35 @@
 #!/bin/sh
-# DeepSeek's official Anthropic-compatible pay-as-you-go API.
-PROVIDER_NAME="deepseek"
-PROVIDER_DESC="DeepSeek V4.1 Flash API"
-
-BASE_URL="https://api.deepseek.com/anthropic"
-MODEL="deepseek-flash[1m]"
-CONTEXT_TOKENS="1000000"
-AUTO_COMPACT_TOKENS="786432"
-MODEL_OPUS="deepseek-flash[1m]"
-MODEL_SONNET="deepseek-flash[1m]"
-MODEL_HAIKU="deepseek-flash"
-MODEL_SUBAGENT="deepseek-flash"
-MODEL_ALIASES="deepseek-v4.1-flash deepseek-v4.1 deepseek-v4-pro deepseek-v4-flash"
-EFFORT="max"
-
-AUTH_MODE="surfaces"
-API_URL="https://api.deepseek.com/anthropic"
-API_AUTH_TYPE="x-api-key"
-API_KEY_ENV="DEEPSEEK_API_KEY"
-API_KEYS="deepseek-api-key"
-API_MODEL="deepseek-flash"
-API_MODEL_OPUS="deepseek-flash"
-API_MODEL_SONNET="deepseek-flash"
-API_MODEL_HAIKU="deepseek-flash"
-API_MODEL_SUBAGENT="deepseek-flash"
-
-EXTRA_ENV="CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1"
-PRE_START=""
-POST_STOP=""
-HEALTH_CHECK_URL=""
+# Catalog/config review: 2026-11-07. See docs/provider-refresh-2026-11-07.md.
+# https://api-docs.deepseek.com/quick_start/pricing
+# Credentials are explicitly assigned to billing surfaces; never infer a plan key.
+PROVIDER_NAME='deepseek'
+PROVIDER_DESC='DeepSeek V4.1 Flash API'
+BASE_URL='https://api.deepseek.com/anthropic'
+MODEL='deepseek-flash[1m]'
+CONTEXT_TOKENS='1000000'
+AUTO_COMPACT_TOKENS='786432'
+MODEL_OPUS='deepseek-flash[1m]'
+MODEL_SONNET='deepseek-flash[1m]'
+MODEL_HAIKU='deepseek-flash'
+MODEL_SUBAGENT='deepseek-flash'
+MODEL_ALIASES='deepseek-flash deepseek-v4-pro deepseek-v4-flash deepseek-v4-flash-vision-exp'
+EFFORT='max'
+AUTH_MODE='surfaces'
+API_URL='https://api.deepseek.com/anthropic'
+API_AUTH_TYPE='x-api-key'
+API_KEY_ENV='DEEPSEEK_API_KEY'
+API_KEYS='deepseek-api-key'
+API_MODEL='deepseek-flash'
+API_MODEL_OPUS='deepseek-flash'
+API_MODEL_SONNET='deepseek-flash'
+API_MODEL_HAIKU='deepseek-flash'
+API_MODEL_SUBAGENT='deepseek-flash'
+EXTRA_ENV='CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1'
+PRE_START=''
+POST_STOP=''
+HEALTH_CHECK_URL=''
+MODELS_DISCOVERY='remote'
+MODELS_API_URL='https://api.deepseek.com/models'
+MODELS_API_AUTH='bearer'
+MODELS_API_SURFACE='api'
+API_MODELS='deepseek-flash deepseek-v4-pro deepseek-v4-flash deepseek-v4-flash-vision-exp'

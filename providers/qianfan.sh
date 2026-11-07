@@ -1,47 +1,43 @@
 #!/bin/sh
-# Baidu Qianfan personal Token Plan and ordinary MaaS use separate prefixes.
-PROVIDER_NAME="qianfan"
-PROVIDER_DESC="Baidu Qianfan personal Token Plan and pay-as-you-go API"
-
-# Fallback to common Baidu Qianfan env vars
-if [ -z "${QIANFAN_TOKEN_PLAN_KEY:-}" ]; then
-  if [ -n "${QIANFAN_API_KEY:-}" ]; then
-    export QIANFAN_TOKEN_PLAN_KEY="$QIANFAN_API_KEY"
-  elif [ -n "${BAIDU_API_KEY:-}" ]; then
-    export QIANFAN_TOKEN_PLAN_KEY="$BAIDU_API_KEY"
-  fi
-fi
-
-BASE_URL="https://qianfan.baidubce.com/anthropic/tokenplan/personal"
-MODEL="deepseek-v4-pro"
-CONTEXT_TOKENS="262144"
-MODEL_OPUS="deepseek-v4-pro"
-MODEL_SONNET="deepseek-v4-pro"
-MODEL_HAIKU="deepseek-v3.2"
-MODEL_SUBAGENT="deepseek-v4-pro"
-MODEL_ALIASES="deepseek-v3.2"
-EFFORT="high"
-
-AUTH_MODE="surfaces"
-PLAN_URL="https://qianfan.baidubce.com/anthropic/tokenplan/personal"
-PLAN_AUTH_TYPE="bearer"
-PLAN_KEY_ENV="QIANFAN_TOKEN_PLAN_KEY"
-PLAN_KEYS="qianfan-token-plan"
-PLAN_MODEL="deepseek-v4-pro"
-PLAN_MODEL_OPUS="deepseek-v4-pro"
-PLAN_MODEL_SONNET="deepseek-v4-pro"
-PLAN_MODEL_HAIKU="deepseek-v3.2"
-PLAN_MODEL_SUBAGENT="deepseek-v4-pro"
-
-API_URL="https://qianfan.baidubce.com/anthropic"
-API_AUTH_TYPE="bearer"
-API_KEY_ENV="QIANFAN_API_KEY"
-API_KEYS="qianfan-api-key"
-API_MODEL="deepseek-v3.2"
-
-ASSET_PROFILE="empty"
-EXTRA_ENV="API_TIMEOUT_MS=600000
-CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1"
-PRE_START=""
-POST_STOP=""
-HEALTH_CHECK_URL=""
+# Catalog/config review: 2026-11-07. See docs/provider-refresh-2026-11-07.md.
+# https://cloud.baidu.com/doc/qianfan/s/Dmrabu8b6
+# Credentials are explicitly assigned to billing surfaces; never infer a plan key.
+PROVIDER_NAME='qianfan'
+PROVIDER_DESC='Baidu Qianfan personal Token Plan and pay-as-you-go API'
+BASE_URL='https://qianfan.baidubce.com/anthropic/tokenplan/personal'
+MODEL='deepseek-v4-pro'
+CONTEXT_TOKENS='262144'
+MODEL_OPUS='deepseek-v4-pro'
+MODEL_SONNET='deepseek-v4-pro'
+MODEL_HAIKU='deepseek-v4-pro'
+MODEL_SUBAGENT='deepseek-v4-pro'
+MODEL_ALIASES='deepseek-v4-pro deepseek-v4.1-flash deepseek-v4.1-flash-1017 glm-5.3 glm-5.3-flash'
+EFFORT='high'
+AUTH_MODE='surfaces'
+PLAN_URL='https://qianfan.baidubce.com/anthropic/tokenplan/personal'
+PLAN_AUTH_TYPE='bearer'
+PLAN_KEY_ENV='QIANFAN_TOKEN_PLAN_KEY'
+PLAN_KEYS='qianfan-token-plan'
+PLAN_MODEL='deepseek-v4-pro'
+PLAN_MODEL_OPUS='deepseek-v4-pro'
+PLAN_MODEL_SONNET='deepseek-v4-pro'
+PLAN_MODEL_HAIKU='deepseek-v4-pro'
+PLAN_MODEL_SUBAGENT='deepseek-v4-pro'
+API_URL='https://qianfan.baidubce.com/anthropic'
+API_AUTH_TYPE='bearer'
+API_KEY_ENV='QIANFAN_API_KEY'
+API_KEYS='qianfan-api-key'
+API_MODEL='deepseek-v3.2'
+ASSET_PROFILE='empty'
+EXTRA_ENV='API_TIMEOUT_MS=600000
+CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1'
+PRE_START=''
+POST_STOP=''
+HEALTH_CHECK_URL=''
+API_MODEL_OPUS='deepseek-v3.2'
+API_MODEL_SONNET='deepseek-v3.2'
+API_MODEL_HAIKU='deepseek-v3.2'
+API_MODEL_SUBAGENT='deepseek-v3.2'
+MODELS_DISCOVERY='static'
+PLAN_MODELS='deepseek-v4-pro deepseek-v4.1-flash deepseek-v4.1-flash-1017 glm-5.3 glm-5.3-flash'
+API_MODELS='deepseek-v3.2'

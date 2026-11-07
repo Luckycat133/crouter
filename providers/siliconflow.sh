@@ -1,27 +1,34 @@
 #!/bin/sh
-# SiliconFlow exposes a pay-as-you-go Anthropic Messages endpoint.
-PROVIDER_NAME="siliconflow"
-PROVIDER_DESC="SiliconFlow multi-model API"
-
-BASE_URL="https://api.siliconflow.cn"
-MODEL="Pro/moonshotai/Kimi-K2.7-Code"
-CONTEXT_TOKENS=""
-MODEL_OPUS="Pro/moonshotai/Kimi-K2.7-Code"
-MODEL_SONNET="Pro/moonshotai/Kimi-K2.7-Code"
-MODEL_HAIKU="deepseek-ai/DeepSeek-V4-Flash"
-MODEL_SUBAGENT="Pro/moonshotai/Kimi-K2.7-Code"
-MODEL_ALIASES="zai-org/GLM-5.3 Pro/zai-org/GLM-5.3 deepseek-ai/DeepSeek-V4-Flash Pro/moonshotai/Kimi-K2.6"
-EFFORT="high"
-
-AUTH_MODE="surfaces"
-API_URL="https://api.siliconflow.cn"
-API_AUTH_TYPE="bearer"
-API_KEY_ENV="SILICONFLOW_API_KEY"
-API_KEYS="siliconflow-api-key"
-API_MODEL="Pro/moonshotai/Kimi-K2.7-Code"
-API_MODEL_HAIKU="deepseek-ai/DeepSeek-V4-Flash"
-
-EXTRA_ENV="CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1"
-PRE_START=""
-POST_STOP=""
-HEALTH_CHECK_URL=""
+# Catalog/config review: 2026-11-07. See docs/provider-refresh-2026-11-07.md.
+# https://api-docs.siliconflow.cn/docs/usercases/use-siliconcloud-in-ccswitch
+# Credentials are explicitly assigned to billing surfaces; never infer a plan key.
+PROVIDER_NAME='siliconflow'
+PROVIDER_DESC='SiliconFlow multi-model API'
+BASE_URL='https://api.siliconflow.cn'
+MODEL='Pro/moonshotai/Kimi-K2.7-Code'
+CONTEXT_TOKENS=''
+MODEL_OPUS='Pro/moonshotai/Kimi-K2.7-Code'
+MODEL_SONNET='Pro/moonshotai/Kimi-K2.7-Code'
+MODEL_HAIKU='deepseek-ai/DeepSeek-V4-Flash'
+MODEL_SUBAGENT='Pro/moonshotai/Kimi-K2.7-Code'
+MODEL_ALIASES='zai-org/GLM-5.3 Pro/zai-org/GLM-5.3 deepseek-ai/DeepSeek-V4-Flash Pro/moonshotai/Kimi-K2.6'
+EFFORT='high'
+AUTH_MODE='surfaces'
+API_URL='https://api.siliconflow.cn'
+API_AUTH_TYPE='bearer'
+API_KEY_ENV='SILICONFLOW_API_KEY'
+API_KEYS='siliconflow-api-key'
+API_MODEL='Pro/moonshotai/Kimi-K2.7-Code'
+EXTRA_ENV='CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1'
+PRE_START=''
+POST_STOP=''
+HEALTH_CHECK_URL=''
+API_MODEL_HAIKU='deepseek-ai/DeepSeek-V4-Flash'
+MODELS_DISCOVERY='remote'
+MODELS_API_URL='https://api.siliconflow.cn/v1/models'
+MODELS_API_AUTH='bearer'
+MODELS_API_SURFACE='api'
+API_MODELS='Pro/moonshotai/Kimi-K2.7-Code deepseek-ai/DeepSeek-V4-Flash zai-org/GLM-5.3 Pro/zai-org/GLM-5.3 Pro/moonshotai/Kimi-K2.6'
+API_MODEL_OPUS='Pro/moonshotai/Kimi-K2.7-Code'
+API_MODEL_SONNET='Pro/moonshotai/Kimi-K2.7-Code'
+API_MODEL_SUBAGENT='Pro/moonshotai/Kimi-K2.7-Code'

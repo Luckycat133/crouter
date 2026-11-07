@@ -1,41 +1,33 @@
 #!/bin/sh
-# Baidu Qianfan team Token Plan has its own endpoint and credential.
-PROVIDER_NAME="qianfan-team"
-PROVIDER_DESC="Baidu Qianfan team Token Plan"
-
-# Fallback to common Baidu Qianfan env vars
-if [ -z "${QIANFAN_TEAM_TOKEN_PLAN_KEY:-}" ]; then
-  if [ -n "${QIANFAN_API_KEY:-}" ]; then
-    export QIANFAN_TEAM_TOKEN_PLAN_KEY="$QIANFAN_API_KEY"
-  elif [ -n "${BAIDU_API_KEY:-}" ]; then
-    export QIANFAN_TEAM_TOKEN_PLAN_KEY="$BAIDU_API_KEY"
-  fi
-fi
-
-BASE_URL="https://qianfan.baidubce.com/anthropic/tokenplan/team"
-MODEL="deepseek-v4-flash"
-CONTEXT_TOKENS="262144"
-MODEL_OPUS="deepseek-v4-flash"
-MODEL_SONNET="deepseek-v4-flash"
-MODEL_HAIKU="deepseek-v4-flash"
-MODEL_SUBAGENT="deepseek-v4-flash"
-MODEL_ALIASES="deepseek-v3.2"
-EFFORT="high"
-
-AUTH_MODE="surfaces"
-PLAN_URL="https://qianfan.baidubce.com/anthropic/tokenplan/team"
-PLAN_AUTH_TYPE="bearer"
-PLAN_KEY_ENV="QIANFAN_TEAM_TOKEN_PLAN_KEY"
-PLAN_KEYS="qianfan-team-token-plan"
-PLAN_MODEL="deepseek-v4-flash"
-PLAN_MODEL_OPUS="deepseek-v4-flash"
-PLAN_MODEL_SONNET="deepseek-v4-flash"
-PLAN_MODEL_HAIKU="deepseek-v4-flash"
-PLAN_MODEL_SUBAGENT="deepseek-v4-flash"
-
-ASSET_PROFILE="empty"
-EXTRA_ENV="API_TIMEOUT_MS=600000
-CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1"
-PRE_START=""
-POST_STOP=""
-HEALTH_CHECK_URL=""
+# Catalog/config review: 2026-11-07. See docs/provider-refresh-2026-11-07.md.
+# https://cloud.baidu.com/doc/qianfan/s/ymq8wwch2
+# Credentials are explicitly assigned to billing surfaces; never infer a plan key.
+PROVIDER_NAME='qianfan-team'
+PROVIDER_DESC='Baidu Qianfan team Token Plan'
+BASE_URL='https://qianfan.baidubce.com/anthropic/tokenplan/team'
+MODEL='deepseek-v4.1-flash'
+CONTEXT_TOKENS='262144'
+MODEL_OPUS='deepseek-v4.1-flash'
+MODEL_SONNET='deepseek-v4.1-flash'
+MODEL_HAIKU='deepseek-v4.1-flash'
+MODEL_SUBAGENT='deepseek-v4.1-flash'
+MODEL_ALIASES='deepseek-v4.1-flash-1017 deepseek-v4.1-flash deepseek-v4-pro deepseek-v4-pro-0813 deepseek-v4-flash-0731 deepseek-v3.2 glm-5.3 glm-5.3-flash glm-5.2 glm-5.1'
+EFFORT='high'
+AUTH_MODE='surfaces'
+PLAN_URL='https://qianfan.baidubce.com/anthropic/tokenplan/team'
+PLAN_AUTH_TYPE='bearer'
+PLAN_KEY_ENV='QIANFAN_TEAM_TOKEN_PLAN_KEY'
+PLAN_KEYS='qianfan-team-token-plan'
+PLAN_MODEL='deepseek-v4.1-flash'
+PLAN_MODEL_OPUS='deepseek-v4.1-flash'
+PLAN_MODEL_SONNET='deepseek-v4.1-flash'
+PLAN_MODEL_HAIKU='deepseek-v4.1-flash'
+PLAN_MODEL_SUBAGENT='deepseek-v4.1-flash'
+ASSET_PROFILE='empty'
+EXTRA_ENV='API_TIMEOUT_MS=600000
+CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1'
+PRE_START=''
+POST_STOP=''
+HEALTH_CHECK_URL=''
+MODELS_DISCOVERY='static'
+PLAN_MODELS='deepseek-v4.1-flash deepseek-v4.1-flash-1017 deepseek-v4-pro deepseek-v4-pro-0813 deepseek-v4-flash-0731 deepseek-v3.2 glm-5.3 glm-5.3-flash glm-5.2 glm-5.1'
