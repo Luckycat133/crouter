@@ -268,7 +268,7 @@ cmd_logs_list() {
   for _f in "$_ld"/*; do
     [ -e "$_f" ] || continue
     _meta=$(ls -l "$_f" 2>/dev/null | awk 'NR==1{print $5, $6, $7}')
-    if [ -n "$_meta" ]; then _size=${_meta%% *}; _when=${_meta#* }; else _size=? _when=unknown; fi
+    if [ -n "$_meta" ]; then _size=${_meta%% *}; _when=${_meta#* }; else _size='?' _when=unknown; fi
     printf '%10s  %-16s  %s\n' "$_size" "$_when" "$_f"
   done
 }
