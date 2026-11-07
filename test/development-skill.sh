@@ -8,3 +8,4 @@ command -v "$NODE_BIN" >/dev/null 2>&1 || {
   exit 1
 }
 "$NODE_BIN" "$ROOT_DIR/.agents/skills/crouter-development/scripts/validate.mjs"
+"$NODE_BIN" "$ROOT_DIR/.agents/skills/crouter-development/scripts/validate.test.mjs"

@@ -1,6 +1,6 @@
 # crouter contributor context
 
-POSIX `/bin/sh` launcher for Anthropic-compatible providers, with dependency-free Node proxies. `bin/crouter` owns dispatch; `providers/` declares provider contracts; `lib/` handles auth, assets and isolated launches. `install.sh` generates compatibility launchers from provider files.
+POSIX `/bin/sh` launcher for Anthropic-compatible providers, with dependency-free Node proxies. `bin/crouter` owns dispatch; `providers/` declares provider contracts; `lib/` handles auth, assets and isolated launches. `install.sh` installs only `crouter`; the retired `claude-<provider>` launchers are not generated.
 
 ## 产品主线
 
@@ -17,17 +17,26 @@ crouter 只服务 Claude Code：API、订阅、多 Key、本地推理和 App 反
 
 ## Commands and release
 
-Use focused offline tests for the affected behavior. Before release, run every `test/*.sh` under both `sh` and `dash`; the legacy smoke test alone is insufficient.
+Use focused offline tests for the affected behavior. Before release, run every `test/*.sh` under both `sh` and `dash`; the legacy smoke test alone is insufficient. Run from an isolated checkout, propagate TEST_SHELL and retain failures. Syntax checks must visit each file, not pass later filenames as shell positional arguments.
 
 ```sh
-for test_file in test/*.sh; do sh "$test_file"; done
-for test_file in test/*.sh; do dash "$test_file"; done
-sh -n bin/crouter bin/crouter-compat install.sh lib/*.sh providers/*.sh test/*.sh
+failed=0
+for shell in sh dash; do
+  for test_file in test/*.sh; do
+    TEST_SHELL="$shell" "$shell" "$test_file" || failed=1
+  done
+  for file in bin/crouter install.sh lib/*.sh providers/*.sh test/*.sh; do
+    "$shell" -n "$file" || failed=1
+  done
+done
+test "$failed" -eq 0 || exit 1
 shellcheck --severity=warning --exclude=SC1007,SC1090,SC1091,SC2034,SC2120 \
-  .githooks/pre-push bin/crouter bin/crouter-compat completions/crouter.bash \
-  config.example.sh install.sh lib/*.sh providers/*.sh test/*.sh
-for file in bin/gateway bin/keypool-proxy lib/*.js lib/*.mjs; do node --check "$file"; done
-./bin/crouter --version
+  .githooks/pre-push bin/crouter completions/crouter.bash \
+  config.example.sh install.sh lib/*.sh providers/*.sh test/*.sh || exit 1
+for file in bin/gateway bin/keypool-proxy bin/crouter-models bin/openrouter-models lib/*.js lib/*.mjs; do
+  node --check "$file" || exit 1
+done
+./bin/crouter --version || exit 1
 git diff --check
 ```
 
