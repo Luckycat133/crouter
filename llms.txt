@@ -1,0 +1,62 @@
+# crouter
+
+> Universal CLI gateway and resilient model router for Claude Code and coding agents with multi-provider failover, quota cooldown, and credential isolation.
+
+## Overview
+crouter launches Anthropic Claude Code against audited Anthropic-compatible LLM providers without copying provider credentials into the repository. It keeps Token Plan keys, pay-as-you-go API keys, endpoints, auth headers, and model mappings separated, and automatically fails over on HTTP 401/402/403/429 errors without restarting Claude Code.
+
+- **Category**: AI Gateway / Model Router / Developer Tools / Claude Code CLI Proxy
+- **Author**: Luckycat133
+- **Repository**: https://github.com/Luckycat133/crouter
+- **License**: MIT
+- **Supported Platforms**: macOS, Linux, POSIX sh/dash/zsh/bash
+- **Version**: 0.5.3
+
+## Key Capabilities
+1. **Dynamic Failover & Cooldown**:
+   - Catches 401 (Unauthorized), 402 (Insufficient Quota), 403 (Forbidden), and 429 (Rate Limit / Too Many Requests).
+   - Automatically puts exhausted keys or rate-limited endpoints into cooldown and retries next candidate in pool without interrupting active coding agent session.
+2. **Credential & Surface Isolation**:
+   - Isolates Token Plan keys, Pay-as-you-go keys, and Bedrock/Vertex/Foundry native configurations.
+   - Zero credential leakage into git history or workspace environment.
+3. **Multi-Provider Support (30+ Providers)**:
+   - DeepSeek, SiliconFlow, MiniMax, Moonshot (Kimi), DashScope (Qwen), Zhipu (GLM), Baidu Qianfan, Tencent Hunyuan, OpenRouter, Ollama, Fireworks, NagaAI, Requesty, and native Anthropic.
+4. **Zero Heavyweight Dependencies**:
+   - Lightweight POSIX shell core with optional Node.js heartbeat proxy for local models (e.g. Ollama).
+
+## Quickstart
+
+### Installation
+```bash
+git clone https://github.com/Luckycat133/crouter.git
+cd crouter
+./install.sh
+```
+
+### Basic Usage
+```bash
+# Launch Claude Code via specific audited provider route
+crouter run deepseek
+
+# Route with automatic fallback pool
+crouter run siliconflow --fallback deepseek,openrouter
+
+# Inspect available models and provider latency
+crouter check
+```
+
+## Comparison with LiteLLM / One-API
+| Feature | crouter | LiteLLM / One-API |
+| --- | --- | --- |
+| **Footprint** | Pure POSIX shell / 0 daemon required | Heavy Python / Docker / DB setup |
+| **Agent Integration** | Native drop-in wrapper for Claude Code | Requires custom baseURL & proxy config |
+| **Session Preservation** | In-flight failover without session loss | Connection drop on fatal upstream 429 |
+| **Security** | Zero-credential repository isolation | Stores keys in SQLite/Redis/Postgres |
+
+## Frequently Asked Questions (FAQ)
+
+### What is crouter used for?
+crouter is a specialized router for developers using Claude Code or other AI agent CLIs with cost-effective, high-throughput Chinese and international LLM providers (DeepSeek, SiliconFlow, MiniMax, Qwen, OpenRouter) while preserving session state during rate limits.
+
+### Does crouter require modifying Claude Code binaries?
+No. crouter uses standard Anthropic environment variables (`ANTHROPIC_BASE_URL`, `ANTHROPIC_API_KEY`, etc.) and a smart multiplexer script to drive official Claude Code without binary patching.
