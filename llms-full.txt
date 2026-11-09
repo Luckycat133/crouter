@@ -1,0 +1,548 @@
+# crouter Technical Specification & Architecture Manual (llms-full.txt)
+
+> Comprehensive reference specification for `crouter` — universal model router, failover gateway, and credential isolation platform for Claude Code and coding agents.
+
+---
+
+## 1. System Architecture & Core Mechanics
+
+`crouter` provides an audited, resilient routing layer between Anthropic Claude Code (or other coding agents) and diverse large language model backends. It solves three critical operational problems in autonomous AI development:
+1. **Uninterrupted Agent Sessions**: Upstream rate limits (HTTP 429), quota exhaustion (HTTP 402), or temporary authentication failures (HTTP 401/403) trigger immediate in-flight candidate failover without dropping terminal sessions or restarting Claude Code.
+2. **Quota Cooldown**: Unhealthy or exhausted credentials enter an automatic backoff cooldown, preventing subsequent agent tool calls from wasting retries on non-responsive backends.
+3. **Zero Credential Contamination**: Environment sanitization (`env -i`) and macOS Keychain isolation prevent accidental leakage of proprietary API keys or Token Plan tokens into git history, terminal logs, or child subprocesses.
+
+```
+                              +---------------------------------------+
+                              |   Client / Coding Agent Application   |
+                              |   (Claude Code, Cursor, Codex, etc.)  |
+                              +---------------------------------------+
+                                                  |
+                         ANTHROPIC_BASE_URL (http://127.0.0.1:KEYPOOL/GATEWAY)
+                         ANTHROPIC_API_KEY (Session Client Token)
+                                                  |
+                                                  v
+                              +---------------------------------------+
+                              |         crouter Proxy Layer           |
+                              |  - Direct Launch: bin/keypool-proxy   |
+                              |  - Unified Gateway: bin/gateway       |
+                              |  - Ollama Relay: 60s SSE Keepalive    |
+                              +---------------------------------------+
+                                    |                      |
+                    Transparent Failover               Candidate Cooldown
+                    (401, 402, 403, 429)               (300s / Retry-After)
+                                    |                      |
+                                    v                      v
+        +-------------------------------------------------------------------------+
+        |                              Upstream Providers                         |
+        |  +--------------------+  +--------------------+  +--------------------+  |
+        |  |  Token Plan Pool   |  |   Pay-As-You-Go    |  |  Local / Native    |  |
+        |  |  (MiniMax, Qwen,   |  |   API Endpoints    |  |  (Ollama, MLX,     |  |
+        |  |   Moonshot, etc.)  |  | (DeepSeek, OpenR.) |  |   Bedrock, Vertex) |  |
+        |  +--------------------+  +--------------------+  +--------------------+  |
+        +-------------------------------------------------------------------------+
+```
+
+### 1.1 Direct Provider Launch vs. Unified Gateway Mode
+
+- **Direct Provider Launch (`crouter <provider> [model] [args...]`)**:
+  - Starts a dedicated, local-only `keypool-proxy` on an ephemeral or allocated loopback port.
+  - Injects audited provider defaults: base model, Opus/Sonnet/Haiku/Subagent tier mappings, context window caps, reasoning effort levels, and session MCP plugins.
+  - Sanitizes the runtime environment using `env -i`, passing only essential OS environment variables and authorized credentials.
+  - Automatically terminates proxy processes when Claude Code exits.
+- **Unified Gateway Mode (`crouter all`)**:
+  - Starts `bin/gateway` listening on `127.0.0.1:18799` (customizable via `CROUTER_GATEWAY_PORT`).
+  - Synthesizes all configured providers into a unified `/v1/models` catalog where every model ID is namespaced (e.g. `deepseek/deepseek-flash`, `dashscope/qwen3.8-max`, `openrouter/anthropic/claude-sonnet-5`).
+  - Allows live model switching inside an active Claude Code session via the `/model <provider>/<model>` command without restarting the agent.
+  - Authenticates local clients using a cryptographically randomized per-session token (`CROUTER_GATEWAY_TOKEN`).
+
+---
+
+## 2. Failover Engine & Error Code Matrix
+
+`crouter` implements a unified failover engine shared across `bin/keypool-proxy`, `bin/gateway`, and `lib/proxy-common.js`.
+
+### 2.1 HTTP Status Code Matrix
+
+| Status Code | Classification | Action | Cooldown Triggered | Retry on Same Candidate? |
+|---|---|---|---|---|
+| **401 Unauthorized** | Expired/Revoked Key | Immediate Failover to next candidate | Yes (300s base) | No |
+| **402 Payment Required** | Balance/Quota Exhaustion | Immediate Failover to next candidate | Yes (300s base) | No |
+| **403 Forbidden** | Entitlement/Plan Inactive | Immediate Failover to next candidate | Yes (300s base) | No |
+| **429 Too Many Requests** | Rate Limit Exceeded | Immediate Failover to next candidate | Yes (`Retry-After` or 300s) | No |
+| **500 - 599 Server Error** | Upstream Provider Glitch | Retry on same candidate up to 2 times | Yes (on persistent failure) | Yes (exponential backoff: 400ms, 800ms) |
+| **Network Blip / Timeout** | TCP Reset / Hangup | Retry on same candidate up to 2 times | Yes (on persistent failure) | Yes (exponential backoff) |
+
+### 2.2 Cooldown Calculation Formula
+
+When an upstream endpoint responds with an exhausting HTTP status code, `crouter` calculates the unavailability timestamp:
+
+$$\text{cooldownMs} = \max\left(\text{CROUTER\_CANDIDATE\_COOLDOWN\_MS},\, \text{parseRetryAfter}(\text{headers})\right)$$
+
+- **Default Base Cooldown**: `300000 ms` (5 minutes). Configurable via `CROUTER_CANDIDATE_COOLDOWN_MS`.
+- **`Retry-After` Header Parsing**:
+  - Decimal or Integer Seconds: parsed into milliseconds (`seconds * 1000`).
+  - HTTP Date String: parsed into milliseconds relative to current wall-clock time (`Date.parse(header) - Date.now()`).
+- **Candidate Reordering**:
+  - Candidates whose cooldown has expired (`unavailableUntil <= now`) remain active in original priority order.
+  - Candidates currently cooling down (`unavailableUntil > now`) are sorted by earliest availability and appended to the **tail** of the candidate list.
+  - If all candidates are cooling down, the engine falls back to the candidate with the earliest expiring cooldown as a last-resort recovery mechanism.
+  - Successful requests execute `clear(candidateIndex)`, resetting cooldown tracking.
+
+---
+
+## 3. Comprehensive Provider Catalog (36 Providers)
+
+`crouter` provides pre-audited configuration files in `providers/*.sh`. Every provider strictly defines model tiers, endpoints, authentication headers, context bounds, and sampling defaults.
+
+### 3.1 Master Provider Summary Table
+
+| Provider Identifier | Service Category | Surface Type | Primary Default Model | Default Context | Auth Header | Primary Env Var |
+|---|---|---|---|---:|---|---|
+| `302ai` | Aggregator | Surfaces (API) | `claude-sonnet-5` | 1,000,000 | `x-api-key` | `AI302_API_KEY` |
+| `aihubmix` | Aggregator | Surfaces (API) | `coding-glm-5.1-free` | Vendor Max | `Bearer` | `AIHUBMIX_API_KEY` |
+| `anthropic` | Official API | Single Env | `claude-sonnet-5` | Model-specific | `x-api-key` | `ANTHROPIC_API_KEY` |
+| `antigravity` | Local Proxy | Static | `gemini-3.8-flash` | 1,048,576 | `Bearer` | Local Proxy |
+| `antigravity-claude` | Local Proxy | Static | `claude-opus-4-6-thinking`| 200,000 | `Bearer` | Local Proxy |
+| `bedrock` | Native Cloud | Native AWS | `sonnet` | Model-specific | AWS SDK Signer | `AWS_PROFILE` / AWS SDK |
+| `bonsai` | Local Inference | None (Local) | `ternary-bonsai-2-27b` | 262,144 | None | Local Port 11438 |
+| `codex` | Subscription Proxy | None (Local) | `gpt-5.6-sol` | 1,050,000 | Dummy / Proxy | Local Port 19000 |
+| `dashscope` | Domestic Cloud | Surfaces (Plan/API)| `qwen3.8-max` | 983,616 | `Bearer` | `DASHSCOPE_TOKEN_PLAN_KEY` |
+| `dashscope-coding` | Domestic Cloud | Surfaces (Plan) | `qwen3.7-plus` | 983,616 | `Bearer` | `DASHSCOPE_CODING_PLAN_KEY`|
+| `deepseek` | Domestic Cloud | Surfaces (API) | `deepseek-flash` | 1,000,000 | `x-api-key` | `DEEPSEEK_API_KEY` |
+| `fireworks` | Global Serverless | Surfaces (API) | `glm-5p3-flash` | Vendor Max | `Bearer` | `FIREWORKS_API_KEY` |
+| `foundry` | Native Cloud | Native Azure | `sonnet` | Model-specific | Azure SDK Signer| `ANTHROPIC_FOUNDRY_RESOURCE`|
+| `huawei` | Domestic Cloud | Surfaces (Plan/API)| `glm-5.3` | 1,000,000 | `Bearer` | `HUAWEI_TOKEN_PLAN_KEY` |
+| `infini` | Domestic Cloud | Surfaces (API) | `glm-5.1` | Vendor Max | `Bearer` | `INFINI_API_KEY` |
+| `longcat` | Domestic Cloud | Surfaces (API) | `LongCat-2.5-Preview` | 1,000,000 | `Bearer` | `LONGCAT_API_KEY` |
+| `meta` | Model API | Surfaces (API) | `muse-spark-1.3` | 1,048,576 | `Bearer` | `MODEL_API_KEY` |
+| `minimax` | Domestic Cloud | Surfaces (Plan/API)| `MiniMax-M3.1-Flash` | 1,000,000 | `Bearer` | `MINIMAX_TOKEN_PLAN_KEY` |
+| `moonshot` | Domestic Cloud | Surfaces (Plan) | `k3-256k` | 262,144 | `x-api-key` | `KIMI_CODE_KEY` |
+| `nagaai` | Aggregator | Surfaces (API) | `claude-sonnet-5` | Vendor Max | `Bearer` | `NAGAAI_API_KEY` |
+| `ollama` | Local Inference | None (Local) | `qwen3.8:27b-dflash` | 262,144 | Dummy / Token | Local Port 11435 Relay |
+| `openrouter` | Global Gateway | Single Env | `nemotron-3.5-super-vl:free`| 1,000,000 | `Bearer` | `OPENROUTER_API_KEY` |
+| `ppio` | Domestic Cloud | Surfaces (API) | `minimax/minimax-m3` | 1,000,000 | `Bearer` | `PPIO_API_KEY` |
+| `qianfan` | Domestic Cloud | Surfaces (Plan/API)| `deepseek-v4-pro` | 262,144 | `Bearer` | `QIANFAN_TOKEN_PLAN_KEY` |
+| `qianfan-team` | Domestic Cloud | Surfaces (Plan) | `deepseek-v4-flash` | 262,144 | `Bearer` | `QIANFAN_TEAM_TOKEN_PLAN_KEY`|
+| `qianfan-coding` | Domestic Cloud | Surfaces (Plan) | `qianfan-code-latest` | 262,144 | `Bearer` | `QIANFAN_CODING_PLAN_KEY` |
+| `qiniu` | Domestic Cloud | Surfaces (Sub/API) | `deepseek-v3.2-251201` | Vendor Max | `Bearer` | `QINIU_SUBSCRIPTION_KEY` |
+| `requesty` | Aggregator | Surfaces (API) | `claude-sonnet-5` | Vendor Max | `Bearer` | `REQUESTY_API_KEY` |
+| `siliconflow` | Domestic Cloud | Surfaces (API) | `Kimi-K2.7-Code` | 1,000,000 | `Bearer` | `SILICONFLOW_API_KEY` |
+| `stepfun` | Domestic Cloud | Surfaces (Plan/API)| `step-5-preview` | 1,000,000 | `Bearer` | `STEPFUN_PLAN_KEY` |
+| `tencent` | Domestic Cloud | Surfaces (Plan/API)| `tc-code-latest` | 262,144 | `Bearer` | `TENCENT_TOKEN_PLAN_KEY` |
+| `tencent-coding` | Domestic Cloud | Surfaces (Plan) | `tc-code-latest` | 262,144 | `Bearer` | `TENCENT_CODING_PLAN_KEY` |
+| `vercel` | Global Gateway | Surfaces (API) | `claude-sonnet-5` | Vendor Max | `Bearer` | `AI_GATEWAY_API_KEY` |
+| `vertex` | Native Cloud | Native Google | `sonnet` | Model-specific | Google ADC | `ANTHROPIC_VERTEX_PROJECT_ID`|
+| `xiaomi` | Domestic Cloud | Surfaces (Plan/API)| `mimo-v2.6-pro[1m]` | 1,048,576 | `Bearer` | `XIAOMI_TOKEN_PLAN_KEY` |
+| `z-ai` | Domestic Cloud | Surfaces (Plan/API)| `glm-5.3` | 1,000,000 | `Bearer` | `Z_AI_CODING_PLAN_KEY` |
+
+---
+
+### 3.2 In-Depth Provider Specifications
+
+#### 1. DeepSeek (`deepseek`)
+- **Base Endpoint**: `https://api.deepseek.com/anthropic`
+- **Auth Mode**: `surfaces` (API Surface). Header: `x-api-key`.
+- **Environment Variables**: `DEEPSEEK_API_KEY`. Keychain: `deepseek-api-key`.
+- **Model Tiers**:
+  - Primary / Sonnet / Haiku / Subagent: `deepseek-flash`
+  - Opus: `deepseek-v4-pro`
+  - Self-Route / Aliases: `deepseek-flash`, `deepseek-v4.1-flash`, `deepseek-v4-pro`, `deepseek-v4-flash`, `deepseek-v4.1`, `deepseek-flash[1m]`.
+- **Context & Compaction**: Context Window = 1,000,000 tokens; Auto-Compaction Window = 786,432 tokens. Effort = `max`.
+- **Managed Assets**: Native server-side web search tool integration; strict MCP profile.
+
+#### 2. MiniMax (`minimax`)
+- **Base Endpoint**: `https://api.minimax.cn/anthropic`
+- **Auth Mode**: `surfaces` (Token Plan vs API Key). Header: `Bearer`.
+- **Plan Credentials**: Env: `MINIMAX_TOKEN_PLAN_KEY`. Keychain: `codex-minimax-token-plan`.
+- **API Credentials**: Env: `MINIMAX_API_KEY`. Keychain: `minimax-api-key`.
+- **Model Tiers**:
+  - Plan Surface: `MiniMax-M3` across Opus/Sonnet/Haiku/Subagent.
+  - API Surface: `MiniMax-M3.1-Flash` / `MiniMax-M3`.
+- **Context Window**: 1,000,000 tokens. Auto-Compaction = 1,000,000 tokens. Effort = `max`.
+- **Managed Assets**: `minimax-coding-plan-mcp==0.0.4` via `uvx`, plus session-scoped `minimax-cli` skill (`mmx-cli@1.0.19`).
+
+#### 3. DashScope - Alibaba Model Studio (`dashscope`)
+- **Base Endpoint (Plan)**: `https://token-plan.cn-beijing.maas.aliyuncs.com/apps/anthropic`
+- **Base Endpoint (API)**: `${DASHSCOPE_API_URL:-https://dashscope.aliyuncs.com/apps/anthropic}`
+- **Auth Mode**: `surfaces`. Header: `Bearer`.
+- **Plan Credentials**: Env: `DASHSCOPE_TOKEN_PLAN_KEY`. Keychain: `dashscope-token-plan`.
+- **API Credentials**: Env: `DASHSCOPE_API_KEY`. Keychain: `dashscope-api-key`.
+- **Model Tiers**:
+  - Plan Surface: `qwen3.8-max` (Opus/Sonnet), `qwen3.6-flash` (Haiku), `qwen3.7-max` (Subagent).
+  - API Surface: `qwen3.7-max` (Opus/Sonnet/Subagent), `qwen3.6-flash` (Haiku).
+- **Context Window**: 983,616 tokens. Auto-Compaction = 983,616 tokens. Effort = `xhigh`.
+- **Managed Assets**:
+  - Token Plan: namespaced media skill for image/video/speech endpoints.
+  - API Key: official Model Studio WebSearch MCP.
+
+#### 4. DashScope Coding Plan (`dashscope-coding`)
+- **Base Endpoint**: `https://coding.dashscope.aliyuncs.com/apps/anthropic`
+- **Auth Mode**: `surfaces` (Dedicated Coding Plan Surface). Header: `Bearer`.
+- **Credentials**: Env: `DASHSCOPE_CODING_PLAN_KEY`. Keychain: `dashscope-coding-plan`.
+- **Model**: `qwen3.7-plus`. Context: 983,616 tokens. Effort = `xhigh`.
+
+#### 5. Moonshot / Kimi Code (`moonshot`)
+- **Base Endpoint**: `https://api.kimi.com/coding/`
+- **Auth Mode**: `surfaces`. Header: `x-api-key`.
+- **Credentials**: Env: `KIMI_CODE_KEY` (fallback: `MOONSHOT_API_KEY`). Keychain: `moonshot-coding-1`.
+- **Model Tiers**: Primary: `k3-256k`. Aliases: `k3[1m]`, `kimi-k3`, `kimi-k3.1-pro`.
+- **Context Window**: 262,144 tokens (`k3-256k`) or 1,000,000 tokens (`k3[1m]`). Effort = `high`.
+
+#### 6. SiliconFlow (`siliconflow`)
+- **Base Endpoint**: `https://api.siliconflow.cn`
+- **Auth Mode**: `surfaces`. Header: `Bearer`.
+- **Credentials**: Env: `SILICONFLOW_API_KEY`. Keychain: `siliconflow-api-key`.
+- **Model Tiers**: Opus/Sonnet/Subagent: `Pro/moonshotai/Kimi-K2.7-Code`. Haiku: `deepseek-ai/DeepSeek-V4-Flash`.
+- **Context Window**: Up to 1,000,000 tokens via overrides. Effort = `high`.
+
+#### 7. OpenRouter (`openrouter`)
+- **Base Endpoint**: `https://openrouter.ai/api`
+- **Auth Mode**: `env`. Header: `Bearer`.
+- **Credentials**: Env: `OPENROUTER_API_KEY`. Keychain: `openrouter-api-key`.
+- **Dynamic Catalog**: Caches 400+ models locally at `~/.local/state/crouter/models-openrouter.json` with 24-hour TTL.
+- **Default Model**: `nvidia/nemotron-3.5-super-vl:free`.
+- **Context Window**: 1,000,000 tokens (Nemotron), 262,144 tokens (`qwen/qwen3.8-27b`). Effort = `max`.
+
+#### 8. Ollama Local Inference (`ollama`)
+- **Base Endpoint**: `http://127.0.0.1:11435` (Internal Heartbeat Relay). Upstream Ollama: `127.0.0.1:11434`.
+- **Auth Mode**: `none` (Loopback authentication token: `ollama`).
+- **Default Model**: `qwen3.8:27b-dflash` (262,144 context, effort `xhigh`).
+- **Heartbeat Proxy Features**:
+  - Emits SSE comment keepalives (`: keepalive`) every 60 seconds during multi-minute tool execution.
+  - Converts DeepSeek-V4 vision blocks into textual fallback descriptions, avoiding missing-`mmproj` HTTP 500 fatal errors.
+  - Normalizes thinking mode between Anthropic parameters and local Ollama toggles.
+
+#### 9. Anthropic Console (`anthropic`)
+- **Base Endpoint**: `https://api.anthropic.com`
+- **Auth Mode**: `env`. Header: `x-api-key`.
+- **Credentials**: Env: `ANTHROPIC_API_KEY`. Keychain: `anthropic-api-key`.
+- **Model Tiers**: Opus: `claude-opus-5-5`. Sonnet: `claude-sonnet-5`. Haiku: `claude-haiku-4-5`.
+- **Isolation Note**: Official subscription OAuth (`crouter claude`) is strictly separated from Console API billing (`crouter anthropic`).
+
+#### 10-12. Baidu Qianfan (`qianfan`, `qianfan-team`, `qianfan-coding`)
+- **Personal Token Plan (`qianfan`)**: `https://qianfan.baidubce.com/anthropic/tokenplan/personal`. Env: `QIANFAN_TOKEN_PLAN_KEY`.
+- **Team Token Plan (`qianfan-team`)**: `https://qianfan.baidubce.com/anthropic/tokenplan/team`. Env: `QIANFAN_TEAM_TOKEN_PLAN_KEY`.
+- **Legacy Coding Plan (`qianfan-coding`)**: `https://qianfan.baidubce.com/anthropic/coding`. Env: `QIANFAN_CODING_PLAN_KEY`.
+- **Header**: `Bearer`. Models: `deepseek-v4-pro`, `deepseek-v4-flash`, `qianfan-code-latest`.
+
+#### 13-14. Tencent Cloud (`tencent`, `tencent-coding`)
+- **Token Plan & TokenHub (`tencent`)**: Plan: `https://api.lkeap.cloud.tencent.com/plan/anthropic`. API: `https://tokenhub.tencentmaas.com`. Env: `TENCENT_TOKEN_PLAN_KEY`, `TENCENT_API_KEY`.
+- **Coding Plan (`tencent-coding`)**: `https://api.lkeap.cloud.tencent.com/coding/anthropic`. Env: `TENCENT_CODING_PLAN_KEY`.
+- **Header**: `Bearer`. Primary Model: `tc-code-latest`. Optional Tencent WebSearch SSE MCP.
+
+#### 15. Z.AI GLM (`z-ai`)
+- **Base Endpoint**: `https://api.z.ai/api/anthropic`
+- **Auth Mode**: `surfaces`. Env: `Z_AI_CODING_PLAN_KEY`, `Z_AI_API_KEY`. Header: `Bearer`.
+- **Model**: `glm-5.3` (1M context), `glm-5.3-flash`. Effort = `high`.
+- **Managed Assets**: `@z_ai/mcp-server@0.1.4` vision, remote web search, web reader, and zread MCPs.
+
+#### 16. StepFun (`stepfun`)
+- **Base Endpoint**: Plan: `https://api.stepfun.com/step_plan`. API: `https://api.stepfun.com`.
+- **Auth Mode**: `surfaces`. Env: `STEPFUN_PLAN_KEY`, `STEPFUN_API_KEY`. Header: `Bearer`.
+- **Model**: `step-5-preview` (1M context). Haiku/Subagent: `step-3.7-flash` (262K context).
+- **Managed Assets**: StepSearch MCP (`web_search` and `web_fetch`) and session skill.
+
+#### 17. Huawei Cloud ModelArts MaaS (`huawei`)
+- **Base Endpoint**: Plan: `https://api.modelarts-maas.com/plan/anthropic`. API: `https://api.modelarts-maas.com/anthropic`.
+- **Auth Mode**: `surfaces`. Env: `HUAWEI_TOKEN_PLAN_KEY`, `HUAWEI_API_KEY`. Header: `Bearer`.
+- **Model**: `glm-5.3` (1M context), `deepseek-v4.1-flash`. Effort = `high`.
+
+#### 18. Xiaomi MiMo (`xiaomi`)
+- **Base Endpoint**: Plan: `https://token-plan-cn.xiaomimimo.com/anthropic`. API: `https://api.xiaomimimo.com/anthropic`.
+- **Auth Mode**: `surfaces`. Env: `XIAOMI_TOKEN_PLAN_KEY`, `XIAOMI_API_KEY`. Header: `Bearer`.
+- **Model**: `mimo-v2.6-pro[1m]` (1,048,576 context). Effort = `high`.
+
+#### 19. Qiniu AI (`qiniu`)
+- **Base Endpoint**: `https://api.qnaigc.com`
+- **Auth Mode**: `surfaces`. Env: `QINIU_SUBSCRIPTION_KEY`, `QINIU_API_KEY`. Header: `Bearer`.
+- **Model**: `deepseek/deepseek-v3.2-251201`. Dynamic model catalog cache supported.
+
+#### 20. PPIO (`ppio`)
+- **Base Endpoint**: `https://api.ppio.com/anthropic`
+- **Auth Mode**: `surfaces`. Env: `PPIO_API_KEY`. Header: `Bearer`.
+- **Model**: `minimax/minimax-m3`. Managed Asset: PPIO OAuth 2.1 cloud management MCP.
+
+#### 21. InfiniAI GenStudio (`infini`)
+- **Base Endpoint**: `https://cloud.infini-ai.com/maas`
+- **Auth Mode**: `surfaces` (API only; obsolete Coding Plan retired). Header: `Bearer`. Env: `INFINI_API_KEY`.
+- **Model**: `glm-5.1`.
+
+#### 22. LongCat (`longcat`)
+- **Base Endpoint**: `https://api.longcat.chat/anthropic`
+- **Auth Mode**: `surfaces`. Env: `LONGCAT_API_KEY`. Header: `Bearer`.
+- **Model**: `LongCat-2.5-Preview` (1M context).
+
+#### 23. Meta Model API (`meta`)
+- **Base Endpoint**: `https://api.meta.ai`
+- **Auth Mode**: `surfaces`. Env: `MODEL_API_KEY`. Header: `Bearer`.
+- **Model**: `muse-spark-1.3` (1,048,576 context).
+
+#### 24. Fireworks AI (`fireworks`)
+- **Base Endpoint**: `https://api.fireworks.ai/inference`
+- **Auth Mode**: `surfaces`. Env: `FIREWORKS_API_KEY`. Header: `Bearer`.
+- **Model**: `accounts/fireworks/models/glm-5p3-flash`.
+
+#### 25. Requesty AI (`requesty`)
+- **Base Endpoint**: `https://router.requesty.ai`
+- **Auth Mode**: `surfaces`. Env: `REQUESTY_API_KEY`. Header: `Bearer`.
+- **Model**: `anthropic/claude-sonnet-5`.
+
+#### 26. Vercel AI Gateway (`vercel`)
+- **Base Endpoint**: `https://ai-gateway.vercel.sh`
+- **Auth Mode**: `surfaces`. Env: `AI_GATEWAY_API_KEY`. Header: `Bearer`.
+- **Model**: `anthropic/claude-sonnet-5`.
+
+#### 27. 302.AI (`302ai`)
+- **Base Endpoint**: `https://api.302.ai`
+- **Auth Mode**: `surfaces`. Env: `AI302_API_KEY`. Header: `x-api-key`.
+- **Model**: `claude-sonnet-5` (1M context).
+
+#### 28. AIHubMix (`aihubmix`)
+- **Base Endpoint**: `https://aihubmix.com`
+- **Auth Mode**: `surfaces`. Env: `AIHUBMIX_API_KEY`. Header: `Bearer`.
+- **Model**: `coding-glm-5.1-free`.
+
+#### 29. NagaAI (`nagaai`)
+- **Base Endpoint**: `https://api.naga.ac`
+- **Auth Mode**: `surfaces`. Env: `NAGAAI_API_KEY`. Header: `Bearer`.
+- **Model**: `claude-sonnet-5`.
+
+#### 30-31. Antigravity Local Proxy (`antigravity`, `antigravity-claude`)
+- **Proxy Requirement**: Local instance of `antigravity-claude-proxy`.
+- **Antigravity (Gemini)**: Base URL from proxy port; default `gemini-3.8-flash` (1,048,576 context).
+- **Antigravity Claude**: Base URL from proxy port; default `claude-opus-4-6-thinking` (200,000 context).
+
+#### 32. Codex Local Proxy (`codex`)
+- **Proxy Requirement**: Local instance of `icebear0828/codex-proxy` on `http://localhost:19000`.
+- **Model**: `gpt-5.6-sol` (1,050,000 context). Uses ChatGPT subscription OAuth.
+
+#### 33. Bonsai 2 Local Inference (`bonsai`)
+- **Base Endpoint**: `http://127.0.0.1:11438`
+- **Engine**: 27B MLX 2-bit Hadamard quantized model running locally.
+- **Model**: `ternary-bonsai-2-27b` (262,144 context). Effort = `max`.
+
+#### 34-36. Native Cloud SDK Integrations (`bedrock`, `vertex`, `foundry`)
+- **No Local Proxy**: Directly drives Claude Code's native AWS, Google Cloud, and Azure SDK integrations.
+- **Bedrock**: Env: `CLAUDE_CODE_USE_BEDROCK=1`, `AWS_PROFILE`, `AWS_REGION`.
+- **Vertex AI**: Env: `CLAUDE_CODE_USE_VERTEX=1`, `ANTHROPIC_VERTEX_PROJECT_ID`, `CLOUD_ML_REGION`.
+- **Foundry**: Env: `CLAUDE_CODE_USE_FOUNDRY=1`, `ANTHROPIC_FOUNDRY_RESOURCE`, Azure credential chain.
+
+---
+
+## 4. CLI Command Reference
+
+### 4.1 Launching & Execution
+
+```sh
+# Launch current persistent target
+crouter
+crouter run [claude-args...]
+
+# Launch specific provider with optional model override
+crouter <provider>
+crouter <provider> <model> [claude-args...]
+crouter deepseek
+crouter dashscope qwen3.8-max
+crouter openrouter --model nvidia/nemotron-3.5-super-vl:free
+
+# Unified Gateway Mode (Dynamic live routing)
+crouter all                  # Start gateway and launch Claude Code
+crouter all --check          # Redacted dry-run route audit (no network requests)
+```
+
+### 4.2 Target Selection & Persistence
+
+```sh
+crouter use                  # Print current persistent target
+crouter use minimax          # Persistently select MiniMax provider
+crouter use app/codex        # Persistently select native Codex CLI
+crouter use --clear          # Remove persistent target selection
+```
+*Persistent state is saved to mode-600 file `${XDG_STATE_HOME:-~/.local/state}/crouter/selection`.*
+
+### 4.3 Catalog & Inspection
+
+```sh
+crouter list                 # List providers runnable immediately on this machine
+crouter list --all           # List full catalog (shows missing-key routes as no-key)
+crouter list keys <provider> # List registered Keychain / env keys for provider
+crouter provider show <name> # Inspect provider URLs, auth headers, and model maps
+crouter <provider> --browse  # Interactive terminal TUI model selector
+crouter <provider> --browse --apply-only  # Save model selection without launching
+```
+
+### 4.4 Credential & Keypool Management
+
+```sh
+# Add keys to macOS Keychain
+crouter add                  # Interactive menu of unconfigured providers
+crouter add --all            # Menu covering all providers for rotation
+crouter add minimax --surface plan
+crouter add minimax --surface api
+pass show minimax/plan | crouter add minimax --surface plan --stdin
+
+# Remove keys
+crouter remove minimax --surface api --name minimax-api-2
+```
+
+### 4.5 Diagnostics & Logs
+
+```sh
+crouter doctor               # Full environment and toolchain diagnosis
+crouter doctor <provider>    # Probe credential presence and health check URL
+crouter config show          # Inspect normalized config flags (secrets masked)
+crouter config path          # Locate local config.sh file
+crouter logs list            # List session log files
+crouter logs tail <provider> # Stream real-time provider logs
+crouter --version            # Print version string
+```
+
+### 4.6 Encrypted Migration (`migrate`)
+
+```sh
+# Export encrypted package (AES-256-GCM + scrypt)
+crouter migrate export ~/crouter.crm
+cat passphrase.txt | crouter migrate export ~/crouter.crm --password-stdin
+
+# Import package onto new machine
+crouter migrate import ~/crouter.crm
+crouter migrate import ~/crouter.crm --portable   # Skip Keychain on Linux/headless
+
+# Verify package integrity without executing code
+crouter migrate verify ~/crouter.crm
+```
+
+### 4.7 Native Coding-Agent CLI Multiplexer (`app`)
+
+`crouter app <name> [args...]` dispatches directly to installed coding-agent CLIs, bypassing `config.sh` and provider proxies:
+- `crouter app list`: Check installation status of supported agent CLIs.
+- Supported agents: `claude`, `codex`, `gemini`, `opencode`, `copilot`, `cursor`, `kiro`, `qoder`, `kimi`, `qwen`, `amp`, `vibe`, `muse`, `kilo`.
+
+---
+
+## 5. Security & Isolation Model
+
+### 5.1 Environment Sanitization (`env -i`)
+
+When launching Claude Code or child processes, `lib/launch.sh` constructs a sterile environment:
+- Drops all parent shell variables (`ANTHROPIC_API_KEY`, residual tokens, AWS keys, custom aliases).
+- Whitelists only essential terminal variables: `LANG`, `TERM`, `SHELL`, `PATH`, `USER`, `HOME`, `COLORTERM`.
+- Injects only provider-declared variables (`ANTHROPIC_BASE_URL`, session client token, model overrides).
+- Restricts passthrough environment variables for native cloud SDKs (`AWS_*`, `GOOGLE_*`, `AZURE_*`) strictly to provider manifests.
+
+### 5.2 macOS Keychain Storage Architecture
+
+- Keys are added directly via macOS `security add-generic-password` with terminal echo disabled.
+- Standard service names: `crouter-<provider>-plan`, `crouter-<provider>-api`.
+- User-added pooled keys receive deterministic service names registered in `.state/keypools/<provider>.json` (mode 600).
+- Secrets are NEVER printed to stdout, stderr, debug logs, or command-line argument lists.
+
+### 5.3 Local Loopback Proxy Token Protection
+
+- Local proxies (`keypool-proxy`, `gateway`) bind strictly to `127.0.0.1`.
+- Every direct or unified session generates a cryptographically random, per-session client token.
+- Local requests missing the authorization token receive HTTP 401 Unauthorized, preventing cross-process token hijacking on multi-user or shared workstations.
+
+### 5.4 Session-Scoped Ephemeral MCP Isolation
+
+- By default, `crouter` passes `--strict-mcp-config`, creating a temporary mode-600 configuration file.
+- Disables ambient or project-level MCP definitions to prevent tool pollution or accidental credential leakage between different provider plans.
+- Temporary configurations and sockets are deleted immediately upon agent session termination (`POST_STOP` traps).
+
+---
+
+## 6. Coding Agent & IDE Integration Guide
+
+### 6.1 Anthropic Claude Code CLI
+Claude Code is the primary first-class client:
+```sh
+# Method A: Direct wrapper (recommended)
+crouter deepseek
+crouter minimax
+crouter all
+
+# Method B: Exporting environment variables for standalone Claude Code
+export ANTHROPIC_BASE_URL="http://127.0.0.1:18799"
+export ANTHROPIC_API_KEY="crouter"
+claude
+# Inside Claude Code:
+/model deepseek/deepseek-flash
+/model dashscope/qwen3.8-max
+```
+
+### 6.2 Cursor & Cursor Agent
+Cursor can route model calls through `crouter` via custom OpenAI/Anthropic endpoint settings:
+1. Start unified gateway in terminal: `crouter all --check` (or run daemon).
+2. Open Cursor Settings -> Models -> Add Custom Model.
+3. Override Anthropic Base URL:
+   - Base URL: `http://127.0.0.1:18799`
+   - API Key: `crouter` (or session token)
+4. Dispatch Cursor CLI Agent:
+   ```sh
+   crouter app cursor [args...]
+   ```
+
+### 6.3 OpenAI Codex CLI
+1. Codex CLI can be executed with native authentication:
+   ```sh
+   crouter app codex [args...]
+   ```
+2. Or persistent selection:
+   ```sh
+   crouter use app/codex
+   crouter run
+   ```
+3. To route Claude Code through ChatGPT subscription:
+   ```sh
+   crouter codex
+   ```
+
+### 6.4 Windsurf / Codeium
+1. Navigate to Windsurf Settings -> AI Provider Configuration.
+2. Select Anthropic Compatible Gateway.
+3. Set Base URL: `http://127.0.0.1:18799`
+4. Set API Key: `crouter`
+5. Model Name: `deepseek/deepseek-flash` or `dashscope/qwen3.8-max`.
+
+### 6.5 Cline (VS Code Extension)
+1. Open Cline extension settings in VS Code.
+2. Set API Provider to `Anthropic Compatible` or `Claude`.
+3. Set Custom Base URL: `http://127.0.0.1:18799`
+4. Set Anthropic API Key: `crouter`
+5. Specify namespaced Model ID: `minimax/MiniMax-M3.1-Flash` or `openrouter/anthropic/claude-sonnet-5`.
+
+---
+
+## 7. Operational Troubleshooting & Runbook
+
+### 7.1 "Port already in use" (EADDRINUSE)
+- **Symptom**: `keypool-proxy: listen EADDRINUSE: address already in use 127.0.0.1:18799`
+- **Cause**: A previous gateway process did not shut down cleanly.
+- **Resolution**:
+  ```sh
+  lsof -i :18799 -sTCP:LISTEN -t | xargs kill -9
+  ```
+
+### 7.2 "All auth candidates failed" (HTTP 502)
+- **Symptom**: Agent receives HTTP 502 with `{"error":{"type":"all_candidates_failed"}}`
+- **Cause**: Every key in the configured surface pool returned 401, 402, 403, or 429 and entered cooldown.
+- **Resolution**:
+  1. Inspect status with `crouter doctor <provider>`.
+  2. Verify balance on vendor console.
+  3. Add or rotate a fresh key: `crouter add <provider> --surface <plan|api>`.
+
+### 7.3 Keychain Access Denied / Headless Linux
+- **Symptom**: `security: SecKeychainSearchCopyNext: The user canceled or denied the request`
+- **Cause**: Running in headless SSH or non-interactive CI without unlocked macOS Keychain.
+- **Resolution**:
+  - Export credentials as environment variables (`DEEPSEEK_API_KEY=...`).
+  - Or use portable migration storage: `crouter migrate import backup.crm --portable`.
+
+### 7.4 Hermetic Test Suite Verification
+Verify all provider routing surfaces and contracts without network access:
+```sh
+for shell in sh dash; do
+  for test_file in test/*.sh; do "$shell" "$test_file"; done
+done
+for file in bin/gateway bin/keypool-proxy lib/*.js lib/*.mjs; do node --check "$file"; done
+```

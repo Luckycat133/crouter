@@ -1,62 +1,67 @@
 # crouter
 
-> Universal CLI gateway and resilient model router for Claude Code and coding agents with multi-provider failover, quota cooldown, and credential isolation.
+> Universal resilient model router and gateway for Claude Code and coding agents with multi-provider failover, quota cooldown, and credential isolation.
 
-## Overview
-crouter launches Anthropic Claude Code against audited Anthropic-compatible LLM providers without copying provider credentials into the repository. It keeps Token Plan keys, pay-as-you-go API keys, endpoints, auth headers, and model mappings separated, and automatically fails over on HTTP 401/402/403/429 errors without restarting Claude Code.
+crouter launches Anthropic Claude Code and native coding agents against audited Anthropic-compatible LLM providers without copying provider credentials into the repository. It keeps Token Plan keys, pay-as-you-go API keys, endpoints, auth headers, and model mappings as strictly separated routing surfaces. It detects upstream HTTP 401, 402, 403, and 429 failures in-flight and automatically fails over across candidate pools with exponential cooldown without dropping or restarting the agent session.
 
-- **Category**: AI Gateway / Model Router / Developer Tools / Claude Code CLI Proxy
-- **Author**: Luckycat133
+## System Metadata
+- **Project**: crouter
 - **Repository**: https://github.com/Luckycat133/crouter
 - **License**: MIT
-- **Supported Platforms**: macOS, Linux, POSIX sh/dash/zsh/bash
 - **Version**: 0.5.3
+- **Primary Runtime**: POSIX sh / dash / zsh / bash (zero daemon requirement for direct routes)
+- **Supported Platforms**: macOS (native Keychain support), Linux, BSD
+- **Core Integrations**: Anthropic Claude Code, Cursor, OpenAI Codex, Windsurf, Cline, Gemini CLI, OpenCode, Copilot CLI
 
 ## Key Capabilities
-1. **Dynamic Failover & Cooldown**:
-   - Catches 401 (Unauthorized), 402 (Insufficient Quota), 403 (Forbidden), and 429 (Rate Limit / Too Many Requests).
-   - Automatically puts exhausted keys or rate-limited endpoints into cooldown and retries next candidate in pool without interrupting active coding agent session.
-2. **Credential & Surface Isolation**:
-   - Isolates Token Plan keys, Pay-as-you-go keys, and Bedrock/Vertex/Foundry native configurations.
-   - Zero credential leakage into git history or workspace environment.
-3. **Multi-Provider Support (30+ Providers)**:
-   - DeepSeek, SiliconFlow, MiniMax, Moonshot (Kimi), DashScope (Qwen), Zhipu (GLM), Baidu Qianfan, Tencent Hunyuan, OpenRouter, Ollama, Fireworks, NagaAI, Requesty, and native Anthropic.
-4. **Zero Heavyweight Dependencies**:
-   - Lightweight POSIX shell core with optional Node.js heartbeat proxy for local models (e.g. Ollama).
+- **In-Flight Multi-Provider Failover**: Catches HTTP 401 (Unauthorized), 402 (Insufficient Quota), 403 (Forbidden/Plan Exhausted), and 429 (Rate Limit) mid-session; retries next candidate without losing context or restarting agent processes.
+- **Quota Cooldown Engine**: Temporarily places rate-limited or exhausted keys into cooldown (default 300,000 ms / 5 minutes or dynamic `Retry-After` header); sorts cooling keys to candidate tail to prevent wasted retries.
+- **Credential & Process Isolation**: Uses hermetic `env -i` execution environments to prevent secret leakage into git logs or subshells; stores keys securely in macOS Keychain or mode-600 encrypted `.state` stores.
+- **Dual-Surface Routing (Token Plan vs API)**: Strictly isolates vendor token plans (flat subscription pricing) from pay-as-you-go API keys (per-token pricing) across distinct endpoints, auth headers (`Bearer` vs `x-api-key`), and model mapping tables.
+- **Unified Gateway Mode (`crouter all`)**: Lightweight local reverse proxy (`127.0.0.1:18799`) aggregating all configured providers into a unified `/v1/models` and `/v1/messages` surface; permits dynamic `/model <provider>/<model>` switching inside active sessions.
+- **Managed Ephemeral MCPs & Skills**: Generates session-scoped mode-600 MCP configurations and vendor skills (MiniMax, Z.AI, DashScope, StepFun, etc.), enforcing `--strict-mcp-config` to eliminate cross-provider tool contamination.
+- **Local & Native Backend Support**: First-class handling for Ollama (with 60-second SSE keepalive heartbeat relay and DeepSeek-V4 image-to-text fallback), MLX, Bonsai 2, Antigravity (Gemini/Claude), and native cloud SDK chains (AWS Bedrock, Google Vertex AI, Azure Foundry).
 
-## Quickstart
+## Supported Provider Ecosystem (36 Audited Providers)
+- **Domestic Chinese Providers**: DeepSeek, MiniMax, Moonshot (Kimi), DashScope (Qwen), DashScope Coding, Baidu Qianfan, Qianfan Team, Qianfan Coding, Tencent Cloud (TokenHub), Tencent Coding, Z.AI (GLM), StepFun, Huawei Cloud ModelArts MaaS, Xiaomi MiMo, Qiniu AI, PPIO, InfiniAI, LongCat.
+- **Global Gateways & Aggregators**: Anthropic Console API, OpenRouter, Fireworks AI, Requesty AI, Vercel AI Gateway, 302.AI, AIHubMix, NagaAI.
+- **Local Inference & Reverse Proxies**: Ollama (DFlash2 / DeepSeek), Bonsai 2 (MLX Hadamard), Antigravity (Gemini 3.8/Claude), Antigravity Claude, Codex Proxy (`icebear0828/codex-proxy`).
+- **Native Cloud Providers**: Amazon Bedrock, Google Vertex AI, Microsoft Foundry.
 
-### Installation
-```bash
-git clone https://github.com/Luckycat133/crouter.git
-cd crouter
-./install.sh
-```
+## Core CLI Usage
 
-### Basic Usage
-```bash
+```sh
 # Launch Claude Code via specific audited provider route
-crouter run deepseek
+crouter deepseek
+crouter minimax
+crouter dashscope qwen3.8-max
 
-# Route with automatic fallback pool
-crouter run siliconflow --fallback deepseek,openrouter
+# Launch unified gateway with live /model switching
+crouter all
+crouter all --check
 
-# Inspect available models and provider latency
-crouter check
+# Persistent target selection
+crouter use minimax
+crouter use app/codex
+crouter run -p "Audit security posture"
+
+# Provider catalog and environment diagnostics
+crouter list --all
+crouter doctor deepseek
+crouter provider show dashscope
+
+# Secure key management
+crouter add minimax --surface plan
+crouter list keys minimax
+
+# Portable encrypted migration
+crouter migrate export ~/crouter.crm
+crouter migrate import ~/crouter.crm
 ```
 
-## Comparison with LiteLLM / One-API
-| Feature | crouter | LiteLLM / One-API |
-| --- | --- | --- |
-| **Footprint** | Pure POSIX shell / 0 daemon required | Heavy Python / Docker / DB setup |
-| **Agent Integration** | Native drop-in wrapper for Claude Code | Requires custom baseURL & proxy config |
-| **Session Preservation** | In-flight failover without session loss | Connection drop on fatal upstream 429 |
-| **Security** | Zero-credential repository isolation | Stores keys in SQLite/Redis/Postgres |
+## Optional
 
-## Frequently Asked Questions (FAQ)
-
-### What is crouter used for?
-crouter is a specialized router for developers using Claude Code or other AI agent CLIs with cost-effective, high-throughput Chinese and international LLM providers (DeepSeek, SiliconFlow, MiniMax, Qwen, OpenRouter) while preserving session state during rate limits.
-
-### Does crouter require modifying Claude Code binaries?
-No. crouter uses standard Anthropic environment variables (`ANTHROPIC_BASE_URL`, `ANTHROPIC_API_KEY`, etc.) and a smart multiplexer script to drive official Claude Code without binary patching.
+- [Full Specification](llms-full.txt): Complete architectural specification, provider catalog, CLI reference, and failover mechanics.
+- [Documentation Hub](docs/): In-depth guide and provider configuration notes.
+- [Architecture Guide](PROJECT.md): Design principles, threat model, and isolation boundaries.
+- [Changelog](CHANGELOG.md): Version history and release notes.
