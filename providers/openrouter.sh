@@ -34,9 +34,9 @@ case "${_main_model:-$MODEL}" in
     _main_model="nvidia/nemotron-3-ultra-550b-a55b:free" ;;
   nemotron-3.5-super-vl|nemotron-3.5-super)
     _main_model="nvidia/nemotron-3.5-super-vl:free" ;;
-  qwen|qwen3.8|qwen3.8-27b)
+  qwen|qwen3.8|qwen3.8-27b|"qwen3.8 27b")
     _main_model="qwen/qwen3.8-27b" ;;
-  qwen3.8-27b:free|qwen/qwen3.8-27b:free)
+  qwen3.8-27b:free|qwen/qwen3.8-27b:free|"qwen3.8 27b:free")
     die "that free route is retired; select a listed model explicitly" ;;
 esac
 MODEL_OPUS=$_main_model; MODEL_SONNET=$_main_model
