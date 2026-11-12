@@ -25,6 +25,12 @@ mkdir -p "$FAKE_ROOT/bin" "$FAKE_ROOT/lib" "$FAKE_ROOT/providers" "$FAKE_BIN" "$
 cp "$ROOT_DIR/bin/crouter" "$FAKE_ROOT/bin/"
 cp "$ROOT_DIR/lib/"*.sh "$ROOT_DIR/lib/"*.js "$FAKE_ROOT/lib/"
 printf 'test\n' > "$FAKE_ROOT/VERSION"
+# 'crouter all' verifies a usable Claude binary before it starts the gateway
+# (bin/crouter: check_claude_binary), so the fixture has to provide one instead
+# of inheriting whatever the host machine happens to have configured.
+printf '#!/bin/sh\nexit 0\n' > "$FAKE_ROOT/bin/claude"
+chmod +x "$FAKE_ROOT/bin/claude"
+export CLAUDE_BIN="$FAKE_ROOT/bin/claude"
 cat > "$FAKE_ROOT/providers/demo.sh" <<'EOF'
 PROVIDER_NAME="demo"
 BASE_URL="https://example.invalid/anthropic"
