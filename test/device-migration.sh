@@ -147,7 +147,7 @@ try {
     run(dynamic,['export',path.join(tmp,'dynamic-override.crm'),'--state-dir',path.join(dynamic.home,'explicit-state')]);
     const alias=fixture('builtin-alias');fs.copyFileSync(path.join(root,'providers/dashscope.sh'),path.join(alias.repo,'providers/dashscope.sh'));
     put(path.join(alias.home,'state/crouter/selection'),'dashscope\n');
-    run(alias,['export',path.join(tmp,'builtin-alias.crm')],{ALIBABA_API_KEY:'real-builtin-alias',DASHSCOPE_API_URL:'https://workspace.example.invalid/apps/anthropic'});
+    run(alias,['export',path.join(tmp,'builtin-alias.crm')],{DASHSCOPE_API_KEY:'real-builtin-alias',DASHSCOPE_API_URL:'https://workspace.example.invalid/apps/anthropic'});
     // Destination links are rejected before ANY Keychain writes or source writes.
     const linked=fixture('linked'); fs.symlinkSync(path.join(tmp,'outside-config'),path.join(linked.repo,'config.sh'));
     run(linked,['import',archive,'--yes'],{},false);
