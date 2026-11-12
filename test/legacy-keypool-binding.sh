@@ -13,6 +13,13 @@ _plus_pool="plan-a plan-b"
 _main_pool="api-a"
 . "$ROOT_DIR/lib/auth.sh"
 
+# Since ac76035 a plan surface suppresses the pay-as-you-go API surface unless
+# the paid fallback is authorized explicitly (docs/provider-refresh-2026-11-07.md).
+# Authorize it here so this case still proves that each secret stays bound to
+# its own declared endpoint.
+CROUTER_ALLOW_PAID_FALLBACK=1
+export CROUTER_ALLOW_PAID_FALLBACK
+
 _json=$(build_legacy_keypool_candidates)
 LEGACY_JSON=$_json "$NODE_BIN" - <<'NODE'
 const assert = require('assert');
