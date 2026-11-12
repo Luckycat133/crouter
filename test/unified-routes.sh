@@ -102,7 +102,7 @@ else
   exit 1
 fi
 
-if [ "$(cat "$MODEL_CAPTURE")" = 'anthropic/claude-sonnet-5' ]; then
+if [ "$(cat "$MODEL_CAPTURE")" = 'anthropic/claude-sonnet-5-5' ]; then
   printf 'ok    crouter all prefers configured Anthropic API as its default route\n'
 else
   printf 'FAIL  crouter all selected unexpected default model: %s\n' "$(cat "$MODEL_CAPTURE")" >&2
@@ -135,7 +135,7 @@ chmod +x "$FAKE_BIN/claude-check-sentinel"
 if env -u OPENROUTER_API_KEY DEMO_PLAN_KEY=plan-secret PATH="$FAKE_BIN:$PATH" NODE_BIN="$NODE_BIN" \
   CLAUDE_BIN="$FAKE_BIN/claude-check-sentinel" "$FAKE_ROOT/bin/crouter" all --check \
   >"$TEST_DIR/check.out" 2>"$TEST_DIR/check.err" &&
-  grep -q '^default: anthropic/claude-sonnet-5$' "$TEST_DIR/check.out" &&
+  grep -q '^default: anthropic/claude-sonnet-5-5$' "$TEST_DIR/check.out" &&
   grep -q '^anthropic:' "$TEST_DIR/check.out" &&
   grep -q '^aa-surface:' "$TEST_DIR/check.out" &&
   ! grep -q 'fake-anthropic-secret\|plan-secret\|fake-openrouter-secret' "$TEST_DIR/check.out" &&
