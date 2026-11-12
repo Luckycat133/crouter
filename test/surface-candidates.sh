@@ -24,6 +24,8 @@ _json=$(
   CR_MODEL_SONNET="logical-sonnet" \
   CR_MODEL_HAIKU="logical-haiku" \
   CR_MODEL_SUBAGENT="logical-subagent" \
+  CROUTER_ALLOW_PAID_FALLBACK=1 \
+  CROUTER_ALLOW_CROSS_MODEL_FALLBACK=1 \
     "$NODE_BIN" "$ROOT_DIR/lib/route-build.js" surface-candidates
 )
 

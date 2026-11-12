@@ -142,7 +142,10 @@ grep -qx sourced "$FAKE_ROOT/provider-lib-sourced"
 grep -qx claude "$FAKE_ROOT/capture/binary"
 grep -qx https://demo.example.invalid "$FAKE_ROOT/capture/url"
 grep -qx custom "$FAKE_ROOT/capture/model"
-printf '%s\000' --model custom -p 'two words' > "$TEST_DIR/expected-args"
+# ac76035 consumes crouter's own --model flag and delivers the resolved model to
+# the target app through ANTHROPIC_MODEL instead of re-passing --model as argv.
+# The functional check above (capture/model) still proves the model arrives.
+printf '%s\000' -p 'two words' > "$TEST_DIR/expected-args"
 cmp "$TEST_DIR/expected-args" "$FAKE_ROOT/capture/args"
 "$CLI" > /dev/null
 grep -qx demo-model "$FAKE_ROOT/capture/model"
