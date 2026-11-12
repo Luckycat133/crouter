@@ -39,6 +39,12 @@ USER=${USER:-test}
 
 die() { printf 'FAIL  %s\n' "$*" >&2; exit 1; }
 info() { :; }
+# ac76035 requires explicit authorization before a plan surface is allowed to
+# fall back to the pay-as-you-go API surface, and a second opt-in when the
+# upstream model maps differ (docs/provider-refresh-2026-11-07.md). This case
+# asserts both surfaces stay bound to their own endpoint, so authorize both.
+export CROUTER_ALLOW_PAID_FALLBACK=1
+export CROUTER_ALLOW_CROSS_MODEL_FALLBACK=1
 export DEMO_PLAN_KEY=plan-env
 export DEMO_API_KEY=api-env
 . "$ROOT_DIR/lib/auth.sh"

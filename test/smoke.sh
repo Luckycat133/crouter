@@ -388,7 +388,7 @@ _openrouter_show_rc=$?
 if [ "$_openrouter_show_rc" -eq 0 ] &&
    printf '%s\n' "$_openrouter_show" | grep -q '^default:     nvidia/nemotron-3.5-super-vl:free$' &&
    printf '%s\n' "$_openrouter_show" | grep -q '^context:     1000000 tokens$' &&
-   printf '%s\n' "$_openrouter_show" | grep -q '^effort:      max$'; then
+   printf '%s\n' "$_openrouter_show" | grep -q '^effort:      <unset>$'; then
   ok "openrouter exposes the pinned Nemotron 3.5 Super free model, context and effort"
 else
   bad "openrouter provider display is stale"
@@ -454,7 +454,7 @@ if printf '%s\n' "$_show" | grep -q '^auth:        env$' &&
    printf '%s\n' "$_show" | grep -q '^  reference: ANTHROPIC_API_KEY$' &&
    printf '%s\n' "$_show" | grep -q '^  keychain fallback: anthropic-api-key$' &&
    "$GATEWAY" help | grep -q 'crouter claude' &&
-   "$GATEWAY" help | grep -q 'crouter all --check' &&
+   "$GATEWAY" help | grep -q 'crouter all \[--check\]' &&
    "$GATEWAY" help | grep -q 'crouter --version'; then
   ok "provider show documents Anthropic API auth and help exposes native account login"
 else
