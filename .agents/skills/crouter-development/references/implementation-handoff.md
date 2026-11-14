@@ -1,25 +1,41 @@
-# 2026-11-07 provider 与交互切片交接
+# 当前接续交接
 
-本轮在 `fdcaf9120b9b4d0bb6c811d0ce75f935435e754d` 上更新 provider 与运行时，不是仅改技能。详细源矩阵：仓库根 `docs/provider-refresh-2026-11-07.md`、`docs/provider-review-2026-11-07.json`。详细命令、风险和未执行项目：`docs/provider-refresh-handoff.md`。先核对当前 HEAD，以上日期不代表未来自动保持最新。
+先读 [基线证据](baseline-and-sources.md) 和 [路线图](roadmap.md)。2026-11-14 已确认 `528a2e1` 的 CI 完成现有 sh/dash 离线门禁。用户报告的本地 36-provider/统一路由通过独立记录。不要再让下一位 agent 重做“第一次全量验收”，也不要把已有绿灯当作后续代码改动免测。
 
-## 已有代码，不应重复开发
+## 已有成果应直接复用
 
-- 全部 36 个来源有审计记录；28 个远端声明更新，8 个本地/原生部署身份保留，loader 补目录策略。
-- `lib/catalog.js`、`catalog.sh`、`catalog-inventory.js` 共同处理目录数据和凭证边界；不是通过启动推理代理取得目录。
-- `lib/model-state.js` 以模型绑定窗口，原子记录和旧镜像兼容；`lib/provider.sh` 已实现缺失 tier helper。
-- `bin/crouter` 选择/保存先于启动；诊断和网关组装移到 commands.sh/unified.sh。裸 TTY 首页在 home.js，普通搜索复用 picker；不存在完整不可变 LaunchPlan。
-- 显式 surfaces 默认不从套餐退到 API；付费和跨模型需两个独立授权，旧自定义 dual-source 仍需后续收敛。
+目录规范化与有界 HTTP、模型绑定窗口、选择先于启动、basic 中文双 TTY 首页、Key 增删、明确套餐/API 凭证、两种独立 fallback 许可、原生登录/环境/MCP/生命周期隔离及现有矩阵均已有代码和离线回归。`docs/provider-refresh-handoff.md` 是首次交付的历史快照，不是当前任务清单。
 
-## 先验收，不把实现存在当完成
+## 下一批可验收切片
 
-已执行：13 个 Node 用例；launch-planning 和 model-picker 在 sh/dash 的隔离回归；修改文件语法检查。未执行：全量旧 suite、完整 36-source fixture、ShellCheck、真实 macOS Keychain、真实 Claude/上游、首页完整真实终端、LLM eval。没有真实账号或付费请求。
+### A：同一选择得到同一运行配置（DEV-02 / DEV-03）
 
-本地 agent 顺序：技能结构 → Node/逐文件 shell syntax → ShellCheck → 新回归 → provider-matrix → 原有认证/路由/生命周期/迁移集成 → 全量 sh/dash → 经授权真实客户端。记录准确 SHA 和失败层级，保存证据。
+从真实入口覆盖 `qwen3.8 27b` 等显式别名，先规范化受支持别名再验证 canonical ID；退役免费别名仍明确拒绝。不要只 eval PRE_START。核对 apply-only、浏览、记忆与启动的最终 model/context/effort/tier/required services，抽出小型纯解析结果即可，不需要先重写全部 provider。
 
-原有测试复制临时仓库时必须包含新模块；测试已授权 fallback 的 fixture 必须显式设置付费/跨模型许可，同时保留未授权 API 零请求负例。模型预期仅凭一手资料调整，不从程序实际输出自动重建 golden。
+让 loadCatalog、inventory、unified 消费同一份已验证目录视图：来源、endpoint、计费面、账户的非秘密身份与时效均有边界。不要为了检查 scope 在首页解密所有 key；可使用受控账号引用/版本或失效标记。A 账户/旧 endpoint 目录不进入 B 的首页或路由；显式离线缓存需要标注来源/过期，不代表权益。
 
-## 剩余主线
+验收：CFG-01～CFG-07、CAT-04/CAT-06 的本切片，补真实 dispatcher 和消费端反例。保存新默认与立即启动分别表达；失败不能静默破坏旧默认或假记最近成功（UX-08）。
 
-DEV-15 仍待完整 CI/集成通过；DEV-02 还缺真正的 LaunchPlan 与全部模型特定设置；DEV-03 还需账户作用域消费/目录异常组合；DEV-04/05 还缺收藏、批量 Key、完整账户/额度池和恢复流程。DEV-09 仅有初步候选许可。DEV-07 原生 /model、DEV-10 严格冷却/断流取消、DEV-11 多会话、DEV-12/13 通用 endpoint/托管反代仍未完成。
+### B：把已有首页做顺手（DEV-04 / DEV-05，主产品增量）
 
-不要运行当前用户未授权的登录、安装、凭证读取或推理。只做离线测试时使用 fake keys 与临时目录，实际 Keychain 权限拒绝与不存在必须分别设计测试，不能静默降级到付费来源。
+优先模型搜索、收藏、最近、来源/计费状态、方向键/返回一致性；加入从裸 crouter 开始的 PTY 测试，而不是只跑 picker。新来源必须实际可配置地址/协议/认证与手填模型，或把尚未支持的菜单准确命名为“配置内置来源”，不能用同一个 keys() 冒充两种流程。
+
+账户管理先交付命名/暂停/优先级、批量 Key 预览去重与确认、失败补偿；额度池只保存已知共享关系，不虚构余额。费用设置必须说明“没有套餐、只有 API”仍是按量来源，不能显示成任何情况下都不付费。
+
+验收：UX-01～UX-08、AUTH-02/03，任一步取消零半成品；操作失败能原地返回和修复。自定义已有 endpoint 最小切片可提前接 DEV-12，不等托管安装。
+
+### C：与交互并行收紧可靠性（DEV-10）
+
+保持现有代理，先用两个 loopback 上游验证首候选持续 503 后到第二候选、所有候选冷却时零早退请求、客户端取消终止上游/timer、部分 SSE/tool_use 后不重放。使用 fake clock/请求计数和总预算，不靠增加重试次数掩盖错误。该切片不必等完整账号 schema；后续再对接账户级错误分类与单飞刷新。
+
+### D：Claude 内菜单最小验证（DEV-07）
+
+在经授权的真实目标 Claude 版本，验证两个不同模型的可见项与实际请求 ID；同时记录用户 settings/managed 策略和不兼容历史的处理。只有 mock/配置 JSON 时标未完成。不要先做跨客户端适配，也不要通过假 Claude ID 规避能力检查。
+
+## 测试与交付
+
+只更新技能：结构校验、校验器反例、链接/ID/依赖一致性；读取当前 CI 即可，无需制造运行时改动。
+
+实现上述切片：先复用 `test/catalog.sh`、`test/launch-planning.sh`、`test/model-picker.sh`、`test/provider-matrix.sh`、`test/unified-routes.sh`，按改动补反例；跨模块广泛改动按 CLAUDE.md 运行完整 sh/dash 门禁。保留固定 golden，不自动生成期望值。
+
+每次报告分别给出本轮运行、复核已有 CI、本地用户报告和未执行部分。GitHub 中的 stub security/claude 与本地 mock 不代表真实账户验证。发布、安装、登录、读取真实凭证与付费推理仍依赖当前授权。

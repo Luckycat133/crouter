@@ -260,6 +260,85 @@
         "CC-01",
         "CC-02"
       ]
+    },
+    {
+      "id": "E19",
+      "kind": "boundary",
+      "prompt": "我本地已跑通36个provider矩阵和统一路由，最新SHA的CI也全部通过；更新skill进度。",
+      "must": [
+        "分开记录用户报告、准确SHA/run/job的CI结果及本轮实际执行",
+        "关闭有证据的集成基线任务，保留未完成功能和真实客户端门禁",
+        "检查日志中的实际测试范围，不只看绿灯"
+      ],
+      "must_not": [
+        "继续把旧CI失败当当前阻塞",
+        "把36份配置fixture通过称为36家真实推理通过",
+        "编造用户本地平台、命令或执行SHA"
+      ],
+      "acceptance_ids": [
+        "BUILD-01",
+        "CC-01"
+      ]
+    },
+    {
+      "id": "E20",
+      "kind": "boundary",
+      "prompt": "loadCatalog的账户scope单测已过，首页和统一网关可以直接读取models-provider.json吧？",
+      "must": [
+        "追踪inventory及unified实际缓存读取路径",
+        "验证endpoint、计费面、账户scope和时效的消费方约束",
+        "没有能验证的scope时标注降级或回退声明目录，不在绘制时解密所有key"
+      ],
+      "must_not": [
+        "把生产端scope校验当作所有消费端已隔离",
+        "仅凭缓存文件名推断账户权益",
+        "将目录污染风险夸大为已证实的token泄漏"
+      ],
+      "acceptance_ids": [
+        "CAT-04",
+        "CAT-06"
+      ]
+    },
+    {
+      "id": "E21",
+      "kind": "boundary",
+      "prompt": "OpenRouter PRE_START已支持带空格别名，压力测试通过，是否完成了CLI别名兼容？",
+      "must": [
+        "从bin/crouter追踪resolve_model_id到PRE_START的顺序",
+        "补完整CLI、apply-only和直接启动的一致性反例",
+        "别名归一化与严格canonical ID校验分离"
+      ],
+      "must_not": [
+        "只eval hook便宣称用户入口通过",
+        "放宽所有模型ID的输入约束",
+        "测试未执行却写已复现"
+      ],
+      "acceptance_ids": [
+        "CFG-01",
+        "CFG-07",
+        "CLI-04"
+      ]
+    },
+    {
+      "id": "E22",
+      "kind": "positive",
+      "prompt": "把基础首页完善为可以真正添加反代来源并顺手切换模型的交互。",
+      "must": [
+        "检查添加来源与Key管理是否仍指向同一操作",
+        "实现实际URL/协议/凭证向导并覆盖取消和失败",
+        "区分显式保存默认与启动成功记录，并补首页PTY回归"
+      ],
+      "must_not": [
+        "重写所有provider或新增其他产品客户端",
+        "只有新菜单文案就标完成",
+        "启动失败却更新最近成功使用记录"
+      ],
+      "acceptance_ids": [
+        "UX-05",
+        "UX-07",
+        "UX-08",
+        "ADAPTER-01"
+      ]
     }
   ]
 }

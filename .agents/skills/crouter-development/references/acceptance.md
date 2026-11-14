@@ -1,6 +1,6 @@
 # 验收矩阵与技能评测
 
-验收 ID 是任务与测试的对应关系，不是通过标记。每项绑定代码 SHA、真实测试文件、命令、平台和退出码；拆分复合场景时明确覆盖哪一半。历史记录与当前结果分开，未运行或 skipped 不写通过。
+验收 ID 是要求，不是通过标记。先看 [当前基线](baseline-and-sources.md) 的 SHA/CI/用户报告，再读下方证据映射。复合项按实际断言给出覆盖子集；CI 全绿只证明已存在测试通过。
 
 ## 产品回归
 
@@ -47,13 +47,11 @@
 | STATE-01 | 迁移、重复迁移、损坏文件、并发、符号链接攻击 | 不丢配置/凭证、不扩权，原子写/权限/回滚正确 |
 | RELEASE-01 | 干净 checkout 安装卸载，旧用户配置存在 | 仅安装当前入口，版本一致，保留无关文件，真实验证范围明确 |
 
-## 最新集成回归
-
-这些是当前基线新增的验收要求，不是声称已存在对应测试。
+## 集成与调用链回归
 
 | ID | Given / When | Then |
 | --- | --- | --- |
-| BUILD-01 | 最新 SHA 的 CI；环境路径含空格；ShellCheck 提前失败 | 正确逐项构造环境 argv；后续 skipped 不计通过，修复后实际执行剩余步骤 |
+| BUILD-01 | 当前 SHA 的 CI；带空格路径；同时考虑成功和提前失败 | 按实际 job/步骤/断言记录结果；失败后的 skipped 不算通过，成功也不代表未写反例已覆盖 |
 | CLI-01 | crouter provider、run、use、原生 claude 路径及参数转发 | 保持有效契约；stub 的 argv/stdin/env/退出码准确，帮助无启动副作用 |
 | CLI-02 | 脚本以 claude 命名，PATH 中包含包装器；显式/未设真实 CLAUDE_BIN | provider 分发与原生子命令可区分；防止自调用循环，不覆盖真实 CLI |
 | CLI-03 | 安装/卸载，旧 claude-* 残留、另一 checkout 链接和同名普通文件 | 不新建退役入口；不删除无关文件，残留迁移策略明确且可重复 |
@@ -61,14 +59,34 @@
 | CFG-06 | 先加载旧 provider-context，再选未知窗口或显式另一模型 | 不把旧内存值重新保存或传给 child；同时测 browse、--model、apply-only |
 | CAT-05 | 交替加载带/不带目录字段的 provider；非 2xx 却有 data 数组 | 目录字段重置；query 保留、状态先判定；凭证 origin 隔离 |
 | SESSION-04 | CROUTER_ALL_EXCLUDE_PROVIDERS 排除来源，另开直接启动和其他会话 | 排除早于凭证发现且不进目录；不泄漏到直接启动或其他会话，不冒充完整策略 UI |
+| CFG-07 | 从 bin/crouter 传入受支持的带空格别名、canonical ID、退役免费别名；比较保存与启动 | 受支持别名先规范化再验证；退役路由不转收费；apply-only 与最终启动的 model/context/effort/tier 一致，不能仅 eval hook |
+| CAT-06 | A 账户/旧 endpoint 写缓存，切 B/新 endpoint/另一计费面，再从首页和统一网关读取 | 调用者验证适用 scope/时效；不展示或路由成 B 已授权模型；同作用域离线缓存清楚标注；不在首页解密全部 key |
+| UX-07 | 从裸 crouter 选择添加来源，有目录和无目录的本地 mock endpoint 各一次 | 真正可填写并保存 URL/协议/认证与模型，或准确标明仅配置内置来源；不能只复用 keys 菜单宣称已实现 |
+| UX-08 | 首页选模型后 apply-only/use/启动任一步失败，再返回首页 | 新默认的提交策略明确、失败不静默破坏旧有效选择；只有成功启动才更新最近成功；可原地恢复，不把预写状态当成功 |
+
+## 当前证据映射（2026-11-14）
+
+对应 SHA `528a2e175c8d93e26dfc1cf2ecd77e73ee7894bd`，CI run `43163712510`。下表复核已有 CI，不是本轮重跑。日志两轮 sh/dash 均完成；精确链接与用户本地报告见基线。
+
+| 范围 | 已通过的证据 | 仍未证明 |
+| --- | --- | --- |
+| 集成基线 | ShellCheck、全部声明的 Node syntax、现有 test/*.sh 两轮、版本元数据 | 没有编写的功能反例、真实平台/供应商/客户端 |
+| provider 配置与 AUTH-01 | provider-config/provider-matrix/provider-refresh 的全 36 集合和固定字段；普通 API key 不推断套餐 | 所有别名权益/价目实时有效、36 家真实推理可用 |
+| CFG/CLI 的已测子集 | launch-planning：save-only 零启动、未知窗口、tiers、参数、帮助、防递归；launch-stdin、selection、原生 backend | 完整 LaunchPlan、模型特定 effort 一致、所有带空格别名、所有主页失败路径 |
+| CAT 的已测子集 | catalog：规范化/价格、query/auth-origin、非 2xx/redirect、大小/timeout/abort、同 scope 旧缓存、分页；共 8 目录/状态用例 | inventory/unified 的 scope 消费、所有供应商形状/单位、真实目录权限 |
+| 策略构造 | catalog.sh 同时运行 5 个 route-policy 用例：默认不付费、同模型付费、两独立许可、API-only | ROUTE-01 的完整网关零请求、Keychain 拒绝、旧 dual-source、来源锁定/备用链 |
+| 统一路由 | unified-routes/gateway-path/surface：默认、token、header/model_map、严格空 MCP、去重和错误传播 | 持续 503 耗尽后切换、全冷却硬禁止、取消/断流状态机 |
+| 选择器 | model-picker 的目录、价格、q、EOF/HUP、取消前 hook/Claude 零副作用 | 裸首页多屏流程、收藏/最近/批量、中文输入全部边界、真实终端可用性 |
+| 隔离与迁移 | 原有 key registry、assets、cleanup、lifecycle、migration、安装卸载断言 | 新多账号 schema/多会话额度协调、真实 macOS Keychain 锁定和共享进程完整场景 |
+| skill | 包结构检查、16 个校验器 fixture；CI 记录 18 个行为案例的格式存在 | 18 个案例未实际运行 LLM；本次新增案例也不等于行为评测通过 |
+
+不能把上表的部分覆盖变成整行验收完成。新 CFG-07/CAT-06/UX-07/UX-08 是本次审查补充要求，尚无本轮产品执行记录。
 
 ## 测试层级和命令
 
-纯逻辑使用固定时钟/随机种子；mock HTTP 绑定 loopback，记录实际 endpoint/header/model，注入慢响应、跨域、失败和断流。假凭证必须显然是假值。
+纯逻辑用固定时钟/种子；mock HTTP 绑定 loopback，记录实际 endpoint/header/model，请求计数覆盖负例。PTY 从真实入口驱动按键、Unicode 分片、粘贴、取消、resize。使用临时 HOME/XDG/STATE 与 stub claude/security，不 source 用户 config，不执行真实 provider hooks。
 
-PTY 覆盖分片 Unicode、粘贴、取消、resize 和终端恢复；静态截图不能替代交互。离线整合使用临时 HOME/XDG/STATE 和 stub claude/security，不 source 用户配置、不执行未知 hooks。
-
-在可运行完整 checkout 中，发布矩阵应将 shell 选择传入测试，并累计失败，不让最后一个通过覆盖前面的失败：
+广泛运行时改动/发布按 CLAUDE.md 门禁执行；仅技能维护不重复整产品测试：
 
 ```sh
 failed=0
@@ -80,18 +98,14 @@ done
 test "$failed" -eq 0
 ```
 
-语法检查逐文件执行，不能用 `sh -n file1 file2` 代替循环。Node 入口含两个 picker；使用 CI 的 ShellCheck 规则而非全局忽略新告警。测试带空格临时路径，避免 env $(...) 的意外拆分。缺工具、平台或完整 checkout 就准确写未执行。
+syntax 逐文件检查，不能 `sh -n file1 file2` 冒充循环。Node 入口含两个 picker；保留 CI ShellCheck 规则及带空格路径反例。缺工具或完整 checkout 写未执行，不能把别人的日志写成自己运行。
 
-真实兼容需实际 Claude 版本/终端/平台和授权；真实推理可能计费，额度耗尽优先用 mock。skills 静态检查、校验器反例、产品测试、真实客户端、LLM 行为评测分开报告。
+真实兼容需记录 Claude/终端/平台和授权，推理可能计费。额度耗尽用 mock，不为验收消耗真实余额。结构检查、校验器测试、产品离线、真实客户端、LLM 行为评测分层报告。
 
-## 技能行为评测
+## 技能行为评测与完成定义
 
-[evals/cases.json](../evals/cases.json) 提供触发、反向和边界任务。隔离 checkout 中检查 agent 是否读取当前证据、选择正确范围、实际运行要求的检查并准确报告；must/must_not 是判定项，不是关键词得分。案例的 acceptance_ids 只关联要求，不意味着已通过。
+[案例](../evals/cases.json) 的 must/must_not 按 agent 实际读取、计划、工具操作和报告判定，不是关键词计分。结构通过只证明材料可读取/引用合法；新增案例不能写成已运行。
 
-关键失败：把 App 当产品客户端、越过费用/数据流向、只包装 flags、流式重放、覆盖用户工作、恢复已退役入口、把 skipped 当通过，或未执行却宣称成功。缺凭证时完成离线部分并说明限制是正确行为。
+关键失败：App 当客户端、越权付费/流向、只包装 flags、流式重放、覆盖用户工作、恢复退役入口、误报 skipped/未执行、将 CI 全绿解释为全产品完成。相反，承认并复用当前成功基线，不强迫重复历史开发，也是正确行为。
 
-技能校验器只检查结构、引用、唯一 ID、任务依赖与 DONE 记录的存在；不验证记录是否真实，也不运行 LLM。改校验器时运行 validate.test.mjs 的正反例；原有技能应仍可通过，新增任务不要求硬编码数量。
-
-## 完成定义
-
-功能从真实入口可达，成功与取消/失败均有测试，共用应用操作，迁移可恢复且不泄密；验收具体子项有证据，文档与实际能力一致。历史 DONE 的范围和新 HEAD 的健康度分开，不能借技能检查替代产品验收。
+功能 DONE 需真实入口可达，成功/取消/失败路径有适用证据，共用应用操作、状态迁移可恢复，文档准确。交付记录必须说明范围与未验证项；历史 DONE 和当前 HEAD 健康度分别维护。

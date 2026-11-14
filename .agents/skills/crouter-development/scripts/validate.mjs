@@ -8,6 +8,7 @@ const name = 'crouter-development';
 const referenceNames = [
   'product-and-ux.md', 'runtime-contracts.md', 'adapters-and-claude.md',
   'roadmap.md', 'acceptance.md', 'baseline-and-sources.md',
+  'implementation-handoff.md',
 ];
 const inside = (parent, child) => {
   const relative = path.relative(parent, child);

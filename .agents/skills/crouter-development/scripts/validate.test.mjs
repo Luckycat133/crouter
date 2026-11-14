@@ -44,6 +44,8 @@ try {
   edit(extension, 'references/roadmap.md', (text) => `${text}\n| DEV-16 | TODO | Additional scoped task | DEV-15 | UX-01 |\n`);
   assert.deepEqual(validatePackage(extension).failures, [], 'new tasks do not require a frozen count change');
   rejects('missing reference', (dir) => fs.unlinkSync(path.join(dir, skillRelative, 'references/product-and-ux.md')), 'ENOENT');
+  rejects('missing handoff', (dir) => fs.unlinkSync(path.join(dir, skillRelative, 'references/implementation-handoff.md')), 'ENOENT');
+  rejects('broken handoff link', (dir) => edit(dir, 'references/implementation-handoff.md', (text) => `${text}\n[missing](missing.md)\n`), 'broken local link');
   rejects('broken local link', (dir) => edit(dir, 'SKILL.md', (text) => `${text}\n[missing](references/missing.md)\n`), 'broken local link');
   rejects('escaping link', (dir) => edit(dir, 'SKILL.md', (text) => `${text}\n[outside](../../SKILLS.md)\n`), 'escapes package');
   rejects('duplicate acceptance', (dir) => edit(dir, 'references/acceptance.md', (text) => `${text}\n| UX-01 | duplicate | duplicate |\n`), 'duplicate acceptance ID');
