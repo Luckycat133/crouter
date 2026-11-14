@@ -91,12 +91,23 @@ load_provider() {
 is_surface_provider() { [ "${AUTH_MODE:-}" = surfaces ]; }
 resolve_model_id() {
   _rmi_model=$1
-  case $_rmi_model in ''|*[!A-Za-z0-9._:/@_\[\]-]*) die 'invalid model ID' ;; esac
+  _rmi_aliased=0
+  # 别名优先：在严格字符集校验前先按 MODEL_ID_ALIASES 规范化，使已注册别名
+  # 先归一化为目标 model ID，再对解析出的最终 model ID 做合法字符集与退役
+  # ID 校验；不在别名表中的值（由 provider PRE_START 归一化的带空格人类
+  # 别名，如 'nemotron 3 ultra' / 'qwen3.8 27b'）按原值透传，避免在 hook
+  # 归一化前把受支持别名误拒，PRE_START 会对其规范化或拒绝退役路由。
+  for _rmi_pair in ${MODEL_ID_ALIASES:-}; do
+    if [ "${_rmi_pair%%=*}" = "$_rmi_model" ]; then
+      _rmi_model=${_rmi_pair#*=}; _rmi_aliased=1; break
+    fi
+  done
+  case $_rmi_model in ''|*[!A-Za-z0-9._:/@_\[\]-]*)
+    [ "$_rmi_aliased" -eq 1 ] && die 'invalid model ID'
+    printf '%s' "$1"; return 0 ;;
+  esac
   for _rmi_blocked in ${MODEL_BLOCKED_IDS:-}; do
     [ "$_rmi_model" != "$_rmi_blocked" ] || die 'retired model ID; select a current model explicitly'
-  done
-  for _rmi_pair in ${MODEL_ID_ALIASES:-}; do
-    if [ "${_rmi_pair%%=*}" = "$_rmi_model" ]; then printf '%s' "${_rmi_pair#*=}"; return 0; fi
   done
   printf '%s' "$_rmi_model"
 }
