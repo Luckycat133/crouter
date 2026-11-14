@@ -17,7 +17,7 @@ const inside = (parent, child) => {
 
 // Exported for hermetic tests; importing this module performs no validation or writes.
 export function validatePackage(repositoryRoot) {
-  const root = path.resolve(repositoryRoot);
+  const root = fs.realpathSync(path.resolve(repositoryRoot));
   const skill = path.join(root, '.agents', 'skills', name);
   const failures = [];
   const check = (ok, message) => { if (!ok) failures.push(message); };
