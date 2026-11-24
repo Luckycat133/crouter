@@ -3,6 +3,7 @@ logs/
 config.sh
 antigravity-claude-proxy/
 .DS_Store
+.claude/settings.local.json
 
 # Scratch directories that other AI coding tools drop into any repo they scan
 # (.adal, .augment, .crush, .roo, .windsurf, ... — 50+ and growing). Ignore all

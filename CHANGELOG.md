@@ -38,6 +38,11 @@ All notable changes to this local setup are documented in this file.
   selection. `--apply-only` saves the canonical ID and reports the same context
   and model-specific effort used at launch. Retired free aliases are refused
   before state changes or authentication.
+- Disable Node's default 300s `requestTimeout` / 60s `headersTimeout` in
+  `bin/gateway`, `bin/keypool-proxy`, `lib/ollama-heartbeat-proxy.mjs` and
+  `lib/anthropic-openai-proxy.mjs` so long-running streams are not cut off, and
+  set 30-minute `API_TIMEOUT_MS` / `CLAUDE_STREAM_IDLE_TIMEOUT_MS` /
+  `CLAUDE_BYTE_STREAM_IDLE_TIMEOUT_MS` in `providers/openrouter.sh`.
 
 ## [0.7.2] - 2026-11-15
 

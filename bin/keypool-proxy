@@ -253,6 +253,11 @@ function attempt(order, position, clientReq, clientRes, body, remaining) {
   upstream.end();
 }
 
+// Disable Node's default 300s requestTimeout / 60s headersTimeout for long LLM streams.
+server.requestTimeout = 0;
+server.headersTimeout = 0;
+server.timeout = 0;
+
 server.listen(PORT, '127.0.0.1', () => {
   const actual = server.address().port;
   // Report the bound port (esp. when PORT=0) so the gateway can wire ANTHROPIC_BASE_URL.

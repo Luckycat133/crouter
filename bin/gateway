@@ -18,7 +18,7 @@
 //
 // Env contract:
 //   CROUTER_ROUTES_FILE  path to a JSON file: an array of route objects
-//   CROUTER_GATEWAY_PORT port to listen on (default 18799)
+//   CROUTER_GATEWAY_PORT port to listen on (default 18799; 0 picks a free port)
 //   CROUTER_GATEWAY_TOKEN token Claude Code must send on /v1/messages
 //                         (default "crouter" for standalone compatibility).
 //                         crouter generates a random token per session.
@@ -38,6 +38,7 @@ const http = require('http');
 const https = require('https');
 const fs = require('fs');
 const { URL } = require('url');
+const { setTimeout: delay } = require('timers/promises');
 const {
   applyAuth,
   createCandidateCooldown,
@@ -67,8 +68,9 @@ try {
 }
 if (!Array.isArray(ROUTES) || ROUTES.length === 0) fail('routes must be a non-empty array');
 
-const PORT = parseInt(process.env.CROUTER_GATEWAY_PORT || '18799', 10);
-if (!Number.isInteger(PORT) || PORT < 1 || PORT > 65535) fail('CROUTER_GATEWAY_PORT invalid');
+const RAW_PORT = process.env.CROUTER_GATEWAY_PORT || '18799';
+const PORT = Number(RAW_PORT);
+if (!/^\d+$/.test(RAW_PORT) || PORT > 65535) fail('CROUTER_GATEWAY_PORT invalid');
 const GATEWAY_TOKEN = process.env.CROUTER_GATEWAY_TOKEN || 'crouter';
 
 function rejectUnauthorized(res) {
@@ -140,8 +142,11 @@ function buildHeaders(cand, clientReq) {
 function handleModels(clientRes) {
   const data = [];
   for (const r of ROUTES) {
+    const catalogModels = new Set(r.catalogModels || []);
     for (const m of r.models) {
-      data.push({ id: r.prefix + '/' + m, type: 'model', object: 'model' });
+      const row = { id: r.prefix + '/' + m, type: 'model', object: 'model' };
+      if (catalogModels.has(m)) row.verification = 'catalog-only';
+      data.push(row);
     }
   }
   const body = JSON.stringify({ object: 'list', data: data, has_more: false });
@@ -151,13 +156,47 @@ function handleModels(clientRes) {
 
 // ---- POST /v1/messages ----------------------------------------------------
 function handleMessage(clientReq, clientRes) {
+  const controller = new AbortController();
+  const { signal } = controller;
+  const upstreamRequests = new Set();
+  const upstreamResponses = new Set();
+  function cancel() {
+    controller.abort();
+    for (const response of upstreamResponses) response.destroy();
+    for (const request of upstreamRequests) request.destroy();
+  }
+  function onClientClose() {
+    if (!clientRes.writableFinished) cancel();
+    cleanup();
+  }
+  function cleanup() {
+    clientReq.removeListener('aborted', cancel);
+    clientRes.removeListener('close', onClientClose);
+    clientRes.removeListener('finish', onClientFinish);
+  }
+  function onClientFinish() {
+    // Also release any discarded error response still draining after failover.
+    cancel();
+    cleanup();
+  }
+  function stopped() {
+    return signal.aborted || clientRes.destroyed || clientRes.writableEnded;
+  }
+  clientReq.once('aborted', cancel);
+  clientReq.on('error', cancel);
+  clientRes.once('close', onClientClose);
+  clientRes.once('finish', onClientFinish);
+  clientRes.on('error', cancel);
+  if (clientReq.aborted || clientRes.destroyed) cancel();
   const chunks = [];
   let size = 0;
   clientReq.on('data', (c) => {
+    if (stopped()) return;
     chunks.push(c);
     size += c.length;
   });
   clientReq.on('end', () => {
+    if (stopped()) return;
     const body = Buffer.concat(chunks, size);
     let parsed;
     try {
@@ -201,11 +240,23 @@ function handleMessage(clientReq, clientRes) {
     const candidateOrder = route._candidateCooldown.order();
     const MAX_CANDIDATE_RETRIES = 2;
     const RETRY_BACKOFF_MS = 400;
-    function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
     // Returns { kind: 'retry' } to retry same candidate, { kind: 'response', res }
     // for a final upstream response, or { kind: 'failover' } to try next candidate.
     function attemptCand(candidateIndex, attempt) {
       return new Promise((resolve) => {
+        let settled = false;
+        const onAbort = () => settle({ kind: 'cancelled' });
+        function settle(result) {
+          if (settled) return;
+          settled = true;
+          signal.removeEventListener('abort', onAbort);
+          resolve(result);
+        }
+        if (stopped()) {
+          settle({ kind: 'cancelled' });
+          return;
+        }
+        signal.addEventListener('abort', onAbort, { once: true });
         const cand = route.candidates[candidateIndex];
         // A surface may expose a provider-specific model for the same logical
         // route (for example a plan router versus a pay-as-you-go model ID).
@@ -220,9 +271,19 @@ function handleMessage(clientReq, clientRes) {
           method: clientReq.method,
           path: path,
           headers: headers,
+          signal: signal,
         };
         const transport = cand._proto === 'https:' ? https : http;
         const up = transport.request(options, (upRes) => {
+          upstreamResponses.add(upRes);
+          upRes.once('close', () => upstreamResponses.delete(upRes));
+          // Discarded error responses may fail while another candidate is active.
+          upRes.on('error', () => {});
+          if (stopped()) {
+            upRes.destroy();
+            settle({ kind: 'cancelled' });
+            return;
+          }
           const status = upRes.statusCode;
           const authFailure = isRetryableStatus(status);
           const serverError = status >= 500 && status < 600;
@@ -231,26 +292,35 @@ function handleMessage(clientReq, clientRes) {
           if (authFailure) {
             // Exhausted candidate: fail over immediately, no retry.
             upRes.resume();
-            resolve({ kind: 'failover' });
+            settle({ kind: 'failover' });
             return;
           }
           if (serverError && attempt < MAX_CANDIDATE_RETRIES) {
             upRes.resume(); // drain, do not pipe
-            setTimeout(() => resolve({ kind: 'retry' }), RETRY_BACKOFF_MS * (attempt + 1));
+            settle({ kind: 'retry', delayMs: RETRY_BACKOFF_MS * (attempt + 1) });
             return;
           }
-          resolve({ kind: 'response', res: upRes });
+          settle({ kind: 'response', res: upRes });
         });
+        upstreamRequests.add(up);
+        up.once('close', () => upstreamRequests.delete(up));
         up.on('error', (e) => {
+          if (stopped()) {
+            settle({ kind: 'cancelled' });
+            return;
+          }
+          // Once a response has been handed off, its body owns error handling.
+          if (settled) return;
           log('upstream error (' + prefix + ' cand ' + candidateIndex + ' attempt ' + (attempt + 1) + '): ' + e.message);
           route._candidateCooldown.fail(candidateIndex);
-          resolve(attempt < MAX_CANDIDATE_RETRIES ? { kind: 'retry' } : { kind: 'failover' });
+          settle(attempt < MAX_CANDIDATE_RETRIES ? { kind: 'retry' } : { kind: 'failover' });
         });
         if (newBody && newBody.length) up.write(newBody);
         up.end();
       });
     }
     async function tryCand(position) {
+      if (stopped() || clientRes.headersSent) return;
       if (position >= candidateOrder.length) {
         if (!clientRes.headersSent) {
           clientRes.writeHead(502, { 'content-type': 'application/json' });
@@ -264,32 +334,54 @@ function handleMessage(clientReq, clientRes) {
       }
       const candidateIndex = candidateOrder[position];
       for (let attempt = 0; attempt <= MAX_CANDIDATE_RETRIES; attempt++) {
+        if (stopped()) return;
         const result = await attemptCand(candidateIndex, attempt);
+        if (stopped() || result.kind === 'cancelled') return;
         if (result.kind === 'failover') {
-          tryCand(position + 1);
-          return;
+          return tryCand(position + 1);
         }
         if (result.kind === 'retry') {
           if (attempt < MAX_CANDIDATE_RETRIES) {
+            if (result.delayMs) await delay(result.delayMs, undefined, { signal });
+            if (stopped()) return;
             log('candidate ' + candidateIndex + ' on ' + prefix + ' transient, retry ' + (attempt + 1) + '/' + MAX_CANDIDATE_RETRIES);
             continue;
           }
           // Exhausted retries on this candidate, fail over.
           log('candidate ' + candidateIndex + ' on ' + prefix + ' exhausted retries -> failing over');
-          tryCand(position + 1);
-          return;
+          return tryCand(position + 1);
         }
         // Final upstream response: return it as-is.
         const upRes = result.res;
+        function upstreamInterrupted() {
+          if (clientRes.writableFinished || stopped()) return;
+          // Never replay a response after its headers or events were committed.
+          if (clientRes.headersSent) clientRes.destroy();
+          else clientRes.writeHead(502, { 'content-type': 'application/json' }).end(
+            JSON.stringify({ error: { type: 'upstream_error', message: 'upstream response interrupted' } })
+          );
+          cancel();
+        }
+        upRes.once('error', upstreamInterrupted);
+        upRes.once('aborted', upstreamInterrupted);
+        upRes.once('close', () => { if (!upRes.complete) upstreamInterrupted(); });
+        if (upRes.destroyed || upRes.readableAborted) {
+          upstreamInterrupted();
+          return;
+        }
         if (!clientRes.headersSent) clientRes.writeHead(upRes.statusCode, upRes.headers);
         upRes.pipe(clientRes);
         return;
       }
     }
-    tryCand(0);
-  });
-  clientReq.on('error', () => {
-    if (!clientRes.headersSent) clientRes.writeHead(400).end('client error');
+    tryCand(0).catch(() => {
+      if (stopped()) return;
+      if (clientRes.headersSent) clientRes.destroy();
+      else clientRes.writeHead(502, { 'content-type': 'application/json' }).end(
+        JSON.stringify({ error: { type: 'upstream_error', message: 'upstream request failed' } })
+      );
+      cancel();
+    });
   });
 }
 
@@ -310,6 +402,12 @@ const server = http.createServer((req, res) => {
   res.writeHead(404, { 'content-type': 'application/json' });
   res.end(JSON.stringify({ error: { type: 'not_found', message: 'only /v1/messages and /v1/models are served' } }));
 });
+
+// Disable Node's default 300s requestTimeout / 60s headersTimeout so local
+// models and long cloud reasoning chains are never aborted mid-flight.
+server.requestTimeout = 0;
+server.headersTimeout = 0;
+server.timeout = 0;
 
 server.listen(PORT, '127.0.0.1', () => {
   const actual = server.address().port;
