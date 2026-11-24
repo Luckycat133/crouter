@@ -11,13 +11,16 @@ separate routing surfaces. It fails over on HTTP 401/402/403/429 without
 restarting Claude Code and temporarily cools down an exhausted candidate so
 the next request does not immediately spend another retry on it.
 
-The original catalog was checked against vendor documentation on 2026-08-08;
-new routes and selected existing contracts were rechecked on 2026-09-26. See
-[docs/provider-audit.md](docs/provider-audit.md) for the source matrix and
-decisions.
+The original catalog was checked against vendor documentation on 2026-08-08,
+updated on 2026-09-26, and refreshed across all 36 provider contracts on
+2026-11-07. See [docs/provider-audit.md](docs/provider-audit.md),
+[docs/provider-refresh-2026-11-07.md](docs/provider-refresh-2026-11-07.md), and
+the full [docs index](docs/README.md) for the source matrix, architecture
+contracts, and decisions, plus [llms.txt](llms.txt) /
+[llms-full.txt](llms-full.txt) for machine-readable LLM indexes.
 
-`VERSION` remains 0.5.3; subsequent changes on `main` are recorded under
-`Unreleased` in [CHANGELOG.md](CHANGELOG.md). The current checkout passes the
+`VERSION` remains 0.5.3; subsequent milestones (`0.6.0`–`0.7.2`) and in-progress
+changes are recorded in [CHANGELOG.md](CHANGELOG.md). The current checkout passes the
 offline contract suite under POSIX `sh` and `dash`. Live catalog access,
 remaining quota, and account entitlement still require the account owner's
 credentials and may incur provider charges.
@@ -159,7 +162,7 @@ reports `UNVERIFIED` when it cannot establish their status offline. It checks
 credential discovery and configured health URLs, not live model entitlement,
 and does not start local services. `crouter doctor` alone prints an
 `Environment` block and a `Providers` block whose header counts the problems
-(`38 total — 26 without a credential, 4 with a failing health check`), listing
+(`36 total — 24 without a credential, 4 with a failing health check`), listing
 affected providers first. Nothing is hidden and a missing optional credential
 never fails the overview, so there is no `--all` counterpart here.
 Keychain availability is checked fresh for each invocation, so adding or
@@ -189,7 +192,7 @@ crouter app list                   # installed coding-agent CLIs
 crouter app codex --help           # run Codex with its own login and flags
 crouter app muse                   # run Muse Code with its own login
 crouter use app/codex              # select Codex for future launches
-crouter                            # launch the selected target
+crouter                            # open the interactive home, or run the saved target from a pipe
 crouter run --help                 # forward arguments to the selected target
 crouter use                       # show the selected target
 crouter use minimax               # select a Claude Code provider instead
@@ -204,8 +207,13 @@ crouter deepseek --model 'deepseek-v4-pro[1m]'
 
 crouter <provider> --browse                    # pick any model in the provider TUI; settings applied, Claude launches
 crouter <provider> --model <id>                # launch any provider model with its settings applied
-crouter <provider> --browse --apply-only       # pick + persist settings only (no launch); then `/model <provider>/<id>` live in `crouter all`
-crouter openrouter --browse                    # OpenRouter: dynamic catalog (469 models, fetched once per day, cached locally)
+crouter <provider> --browse --apply-only       # pick and save for this provider, without launching
+crouter <provider> --model <id> --plan         # inspect the resolved launch plan as JSON
+crouter <provider> --model <id> --set-default  # save the model and the default target
+crouter <provider> --model <id> --once         # launch once without changing the saved default model
+crouter models <provider> --list               # inspect cached/live provider models without launching Claude
+crouter models <provider> --refresh            # refresh the provider model directory cache
+crouter openrouter --browse                    # pick from the current OpenRouter catalog
 crouter openrouter --model <id>                # launch any OpenRouter model with its settings applied
 
 crouter add                         # pick a provider from a menu
@@ -299,38 +307,39 @@ limit; the selected vendor model or native backend remains authoritative.
 
 | Provider | Billing surfaces | Default model | Context | Managed assets |
 | --- | --- | --- | ---: | --- |
-| `302ai` | API | `claude-sonnet-5` | 1,000,000 | — |
+| `302ai` | API | `claude-sonnet-5-5` | 1,000,000 | — |
 | `aihubmix` | API | `coding-glm-5.1-free` | — | API MCP |
-| `anthropic` | Console API key | `claude-sonnet-5` | — | — |
+| `anthropic` | Console API key | `claude-sonnet-5-5` | — | — |
 | `antigravity` | local proxy | `gemini-3.8-flash` | 1,048,576 | — |
-| `antigravity-claude` | local proxy | `claude-opus-4-6-thinking` | 200,000 | — |
+| `antigravity-claude` | local proxy | `claude-opus-5-5-medium` | 200,000 | — |
 | `bedrock` | native AWS credentials | `sonnet` alias | — | — |
+| `bonsai` | local MLX 2-bit | `ternary-bonsai-2-27b` | 262,144 | — |
 | `codex` | local ChatGPT subscription proxy | `gpt-5.6-sol` | 1,050,000 | — |
 | `dashscope` | Token Plan + API | `qwen3.8-max` | 983,616 | Plan media skill + API WebSearch MCP |
-| `dashscope-coding` | Coding Plan | `qwen3.8-plus` | 983,616 | — |
+| `dashscope-coding` | Coding Plan | `qwen3.7-plus` | — | — |
 | `deepseek` | API | `deepseek-flash[1m]` | 1,000,000 | native web search |
 | `fireworks` | API | `accounts/fireworks/models/glm-5p3-flash` | — | — |
 | `foundry` | native Azure credentials, Bearer token, or Foundry API key | `sonnet` alias | — | — |
 | `huawei` | Token Plan + API | `glm-5.3` | 262,144 | — |
 | `infini` | GenStudio API | `glm-5.1` | — | — |
-| `longcat` | Token Pack + pay-as-you-go on one API key | `LongCat-2.5-Preview` | 1,000,000 | — |
+| `longcat` | Token Pack + pay-as-you-go on one API key | `LongCat-2.5` | 1,000,000 | — |
 | `meta` | Model API key | `muse-spark-1.3` | 1,048,576 | — |
-| `minimax` | Token Plan + API | `MiniMax-M3` | 1,000,000 | Plan MCP + CLI skill |
-| `moonshot` | Kimi Code membership | `k3-256k` | 262,144 | — |
-| `nagaai` | API | `claude-sonnet-4.5` | — | — |
+| `minimax` | Token Plan + API | `MiniMax-M3.1-Flash` | 1,000,000 | Plan MCP + CLI skill |
+| `moonshot` | Kimi Code membership | `k3.1-pro` | 262,144 | — |
+| `nagaai` | API | `claude-sonnet-5` | — | — |
 | `ollama` | local Ollama/MLX | `qwen3.8:27b-dflash` | 262,144 for DFlash2; explicit legacy profiles retain their caps | 60s SSE heartbeat |
 | `openrouter` | API | `nvidia/nemotron-3.5-super-vl:free` | 1,000,000 | — |
-| `ppio` | API | `minimax/minimax-m3` | 1,000,000 | cloud OAuth MCP |
+| `ppio` | API | `minimax/minimax-m3.1-flash` | 1,000,000 | cloud OAuth MCP |
 | `qianfan` | personal Token Plan + API | `deepseek-v4-pro` | 262,144 | — |
-| `qianfan-team` | team Token Plan | `deepseek-v4-flash` | 262,144 | — |
+| `qianfan-team` | team Token Plan | `deepseek-v4.1-flash` | 262,144 | — |
 | `qianfan-coding` | legacy Coding Plan | `qianfan-code-latest` | 262,144 | — |
-| `qiniu` | enterprise subscription + API | `deepseek/deepseek-v3.2-251201` | — | optional managed MCPs |
-| `requesty` | API | `anthropic/claude-sonnet-5` | — | — |
+| `qiniu` | enterprise subscription + API | `deepseek/deepseek-v4.1-flash` | — | optional managed MCPs |
+| `requesty` | API | `anthropic/claude-sonnet-5-5` | — | — |
 | `siliconflow` | API | `Pro/moonshotai/Kimi-K2.7-Code` | — | — |
 | `stepfun` | Step Plan + API | `step-5-preview` | 1,000,000 | StepSearch MCP + skill |
 | `tencent` | personal Token Plan + TokenHub API | `tc-code-latest` | 262,144 | optional WebSearch MCP |
 | `tencent-coding` | Coding Plan | `tc-code-latest` | 262,144 | — |
-| `vercel` | AI Gateway API key | `anthropic/claude-sonnet-5` | — | — |
+| `vercel` | AI Gateway API key | `anthropic/claude-sonnet-5.5` | — | — |
 | `vertex` | native Google ADC | `sonnet` alias | — | — |
 | `xiaomi` | Token Plan + API | `mimo-v2.6-pro[1m]` | 1,048,576 | — |
 | `z-ai` | Coding Plan + API | `glm-5.3[1m]` | 1,000,000 | vision/search/reader/zread MCPs |
@@ -525,41 +534,52 @@ crouter all
 /model dashscope/qwen3.7-max
 ```
 
-Inside a `crouter all` session, `/model openrouter/<id>` switches to any model
-in the namespaced catalog live — no restart needed. To pick interactively, run
-`crouter openrouter --browse --apply-only` in another terminal (or
-`crouter openrouter --model <id> --apply-only` for a known id): it saves the
-model and its context to state, then exits without launching anything; back in
-Claude Code, `/model openrouter/<id>` completes the switch. Context and effort
-are fixed when the Claude Code process starts, so they follow each model only
-for direct `crouter openrouter` launches and stay fixed for the session in
-gateway mode.
+Inside a `crouter all` session, `/model openrouter/<id>` sends model traffic
+through the configured OpenRouter route. To find a canonical ID, use
+`crouter openrouter --browse --apply-only` in another terminal, or pass a
+known ID or alias such as `--model 'qwen3.8 27b'` to `--apply-only`. The
+command prints the canonical ID and saves it for future direct launches.
+Use that ID in the gateway session. Claude Code keeps its launch-time context
+and effort settings in gateway mode.
 
 `crouter all` exposes a namespaced `/v1/models` catalog on
 `127.0.0.1:${CROUTER_GATEWAY_PORT:-18799}` and uses the same bound candidates
-and per-surface model maps. Its paid `/v1/messages` route requires a random
+and per-surface model maps. Set `CROUTER_GATEWAY_PORT=0` to use a free port.
+Its `/v1/messages` route requires a random
 per-session local token. Native Bedrock/Vertex/Foundry routes are excluded because their
 SDK signers live inside Claude Code.
 
+Disconnecting or cancelling a request closes the gateway's upstream request
+and response, and cancels any pending retry wait. After forwarding response
+headers, an upstream interruption closes the client response without replaying
+the request on another candidate. This also forwards cancellation to local
+proxies such as Antigravity when they support cancelling their own upstream.
+Usage already processed by a provider is not undone.
+
 Model catalog and cache. `crouter <provider> --browse` opens an interactive
 picker (search, free-only filter, Enter to select) for **any provider**. The
-catalog is fetched from `MODELS_API_URL` when declared (e.g. OpenRouter), or
-probed at `BASE_URL/v1/models` for any Anthropic-compatible endpoint; each URL
-is retried up to 3 times with backoff before falling back to the next URL or the
-provider's declared static aliases. Results are persisted to
-`~/.local/state/crouter/models-<provider>.json` and re-used for up to 24 h so
-the picker never hammers the network. Providers without a public list fall back
-to their declared static aliases. Pass `--refresh` to force a re-fetch.
+catalog uses the declared `MODELS_API_URL` or the provider's `/v1/models`
+endpoint. A 24-hour cache is bound to the provider, directory and inference
+URLs, billing surface, and credential identity. The picker marks same-scope
+offline data as stale. The home and plan use declared fallbacks when an
+account-scoped cache can only be matched by decrypting Keychain. The unified
+gateway advertises fresh directory-only entries when its configured
+candidates match that scope. A directory-only entry has unverified model
+permissions. Use `crouter models <provider> --refresh` to refresh a directory.
 
-When a model is selected, crouter reads its `context_length` from the catalog
-cache and applies it automatically, routes every Claude Code tier (OPUS/SONNET/
-HAIKU/SUBAGENT) to the selected model, and uses the provider's default effort.
-Use `--apply-only` to save a model and its context without launching Claude
-— then switch to it live inside a `crouter all` session with
-`/model <provider>/<id>`. Context and effort are fixed when the Claude Code
-process starts, so gateway-mode `/model` switches change the model but keep the
-session's context/effort; for per-model auto-config, launch directly with
-`crouter <provider> --browse` or `crouter <provider> --model <id>`.
+`crouter <provider> --plan` shows the resolved model, bounds, effort, tier
+mapping, and required services and assets before startup. Direct launches
+apply the same plan. Fresh, matching catalog limits can tighten the local
+configuration. Saving the model retains local limits and revalidates catalog
+limits on each launch. In the interactive home, Enter starts the chosen model
+once and Ctrl-S saves it and its provider as the default. Ctrl-F adds or
+removes a favorite for that exact provider and model. Favorites appear
+before recent models. Ctrl-R opens source selection when several sources
+are configured, and Esc returns to the current search. The picker records
+recent use after Claude Code exits successfully.
+
+Home menu 3 configures a built-in source. The source picker shows credential
+status and the supported billing surfaces for each configured provider.
 
 `crouter all --check` builds the same configured route graph, prints only redacted
 URLs, candidate labels/auth shapes, model counts, and the chosen default, then
@@ -628,6 +648,15 @@ Antigravity requires a checkout of
 Set `ANTIGRAVITY_PROXY_DIR` and optionally `ANTIGRAVITY_PORT` in `config.sh`.
 crouter starts it only when needed and stops it only if that same session owns
 the process; a proxy that was already running is left untouched.
+
+For these two providers, the picker and unified gateway read the existing
+loopback proxy's `/v1/models` account directory. Static declarations and old
+account caches do not add selectable variants. An unauthenticated/unavailable
+proxy yields no model choices; starting a provider still uses the lifecycle
+above. `crouter all --check` does not query the directory or start a service.
+Argon follows the account's live directory and is not globally blocked. Thinking suffixes such as
+`xhigh` and `max` are preserved as returned, without adding tiers that the
+account does not offer. Account detection uses metadata, never a test prompt.
 
 Ollama exposes its native Anthropic compatibility endpoint at
 `http://127.0.0.1:11434`. The local crouter profile defaults to
@@ -758,7 +787,7 @@ sh -n bin/crouter bin/crouter-compat install.sh lib/*.sh providers/*.sh test/*.s
 shellcheck --severity=warning --exclude=SC1007,SC1090,SC1091,SC2034,SC2120 \
   .githooks/pre-push bin/crouter bin/crouter-compat completions/crouter.bash \
   config.example.sh install.sh lib/*.sh providers/*.sh test/*.sh
-for file in bin/gateway bin/keypool-proxy lib/*.js lib/*.mjs; do node --check "$file"; done
+for file in bin/gateway bin/keypool-proxy bin/crouter-models bin/openrouter-models lib/*.js lib/*.mjs; do node --check "$file"; done
 test "$(./bin/crouter --version)" = "crouter $(cat VERSION)"
 git diff --check
 ```

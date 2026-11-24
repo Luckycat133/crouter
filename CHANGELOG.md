@@ -4,121 +4,98 @@ All notable changes to this local setup are documented in this file.
 
 ## [Unreleased]
 
-### Removed
-
-- Dropped Volcengine Ark support: the `volcengine` (Ark Agent Plan) and
-  `volcengine-coding` (Ark Coding Plan) providers, their Keychain/keypool
-  services, the Ark documentation/Doubao Search/DataPro/OpenViking MCP assets,
-  the related provider-matrix and provider-asset tests, and the provider
-  documentation. The Ark Coding Plan key stopped being accepted by the remote
-  endpoint, so the providers were retired instead of carried forward.
-
 ### Added
 
-- `crouter migrate verify <file>` checks installed configuration and credential
-  values against the encrypted package without executing imported code or
-  printing secrets. `import --portable` explicitly avoids Keychain on any host.
-- Keychain imports now require exact secret readback and metadata presence;
-  a writer that acknowledges a missing/wrong key triggers transaction rollback.
-
-- `crouter migrate export <file>` / `import <file>` move configuration, custom
-  providers, registered API keys, selected target, remembered models and provider
-  environment overrides in a passphrase-encrypted AES-256-GCM/scrypt package.
-  Import authenticates and validates before writing, backs up conflicts, rolls
-  back failures and never executes imported source. macOS uses Keychain; other
-  hosts use a private local credential fallback. Machine-path rebasing is limited
-  to explicit path settings; native login/SDK/helper dependencies are reported.
+- `crouter <provider> --plan` previews the resolved model, token bounds,
+  effort, tier mapping, and required local services and assets as JSON.
+- The home picker uses Enter for one-time launches and Ctrl-S to save the
+  default target. Successful Claude Code exits update recent models.
+- The home picker supports persistent provider-specific favorites and
+  filtering by source. Built-in source configuration has its own menu
+  and shows credential status and supported billing surfaces.
 
 ### Changed
 
-- Retarget the `openrouter` default to `nvidia/nemotron-3-ultra-550b-a55b:free`
-  (1,000,000 context, 786,432 auto-compaction, `max` effort) after the previous
-  `qwen/qwen3.8-27b:free` slug was retired upstream and began returning 404.
-  All tiers share the default model, and the `nemotron` shorthand is normalized
-  in `PRE_START`; the rest of the contract is untouched.
-- Synchronize provider catalog defaults and alias pools with October 2026 releases:
-  DeepSeek to `deepseek-flash[1m]` (CED architecture V4.1-Flash), Z.AI to `glm-5.3[1m]`,
-  DashScope Coding Plan to `qwen3.8-plus`, StepFun to `step-5-preview` (1M context),
-  SiliconFlow to `Pro/moonshotai/Kimi-K2.7-Code`, Huawei MaaS to `glm-5.3`,
-  Qianfan Team Plan to `deepseek-v4-flash`, and Antigravity to `gemini-3.8-flash`. Added
-  modern aliases across Volcengine, Tencent, DashScope, and OpenRouter.
-- Align the documented local validation with CI's `sh`/`dash`, ShellCheck,
-  Node syntax, and version checks. Document the maintainer's local daily
-  fast-forward sync and clarify the narrower optional pre-push hook.
-- Drop the unreferenced `google/gemma-4-26b-a4b-it:free` context override from
-  `openrouter`: no tier, alias, or self-route entry named that model, so the
-  entry could never match. No other declaration changed.
-- `crouter list` now answers the question the catalog exists for, "what can I
-  launch right now", instead of printing all 38 contracts. Each row carries a
-  status (`ready` for a present credential, `local` for a route that needs only
-  a local service, `native` for a Claude Code cloud backend, `no-key` for a
-  missing credential), the auth mode, the default model, and the endpoint. The
-  default view hides `no-key` rows and closes with how many are hidden;
-  `crouter list --all` (or `-a`) still shows the entire catalog, and
-  `crouter list <provider>` / `crouter list keys <provider>` are unchanged.
-  `--all` is purely additive: no existing invocation changes its output.
-- `crouter doctor` prints an `Environment` block and then a `Providers` block
-  whose header states the total and the problems (`38 total — 26 without a
-  credential, 4 with a failing health check`). Providers that need attention
-  come first, and the closing hint points at `crouter doctor <provider>`. The
-  row set, the per-provider format, and the overview's exit status are
-  unchanged: a missing optional credential still never fails the summary.
-  Nothing is hidden, so there is no `--all` counterpart here.
-- `crouter provider show` no longer prints `tokens` after `<unset>` for a
-  provider that declares no auto-compaction budget.
-- Remove two serial costs from the catalog scan. Provider names come from
-  parameter expansion instead of a `basename` child per provider, and the
-  per-provider status checks run concurrently rather than one at a time. On
-  the reference machine, median of five interleaved runs (before -> after):
-  `doctor` 4.43 s -> 2.69 s, `list` 1.43 s -> 1.67 s, `list --all` 1.65 s.
-  `list` is the one that grew, and only because the status column now resolves
-  a credential for all 38 contracts, which costs more than the removed forks
-  saved; the fork removal is what keeps it from landing near 2.4 s. There is no
-  before number for `list --all`: the old parser rejected the flag as a
-  provider name.
+- Saving, browsing, and direct launches use the same model resolution.
+  Ollama selects its relay, local MLX plugin, and effort before startup.
+- The model catalog cache now binds reads to the configured endpoint,
+  billing surface, and account, with separate handling for stale and
+  directory-only models in the home and gateway. Antigravity providers read
+  the existing loopback proxy's live `/v1/models` account directory.
+
+### Fixed
+
+- Align Antigravity Claude test fixtures with the existing 5.5 defaults and
+  compatibility aliases; remove the retired GPT-OSS expectation while retaining
+  exact model, context, effort, subagent and live-directory assertions.
+- Quote literal model-state action names for ShellCheck and remove the installer
+  message that referenced the deleted `SHORTCUTS` variable. Installation and
+  reinstallation tests now require empty stderr under both sh and dash.
+- The unified gateway closes upstream requests and response bodies when a client
+  cancels or disconnects, cancels retry waits, and terminates interrupted
+  responses without replaying them after headers have been sent.
+- Resolve OpenRouter aliases such as `qwen3.8 27b` before saving or launching a
+  selection. `--apply-only` saves the canonical ID and reports the same context
+  and model-specific effort used at launch. Retired free aliases are refused
+  before state changes or authentication.
+
+## [0.7.2] - 2026-11-15
 
 ### Added
 
-- Add Meta Model API, Requesty, and NagaAI Claude Code Messages routes with
-  audited base URLs, Bearer key bindings, model tiers, and context defaults.
-  Add Muse Code and Kilo Code to native CLI selection; Muse Code login and
-  subscription stay separate from the Meta Model API key route.
-- `crouter use <provider|app/name>` saves a validated default target in a
-  mode-600 XDG state file. Bare `crouter` and `crouter run [args...]` launch
-  that target; `crouter use` shows it and `crouter use --clear` removes it.
-  Native app selections retain the early config-free launch path, and direct
-  provider or app launches do not alter the saved target.
-- Add documented Fireworks, Vercel AI Gateway, and LongCat Messages API routes,
-  plus Claude Code's native Microsoft Foundry backend. API credentials stay
-  bound to their own endpoints and header formats.
-- `crouter app list` and `crouter app <name> [args...]` launch fourteen official
-  coding-agent CLIs through their own authentication, without sourcing
-  `config.sh` or routing subscription credentials through crouter providers.
-  Cursor uses its current `agent` command with `cursor-agent` as a legacy fallback.
-- Volcengine now supports both subscription gateways following provider pair conventions:
-  `volcengine` fronts the multi-vendor Ark Agent Plan (`/api/plan`, validated for
-  `doubao-seed-evolving`, `deepseek-v4-pro`, `glm-5.3`, `kimi-k3`, `minimax-m3`),
-  while `volcengine-coding` isolates the dedicated Coding Plan (`/api/coding`).
-  Both use current models, 1M context, and tier mappings with Keychain keypool fallback.
-- Session-scoped dynamic MCP injection for Volcano Engine Ark Agent Plan:
-  `volcengine` automatically provisions and switches official Doubao Search
-  (`mcp-server-askecho-search-infinity`), DataPro professional datasets, and
-  OpenViking control-plane MCPs alongside public Ark documentation in temporary
-  session assets without polluting `~/.claude.json`. Coding Plan isolates the public docs MCP.
-- `crouter add` with no provider opens an interactive picker instead of failing
-  on a missing argument. The menu lists the providers that still need a
-  credential, numbered, with the same status and auth columns as `crouter list`;
-  a number or a name selects one, and an empty answer cancels. A provider with
-  both surfaces asks which one to configure before prompting for the secret, and
-  the selection then reuses the existing key path unchanged, so `--name`,
-  `--stdin`, Keychain storage, and the keypool registry behave exactly as they
-  do for the explicit form. `crouter add --all` widens the menu to every
-  provider for adding or rotating a key.
-- Every command explains itself on `-h` / `--help`, including the two that are
-  dispatched before the shared helpers load (`app`, `use`) and the ones that
-  previously ran work instead of printing usage (`doctor`, `provider`, `remove`,
-  `config`, `logs`, `list keys`). `crouter <command> --help` never launches a
-  provider or starts a local service.
+- Allow space-containing model aliases to pass through `resolve_model_id` before
+  provider `PRE_START` hook normalization (`DEV-02`).
+
+### Fixed
+
+- Align Moonshot `k3[1m]` context override (`1,000,000` tokens), OpenRouter
+  space-separated alias and retired `:free` route handling, canonical
+  `DASHSCOPE_API_KEY` migration test, explicit `CROUTER_ALLOW_PAID_FALLBACK=1`
+  opt-in in surface/keypool binding tests, and unified cleanup `CLAUDE_BIN` stub
+  with the `ac76035` provider contract refresh (`#4`).
+- Resolve `realpath` on repository root in `.agents/skills/crouter-development/scripts/validate.mjs`
+  for macOS symlinked temporary directories.
+
+### Docs
+
+- Record the verified CI integration baseline (`528a2e1`) and next acceptance
+  gaps in the `crouter-development` skill and `docs/development-plan.md`.
+
+## [0.7.1] - 2026-11-09
+
+### Docs
+
+- Add `llms.txt` and `llms-full.txt` following the `llmstxt.org` specification
+  and add a generative-engine FAQ section to `README.md`.
+
+## [0.7.0] - 2026-11-08
+
+### Added
+
+- Route providers through `crouter <provider>` or `claude <provider>` (when
+  invoked under the `claude` command name), replacing per-provider hyphenated
+  `claude-*` shortcuts.
+- Add the interactive model workflow (`crouter models <provider> [--list|--refresh|--set <id>]`,
+  `crouter <provider> --once`, `crouter <provider> --set-default`, and the
+  interactive TTY home picker) and refresh all 36 provider contracts against
+  2026-11-07 vendor documentation (`docs/provider-refresh-2026-11-07.md`).
+
+### Changed
+
+- Enforce an explicit paid-fallback boundary (`CROUTER_ALLOW_PAID_FALLBACK=1`)
+  between plan and pay-as-you-go API surfaces, standardize one canonical
+  `*_KEY_ENV` per surface, require a usable Claude executable on `crouter all`,
+  and pass resolved `--model` selections via `ANTHROPIC_MODEL`.
+
+### Fixed
+
+- Quote literal log-size placeholder for ShellCheck compliance.
+- Refresh the `crouter-development` workflow skill against current `main`.
+
+## [0.6.4] - 2026-10-31
+
+### Added
+
 - `crouter <provider> --browse` opens an interactive model picker for any
   provider (search, free-only filter, Enter to select): the chosen model is
   saved to provider state with its context, every Claude Code tier routes to
@@ -129,106 +106,14 @@ All notable changes to this local setup are documented in this file.
   retried up to 3 times with backoff before falling back to the next URL or the
   provider's declared static aliases. Results are persisted to
   `~/.local/state/crouter/models-<provider>.json` and re-used for up to 24 h
-  (`--refresh` forces a re-fetch). Providers without a public list fall back
-  to their declared static aliases. When a model is selected, its
-  `context_length` from the catalog is applied automatically, all Claude Code
-  tiers route to it, and the provider's default effort is used.
-  Add `--apply-only` to persist the model and context without launching Claude:
-  alongside a running `crouter all` session, pick a model in another terminal,
-  then switch live inside Claude Code with `/model <provider>/<id>`. Context
-  and effort are fixed when the Claude Code process starts, so gateway-mode
-  model switches keep the session's context/effort; use a direct
-  `crouter <provider>` launch for per-model auto-config.
+  (`--refresh` forces a re-fetch). Add `--apply-only` to persist the model and
+  context without launching Claude.
 - Unified gateway now retries each candidate up to 2 additional times on 5xx
   server errors and network blips before failing over to the next candidate, so
   transient upstream glitches no longer immediately break a request. 401/402/
   403/429 still fail over immediately (exhausted candidate).
-
-### Fixed
-
-- `crouter logs list` printed every path twice. The row reader took fields 6, 7,
-  and 8 of `ls -l`, but field 8 is the filename, which the row already printed
-  as its own column, so each line ended with a duplicate. It now reads size and
-  mtime only, prints a `SIZE / MODIFIED / FILE` header, and reports an empty or
-  missing log directory as a single line instead of an empty table.
-- `crouter config <typo>` and `crouter logs <typo>` silently ran `config show`
-  and `logs list` respectively, so a mistyped subcommand looked like it worked.
-  Both now fail with the accepted forms. Unknown extra arguments to the
-  argument-less forms (`config show`, `config path`, `logs list`, `app list`)
-  are rejected too.
-- Stop local Ollama sessions from wedging on reasoning effort. Ollama copies
-  `output_config.effort` into the model chat template (collapsing `xhigh` to
-  `high`) and answers HTTP 500 for a level the template rejects; the body never
-  names `output_config`, so Claude Code cannot apply its effort downgrade and
-  retries the same request with exponential backoff for up to half an hour.
-  `providers/ollama.sh` now declares `OLLAMA_EFFORT_MAX=medium` for the
-  `qwen3.8*` selections and the heartbeat relay clamps every request to that
-  cap, including ones that carry a caller-supplied `--effort`. The relay
-  advertises the cap in `/health`, and a session reuses a running relay only
-  when its cap matches the selected model. Requests at or below the cap, an
-  omitted `effort`, relays with no declared cap, and the DeepSeek V4
-  pass-through contract are unchanged.
-
-- Give the keypool cooldown integration test a wider timing window on loaded
-  runners; its exact 200 ms and `Retry-After` boundaries remain checked with a
-  controlled clock.
-
-- Reinstall now prunes retired `claude-*` shortcuts owned by the current
-  checkout, and uninstall removes all owned shortcuts even after a provider is
-  removed. Both preserve regular files and links owned by other checkouts.
-- Diagnose Keychain credentials with a fresh lookup instead of a permanent
-  `.kc-cache`, so external additions and removals appear immediately.
-- Make Bash/Zsh completion aware of `config`, `logs`, `provider`, and `list`
-  subcommand depth while retaining native app names and avoiding config sourcing.
-- Refresh documented provider defaults: MiniMax China's current Anthropic host
-  and 1M compact window, Anthropic/Vercel/302.AI Opus 5.5, Xiaomi MiMo 2.6 Pro,
-  and DeepSeek's `deepseek-flash` fast-tier mapping. Remove retired Huawei
-  Token Plan models from the advertised aliases.
-- Keep Volcengine Agent Plan and Coding Plan credentials on their own gateways.
-  The Agent Plan accepts only its named key and alias; neither plan silently
-  falls back to a generic Ark API key or the other plan's key.
-- Make targeted provider diagnostics fail on known missing credentials or an
-  unhealthy service, with actionable next steps; keep no-argument diagnostics
-  as an overview. Native SDK credential chains are reported as unverified.
-- Preserve documented Bedrock, Vertex, and Foundry credential paths and Claude
-  settings in isolated launches, including unexported `config.sh` assignments.
-  Forward only explicit cloud model pins and support Foundry Bearer tokens.
-- Show only known safe effective settings in `config show`, preventing config
-  source, multiline credentials, and unknown values from being printed.
-- Redact provider environment values, hook commands, and literal authentication
-  references in `provider show`; targeted health diagnostics no longer echo a
-  potentially sensitive health URL.
-
-- Preserve piped stdin when launching Claude in the isolated environment.
-- Remember model selections only for actual Ollama launches; other providers
-  and help/version commands no longer overwrite the saved local model.
-- Apply model context overrides to exact IDs, allowing prefix matching only
-  for explicitly declared colon-terminated families.
-- Limit DeepSeek image fallback to Anthropic content blocks, preserving arbitrary
-  tool input data and message metadata.
-- Remove incoming transfer framing before sending buffered Ollama requests with
-  a calculated Content-Length.
-
-- Ollama DeepSeek V4 sessions now keep Claude Code's `high`/`max` request and
-  its Anthropic thinking block intact. Current Ollama releases expose only an
-  unbounded local thinking toggle through this compatibility path, so crouter
-  reports the effective mode honestly instead of deleting the request and
-  accidentally creating a 2^31-1-token reasoning budget. The Ollama provider
-  still defaults to Claude Code's `max` request.
-- Text-only Ollama DeepSeek V4 sessions no longer abort when Claude Code's
-  `Read` tool adds a screenshot to the next Anthropic Messages request. The
-  localhost relay replaces only those DeepSeek image blocks with a text-only
-  fallback notice, allowing the agent to continue with DOM, console, Canvas,
-  or pixel-statistics inspection. Requests for other Ollama models are left
-  byte-for-byte unchanged so native multimodal models retain image input.
-- Interactive `crouter add` still asks exactly once for the provider API key,
-  and the captured value now reaches the macOS Keychain without ever entering
-  a child process's argv (world-readable via ps). security(1) on current
-  macOS ignores piped stdin for its `-w` password prompt and reads /dev/tty
-  directly, so crouter drives that prompt through a pty with the system
-  expect(1); the secret is loaded from the environment and unset before the
-  security child spawns. A regression test proves the Keychain child argv
-  stays secret-free.
+- Add the Claude Code-focused `crouter-development` skill and `DEV-01` roadmap
+  entry, plus the desktop `computer-use` skill.
 
 ### Fixed
 
@@ -240,24 +125,190 @@ All notable changes to this local setup are documented in this file.
   `:free` tier.
 - Rates are now read in every shape the provider catalogs use: OpenRouter's
   `prompt`/`completion`, Vercel's `input`/`output`, NagaAI's
-  `per_input_token`/`per_output_token`, and Requesty's tiered rows. Before
-  this, every model of those providers was displayed as `$0.00/$0.00`.
-- A provider that declares only `BASE_URL` is now probed for its catalog. The
-  catalog was loaded only when `CR_MODELS_API_URL` was set, so such a provider
-  could never list or pick a model.
+  `per_input_token`/`per_output_token`, and Requesty's tiered rows.
+- A provider that declares only `BASE_URL` is now probed for its catalog even
+  when `CR_MODELS_API_URL` is unset.
 - Selecting a model whose context window is unknown now removes the previous
   model's window instead of leaving it behind, so the old window cannot leak
   into the next launch. `crouter run --apply-only` does the same.
 - `q` is an ordinary filter character in the picker instead of a quit key. The
   picker reads the terminal as bytes and splits a chunk into keys, so several
   keys in one read, a pasted string, and an escape sequence split across two
-  reads are all handled. `Esc`, `Ctrl-C`, the end of the input stream, and a
-  terminal hangup cancel the picker and exit with code `2`.
+  reads are all handled. `Esc`, `Ctrl-C`, EOF, and terminal hangup cancel the
+  picker and exit with code `2`.
 - `crouter run --browse` no longer starts Claude Code after the picker was
   cancelled. A cancelled selection keeps the previously selected model and
   starts nothing.
 - The CI Node syntax check now covers `bin/crouter-models` and
-  `bin/openrouter-models`, which the picker entry points were missing.
+  `bin/openrouter-models`.
+
+## [0.6.3] - 2026-10-23
+
+### Added
+
+- `crouter migrate export <file>` / `import <file>` move configuration, custom
+  providers, registered API keys, selected target, remembered models and provider
+  environment overrides in a passphrase-encrypted AES-256-GCM/scrypt package.
+  Import authenticates and validates before writing, backs up conflicts, rolls
+  back failures and never executes imported source. macOS uses Keychain; other
+  hosts use a private local credential fallback. Machine-path rebasing is limited
+  to explicit path settings; native login/SDK/helper dependencies are reported.
+- `crouter migrate verify <file>` checks installed configuration and credential
+  values against the encrypted package without executing imported code or
+  printing secrets. `import --portable` explicitly avoids Keychain on any host.
+- Keychain imports now require exact secret readback and metadata presence;
+  a writer that acknowledges a missing/wrong key triggers transaction rollback.
+
+### Changed
+
+- Update local provider configuration, gateway tests, and offline fixtures for
+  the DFlash default.
+
+### Fixed
+
+- Decouple the offline test suite from an optional local proxy checkout (`#2`).
+
+### Removed
+
+- Dropped Volcengine Ark support: the `volcengine` (Ark Agent Plan) and
+  `volcengine-coding` (Ark Coding Plan) providers, their Keychain/keypool
+  services, the Ark documentation/Doubao Search/DataPro/OpenViking MCP assets,
+  the related provider-matrix and provider-asset tests, and the provider
+  documentation. The Ark Coding Plan key stopped being accepted by the remote
+  endpoint, so the providers were retired instead of carried forward.
+
+## [0.6.2] - 2026-10-18
+
+### Added
+
+- Add adversarial stress harness (`test/adversarial-stress-harness.sh`) for
+  tiered models and routing contracts.
+- Track project-level agent skills and discovery entries under `.agents/`.
+
+### Fixed
+
+- Preserve Ollama system order for verified model templates.
+
+## [0.6.1] - 2026-10-07
+
+### Added
+
+- `crouter add` with no provider opens an interactive picker instead of failing
+  on a missing argument. The menu lists the providers that still need a
+  credential, numbered, with the same status and auth columns as `crouter list`;
+  a number or a name selects one, and an empty answer cancels. A provider with
+  both surfaces asks which one to configure before prompting for the secret, and
+  the selection then reuses the existing key path unchanged. `crouter add --all`
+  widens the menu to every provider for adding or rotating a key.
+- Every command explains itself on `-h` / `--help`, including the two that are
+  dispatched before the shared helpers load (`app`, `use`) and the ones that
+  previously ran work instead of printing usage (`doctor`, `provider`, `remove`,
+  `config`, `logs`, `list keys`). `crouter <command> --help` never launches a
+  provider or starts a local service.
+- Add project Codex `SessionStart` hook, ignore rules, and agent workflow sync.
+
+### Changed
+
+- Retarget the `openrouter` default to `nvidia/nemotron-3-ultra-550b-a55b:free`
+  (1,000,000 context, 786,432 auto-compaction, `max` effort) after the previous
+  `qwen/qwen3.8-27b:free` slug was retired upstream and began returning 404.
+  All tiers share the default model.
+- Synchronize provider catalog defaults, tier mappings, and alias pools with
+  October 2026 releases: DeepSeek to `deepseek-flash[1m]` (CED architecture
+  V4.1-Flash), Z.AI to `glm-5.3[1m]`, DashScope Coding Plan to `qwen3.8-plus`,
+  StepFun to `step-5-preview` (1M context), SiliconFlow to
+  `Pro/moonshotai/Kimi-K2.7-Code`, Huawei MaaS to `glm-5.3`, Qianfan Team Plan
+  to `deepseek-v4-flash`, and Antigravity to `gemini-3.8-flash`.
+- Drop the unreferenced `google/gemma-4-26b-a4b-it:free` context override from
+  `openrouter`.
+- `crouter list` now defaults to launchable providers (`ready`, `local`,
+  `native`), hiding `no-key` rows with a summary count; `crouter list --all`
+  (`-a`) still shows the entire catalog.
+- `crouter doctor` prints an `Environment` block and a `Providers` block whose
+  header summarizes totals and problem counts, listing providers needing
+  attention first without failing the overview on missing optional credentials.
+- `crouter provider show` no longer prints `tokens` after `<unset>` for a
+  provider that declares no auto-compaction budget.
+- Remove serial costs from the catalog scan by avoiding per-provider `basename`
+  subprocesses and running per-provider status checks concurrently.
+
+### Fixed
+
+- Stop local Ollama sessions from wedging on reasoning effort: `providers/ollama.sh`
+  declares `OLLAMA_EFFORT_MAX=medium` for `qwen3.8*` selections and the
+  heartbeat relay clamps requests to that cap and advertises it in `/health`.
+- Fix `crouter logs list` printing every path twice, add a `SIZE / MODIFIED / FILE`
+  header, and report empty or missing log directories cleanly.
+- Reject mistyped `crouter config` / `crouter logs` subcommands and unexpected
+  extra arguments to argument-less forms (`config show`, `config path`,
+  `logs list`, `app list`).
+- Fix `provider show` exit code, key surface validation, and MCP assets security.
+
+## [0.6.0] - 2026-09-26
+
+### Added
+
+- Add Meta Model API, Requesty, and NagaAI Claude Code Messages routes with
+  audited base URLs, Bearer key bindings, model tiers, and context defaults.
+  Add Muse Code and Kilo Code to native CLI selection; Muse Code login and
+  subscription stay separate from the Meta Model API key route.
+- `crouter use <provider|app/name>` saves a validated default target in a
+  mode-600 XDG state file. Bare `crouter` and `crouter run [args...]` launch
+  that target; `crouter use` shows it and `crouter use --clear` removes it.
+- Add documented Fireworks, Vercel AI Gateway, and LongCat Messages API routes,
+  plus Claude Code's native Microsoft Foundry backend. API credentials stay
+  bound to their own endpoints and header formats.
+- `crouter app list` and `crouter app <name> [args...]` launch fourteen official
+  coding-agent CLIs through their own authentication, without sourcing
+  `config.sh` or routing subscription credentials through crouter providers.
+  Cursor uses its current `agent` command with `cursor-agent` as a legacy fallback.
+- Add optional `.githooks/pre-push` gate for the offline contract suite.
+- Add Volcengine Ark Agent Plan (`volcengine`) and Coding Plan
+  (`volcengine-coding`) subscription gateways with session-scoped MCP injection
+  (later retired in `0.6.3`).
+
+### Changed
+
+- Align the documented local validation with CI's `sh`/`dash`, ShellCheck,
+  Node syntax, and version checks. Document the maintainer's local daily
+  fast-forward sync and clarify the narrower optional pre-push hook.
+
+### Fixed
+
+- Make the Keychain diagnostic test self-contained for CI and give the keypool
+  cooldown integration test a wider timing window on loaded runners.
+- Reinstall now prunes retired `claude-*` shortcuts owned by the current
+  checkout, and uninstall removes all owned shortcuts even after a provider is
+  removed. Both preserve regular files and links owned by other checkouts.
+- Diagnose Keychain credentials with a fresh lookup instead of a permanent
+  `.kc-cache`, so external additions and removals appear immediately.
+- Make Bash/Zsh completion aware of `config`, `logs`, `provider`, and `list`
+  subcommand depth while retaining native app names and avoiding config sourcing.
+- Refresh documented provider defaults (MiniMax China, Anthropic/Vercel/302.AI
+  Opus 5.5, Xiaomi MiMo 2.6 Pro, DeepSeek `deepseek-flash` fast tier) and remove
+  retired Huawei Token Plan aliases.
+- Keep Volcengine Agent Plan and Coding Plan credentials strictly bound to their
+  own gateways.
+- Make targeted provider diagnostics fail on known missing credentials or an
+  unhealthy service with actionable next steps while keeping no-argument
+  diagnostics as an overview; report native SDK credential chains as unverified.
+- Preserve documented Bedrock, Vertex, and Foundry credential paths and Claude
+  settings in isolated launches, including unexported `config.sh` assignments;
+  forward only explicit cloud model pins and support Foundry Bearer tokens.
+- Show only known safe effective settings in `config show`, and redact provider
+  environment values, hook commands, literal auth references, and sensitive
+  health URLs in `provider show` and targeted diagnostics.
+- Preserve piped stdin when launching Claude in the isolated environment,
+  remember model selections only for actual Ollama launches, restrict model
+  context overrides to exact IDs or colon-terminated families, limit DeepSeek
+  image fallback to Anthropic content blocks, and remove incoming transfer
+  framing before sending buffered Ollama requests with a calculated
+  `Content-Length`.
+- Keep Ollama DeepSeek V4 `high`/`max` Anthropic thinking requests intact while
+  reporting effective mode honestly, replace DeepSeek image blocks with a
+  text-only fallback notice to avoid missing-`mmproj` HTTP 500s, and deliver
+  interactive `crouter add` secrets to macOS Keychain via a pty (`expect(1)`)
+  so secrets never appear in child process argv.
 
 ## [0.5.3] - 2026-08-20
 
