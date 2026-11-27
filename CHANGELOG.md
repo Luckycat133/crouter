@@ -44,6 +44,24 @@ All notable changes to this local setup are documented in this file.
   set 30-minute `API_TIMEOUT_MS` / `CLAUDE_STREAM_IDLE_TIMEOUT_MS` /
   `CLAUDE_BYTE_STREAM_IDLE_TIMEOUT_MS` in `providers/openrouter.sh`.
 
+## [0.7.3] - 2026-11-27
+
+### Added
+
+- New `bonsai25` provider: local Bonsai 2.5 27B MLX launched from configured
+  local machine paths (`BONSAI25_DEMO_DIR`, `BONSAI25_MODEL_DIR`) through the
+  existing Anthropic adapter, with xhigh effort, 256K agent context, prefill
+  step size 256, in-memory prefix cache enabled with disk off (4GiB memory
+  budget, 2 checkpoints), MTP off pending evidence, native sampler settings,
+  and session-owned startup/cleanup that stops only processes this session
+  started.
+
+### Changed
+
+- Ollama context overrides now give the exact `inkling-2-mini` and
+  `inkling-2-mini:latest` IDs a model-specific 1,048,576-token agent context;
+  other Ollama models keep their stored model parameters.
+
 ## [0.7.2] - 2026-11-15
 
 ### Added

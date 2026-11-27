@@ -21,6 +21,12 @@ check foo:tag 8192
 check foo-other:tag 65536
 check foo 65536
 
+# Inkling's saved Ollama parameters must also reach the agent context plan.
+load_provider ollama
+check inkling-2-mini:latest 1048576
+check inkling-2-mini 1048576
+check inkling-2-mini-unbound:latest 65536
+
 # Moonshot provider context override verification
 load_provider moonshot
 CONTEXT_TOKENS=262144
