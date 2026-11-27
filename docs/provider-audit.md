@@ -698,6 +698,14 @@ upstream request. Raw V2.5 IDs remain as explicit migration aliases.
   local-proxy contracts. Their catalogs are not presented as first-party model
   APIs.
 
+### OpenRouter default, 2026-11-27 (directory evidence only)
+
+The [official free Nemotron 3.5 Super VL listing](https://openrouter.ai/nvidia/nemotron-3.5-super-vl%3Afree)
+documents the pinned default ID, 1,000,000 total context tokens and up to 131,072
+completion tokens. The offline plan scopes the output ceiling to that exact
+default and accepts the explicit human-readable alias. No account entitlement,
+inference, latency, or other model limits were verified by this change.
+
 ## Re-audit checklist
 
 When a vendor changes its plan:
