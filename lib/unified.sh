@@ -59,6 +59,8 @@ build_all_routes() {
       CR_API_URL="${API_URL:-$BASE_URL}" CR_API_TYPE="${API_AUTH_TYPE:-}" CR_API_KEY="$_api_key" \
       CR_EXPLICIT_API="${API_KEY_ENV:-}${API_KEY_REF:-}${API_URL:-}" \
       CR_AUTH_MODE="$AUTH_MODE" CR_AUTH_SCHEME="$_AUTH_SCHEME" CR_NONE_TOKEN="$_te" \
+      CR_CONTEXT_TOKENS="$CONTEXT_TOKENS" CR_MAX_OUTPUT_TOKENS="$MAX_OUTPUT_TOKENS" \
+      CR_MODEL_CONTEXT_OVERRIDES="$MODEL_CONTEXT_OVERRIDES" \
         catalog_exec "$NODE_BIN" "$LIB_DIR/route-build.js" candidates
     ) >> "$_rt"; then die "failed to build unified routes for provider '$_n'"; fi
   done

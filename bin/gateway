@@ -143,8 +143,18 @@ function handleModels(clientRes) {
   const data = [];
   for (const r of ROUTES) {
     const catalogModels = new Set(r.catalogModels || []);
+    const metadata = r.modelMetadata || {};
     for (const m of r.models) {
       const row = { id: r.prefix + '/' + m, type: 'model', object: 'model' };
+      const meta = metadata[m];
+      if (meta && typeof meta === 'object') {
+        if (Number.isFinite(meta.context_length)) {
+          row.context_length = meta.context_length;
+          // Anthropic-compatible alias of the input-side context bound.
+          row.max_input_tokens = meta.context_length;
+        }
+        if (Number.isFinite(meta.max_output_tokens)) row.max_output_tokens = meta.max_output_tokens;
+      }
       if (catalogModels.has(m)) row.verification = 'catalog-only';
       data.push(row);
     }

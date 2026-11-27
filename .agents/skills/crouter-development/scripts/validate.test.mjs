@@ -15,7 +15,7 @@ function fixture() {
   const destination = path.join(temp, String(count++));
   fs.mkdirSync(path.join(destination, '.agents/skills'), {recursive: true});
   fs.cpSync(path.join(root, skillRelative), path.join(destination, skillRelative), {recursive: true});
-  for (const file of ['.agents/SKILLS.md', 'CLAUDE.md', 'docs/development-plan.md', 'test/development-skill.sh']) {
+  for (const file of ['AGENTS.md', '.agents/SKILLS.md', 'CLAUDE.md', 'docs/development-plan.md', 'test/development-skill.sh']) {
     fs.mkdirSync(path.dirname(path.join(destination, file)), {recursive: true});
     fs.copyFileSync(path.join(root, file), path.join(destination, file));
   }
@@ -40,6 +40,10 @@ function rejects(label, mutate, expected) {
 try {
   assert.deepEqual(validatePackage(root).failures, [], 'source package must be valid');
   assert.deepEqual(validatePackage(fixture()).failures, [], 'package works under a path with spaces');
+  const direct = fixture();
+  fs.writeFileSync(path.join(direct, 'CLAUDE.md'), '# crouter development entry\n\ncrouter-development\n');
+  fs.writeFileSync(path.join(direct, 'AGENTS.md'), '# AGENTS\nno routing here\n');
+  assert.deepEqual(validatePackage(direct).failures, [], 'direct CLAUDE.md route still passes');
   const extension = fixture();
   edit(extension, 'references/roadmap.md', (text) => `${text}\n| DEV-16 | TODO | Additional scoped task | DEV-15 | UX-01 |\n`);
   assert.deepEqual(validatePackage(extension).failures, [], 'new tasks do not require a frozen count change');
@@ -57,12 +61,29 @@ try {
   rejects('duplicate eval', (dir) => edit(dir, 'evals/cases.json', (text) => { const data = JSON.parse(text); data.cases.push(data.cases[0]); return JSON.stringify(data); }), 'duplicate eval ID');
   rejects('unknown eval reference', (dir) => edit(dir, 'evals/cases.json', (text) => text.replace('"BUILD-01"', '"BUILD-99"')), 'unknown eval acceptance reference');
   rejects('missing DONE evidence', (dir) => edit(dir, 'references/roadmap.md', (text) => text.replace('### DEV-01 ', '### Historical ')), 'DONE task needs a delivery record');
+  rejects('no route at all', (dir) => {
+    fs.writeFileSync(path.join(dir, 'CLAUDE.md'), '# crouter\n\n');
+  }, 'missing CLAUDE.md development routing');
+  rejects('indirect route target missing', (dir) => {
+    fs.writeFileSync(path.join(dir, 'CLAUDE.md'), '@AGENTS.md\n');
+    fs.unlinkSync(path.join(dir, 'AGENTS.md'));
+  }, 'missing CLAUDE.md development routing');
+  rejects('indirect route without target', (dir) => {
+    fs.writeFileSync(path.join(dir, 'CLAUDE.md'), '@AGENTS.md\n');
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), '# AGENTS\nno routing here\n');
+  }, 'missing CLAUDE.md development routing');
+  rejects('unrelated indirection', (dir) => {
+    fs.writeFileSync(path.join(dir, 'CLAUDE.md'), '@../../.claude/CLAUDE.md\n');
+  }, 'missing CLAUDE.md development routing');
+  rejects('indirection filename suffix', (dir) => {
+    fs.writeFileSync(path.join(dir, 'CLAUDE.md'), '@AGENTS.md.backup\n');
+  }, 'missing CLAUDE.md development routing');
   rejects('copied discovery entry', (dir) => {
     const entry = path.join(dir, '.claude/skills/crouter-development');
     fs.unlinkSync(entry); fs.mkdirSync(entry);
   }, 'discovery entry must be a symlink');
   rejects('wrong frontmatter name', (dir) => edit(dir, 'SKILL.md', (text) => text.replace('name: crouter-development', 'name: another-skill')), 'skill name must match directory');
-  console.log(`ok validator self-tests: ${count} isolated fixtures (2 positive, ${count - 2} negative)`);
+  console.log(`ok validator self-tests: ${count} isolated fixtures (3 positive, ${count - 3} negative)`);
 } finally {
   fs.rmSync(temp, {recursive: true, force: true});
 }

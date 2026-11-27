@@ -70,7 +70,17 @@ export function validatePackage(repositoryRoot) {
     } catch (error) { failures.push(`${host}: missing or broken discovery entry (${error.code})`); }
   }
   check(read(path.join(root, '.agents', 'SKILLS.md')).includes('skills/crouter-development/SKILL.md'), 'missing routing-table link');
-  check(read(path.join(root, 'CLAUDE.md')).includes('crouter-development'), 'missing CLAUDE.md development routing');
+  const claude = read(path.join(root, 'CLAUDE.md'));
+  let claudeRoutes = claude.includes('crouter-development');
+  if (!claudeRoutes) {
+    const agents = /^[ \t]*@(AGENTS\.md)[ \t]*\r?$/m.exec(claude);
+    if (agents) {
+      // CLAUDE.md defers to AGENTS.md; follow only in-repo indirection.
+      // read() applies the inside/root guard, so escapes and absences still fail.
+      claudeRoutes = read(path.resolve(root, agents[1])).includes('crouter-development');
+    }
+  }
+  check(claudeRoutes, 'missing CLAUDE.md development routing');
   check(read(path.join(root, 'docs', 'development-plan.md')).includes('../.agents/skills/crouter-development/SKILL.md'), 'missing human-readable development entry');
   check(fs.existsSync(path.join(root, 'test', 'development-skill.sh')), 'missing offline test wrapper');
 
