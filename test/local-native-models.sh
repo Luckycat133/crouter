@@ -7,7 +7,7 @@ die() { fail "$*"; }
 . "$ROOT_DIR/lib/provider.sh"
 load_last_selected_model() { :; }
 . "$ROOT_DIR/providers/ollama.sh"
-for pair in qwen3.6-hauhau:35b-a3b-q4_k_p=131072 qwen3.8-abliterated:27b-dflash=262144 inkling-2-mini:latest=1048576; do
+for pair in qwen3.6-hauhau:35b-a3b-q4_k_p=262144 qwen3.8-abliterated:27b-dflash=262144 inkling-2-mini:latest=1048576; do
   id=${pair%=*}; CONTEXT_TOKENS=
   apply_model_context_override "$id"
   [ "$CONTEXT_TOKENS" = "${pair#*=}" ] || fail "$id context"

@@ -4,6 +4,15 @@ All notable changes to this local setup are documented in this file.
 
 ## [Unreleased]
 
+## [0.7.7] - 2026-11-28
+
+### Changed
+
+- Ollama declares the full 262,144-token Claude Code context for
+  `qwen3.6-hauhau:35b-a3b-q4_k_p`, matching the saved native model default.
+  Model selection, save-only and launch planning retain this exact-model
+  window without starting local services.
+
 ## [0.7.6] - 2026-11-28
 
 ### Changed

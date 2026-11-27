@@ -72,7 +72,7 @@ Current model defaults, effort and per-model window caps are defined in `provide
 
 DeepSeek request handling preserves the requested thinking/effort fields and reports effective local behavior without claiming unsupported budget control. Its text-only image fallback is deliberately model-scoped; other models retain their multimodal input. Changes here need focused offline coverage for model selection/caps, thinking pass-through, image scope, heartbeat interval, relay fidelity and cleanup.
 
-The exact Ollama IDs `qwen3.8-abliterated:27b-dflash` (declared 262,144-token client window) and `qwen3.6-hauhau:35b-a3b-q4_k_p` (declared 131,072-token client window) are registered in `providers/ollama.sh` alongside the DFlash and `inkling` profiles; tiers pin to the selected ID through `MODEL_SELF_ROUTE_MODELS`, and native Ollama definitions keep sampler/cache/MTP defaults, so crouter injects no extra inference settings. Declared windows are scoped per exact ID in `MODEL_CONTEXT_OVERRIDES`; selections without a declared override keep the 65,536-token fallback.
+The exact Ollama IDs `qwen3.8-abliterated:27b-dflash` (declared 262,144-token client window) and `qwen3.6-hauhau:35b-a3b-q4_k_p` (declared 262,144-token client window) are registered in `providers/ollama.sh` alongside the DFlash and `inkling` profiles; tiers pin to the selected ID through `MODEL_SELF_ROUTE_MODELS`, and native Ollama definitions keep sampler/cache/MTP defaults, so crouter injects no extra inference settings. Declared windows are scoped per exact ID in `MODEL_CONTEXT_OVERRIDES`; selections without a declared override keep the 65,536-token fallback.
 
 ## Bonsai transport
 

@@ -22,6 +22,8 @@ check foo-other:tag 65536
 check foo 65536
 
 load_provider ollama
+check qwen3.6-hauhau:35b-a3b-q4_k_p 262144
+check qwen3.6-hauhau:35b-a3b-q4_k_p-custom 65536
 check inkling-2-mini:latest 1048576
 check inkling-2-mini 1048576
 check inkling-2-mini-unbound:latest 65536

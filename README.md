@@ -1,7 +1,7 @@
 # crouter
 
 [![CI](https://github.com/Luckycat133/crouter/actions/workflows/ci.yml/badge.svg)](https://github.com/Luckycat133/crouter/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/version-0.7.6-blue)
+![Version](https://img.shields.io/badge/version-0.7.7-blue)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 `crouter` launches Claude Code against audited Anthropic-compatible providers
@@ -19,7 +19,7 @@ the full [docs index](docs/README.md) for the source matrix, architecture
 contracts, and decisions, plus [llms.txt](llms.txt) /
 [llms-full.txt](llms-full.txt) for machine-readable LLM indexes.
 
-`VERSION` is 0.7.6; release history and in-progress changes are recorded in
+`VERSION` is 0.7.7; release history and in-progress changes are recorded in
 [CHANGELOG.md](CHANGELOG.md). Offline checks run under both POSIX `sh` and `dash`;
 the `crouter-development` skill routing validator and its 24 isolated fixture
 checks pass under both `sh` and `dash` (package structure only; live-client and
@@ -683,7 +683,7 @@ Ollama model with `num_ctx=262144` to match the advertised native window.
 sampling/batch/draft defaults remain stored in the Ollama model; crouter adds
 no sampler/cache defaults. Two more exact IDs are registered:
 `qwen3.8-abliterated:27b-dflash` (declared 262,144-token client window) and
-`qwen3.6-hauhau:35b-a3b-q4_k_p` (declared 131,072-token client window);
+`qwen3.6-hauhau:35b-a3b-q4_k_p` (declared 262,144-token client window);
 tiers pin to the selected ID and crouter adds no sampler/cache or MTP
 settings beyond what the model stores. Select models with
 `crouter ollama --model <id>`.

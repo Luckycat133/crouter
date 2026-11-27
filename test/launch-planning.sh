@@ -219,6 +219,24 @@ fi
 [ ! -e "$SPY" ] || fail 'invalid local plan reached an external boundary'
 [ "$(cat "$selection_dir/last-model-ollama")" = qwen3.8:27b-dflash ] || fail 'failed apply-only changed the saved local plan'
 
+# The full Hauhau window must be visible through the real CLI without
+# contacting Ollama, starting the relay, or invoking Claude.
+run ollama --model qwen3.6-hauhau:35b-a3b-q4_k_p --plan > "$TMP_DIR/hauhau.json"
+run ollama --model qwen3.6-hauhau:35b-a3b-q4_k_p --apply-only > "$TMP_DIR/saved"
+run ollama --plan > "$TMP_DIR/remembered-hauhau.json"
+"$NODE_BIN" - "$TMP_DIR/hauhau.json" "$TMP_DIR/remembered-hauhau.json" <<'NODE'
+const assert = require('node:assert/strict');
+for (const file of process.argv.slice(2)) {
+  const plan = require(file);
+  assert.equal(plan.model, 'qwen3.6-hauhau:35b-a3b-q4_k_p');
+  assert.equal(plan.contextTokens, 262144);
+  assert.equal(plan.source.origin, 'http://127.0.0.1:11435');
+  assert.deepEqual(plan.services, ['ollama-heartbeat']);
+  assert.deepEqual(Object.values(plan.tiers), Array(4).fill(plan.model));
+}
+NODE
+[ ! -e "$SPY" ] || fail 'Hauhau preview or save started a resource'
+
 run demo large > "$TMP_DIR/large.out"
 grep -Fxq 'output=8192' "$TMP_DIR/large.out" || fail 'configured output cap not sent to Claude'
 run demo unknown > "$TMP_DIR/unknown.out"
