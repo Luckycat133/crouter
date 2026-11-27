@@ -10,7 +10,7 @@ MODEL="qwen3.8:27b-dflash"
 CONTEXT_TOKENS="65536"
 # Keep context windows scoped to the selected model; both native Qwen routes
 # and the DFlash profile retain their 262K window.
-MODEL_CONTEXT_OVERRIDES="deepseek-v4-flash:q8=373760 deepseek-v4-flash=373760 qwen3.8-27b=262144 qwen3.8-27b-heretic:q4=262144 qwen3.8-27b-heretic:q4-dflash=262144 qwen3.8-27b-heretic=262144 qwen3.8:27b-dflash=262144"
+MODEL_CONTEXT_OVERRIDES="deepseek-v4-flash:q8=373760 deepseek-v4-flash=373760 qwen3.8-27b=262144 qwen3.8-27b-heretic:q4=262144 qwen3.8-27b-heretic:q4-dflash=262144 qwen3.8-27b-heretic=262144 qwen3.8:27b-dflash=262144 inkling-2-mini=1048576 inkling-2-mini:latest=1048576"
 MODEL_SELF_ROUTE_MODELS="deepseek-v4-flash:q8 deepseek-v4-flash qwen3.8-27b qwen3.8-27b-heretic:q4 qwen3.8-27b-heretic:q4-dflash qwen3.8-27b-heretic qwen3.8:27b-dflash"
 EFFORT="xhigh"
 

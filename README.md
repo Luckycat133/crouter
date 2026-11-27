@@ -1,7 +1,7 @@
 # crouter
 
 [![CI](https://github.com/Luckycat133/crouter/actions/workflows/ci.yml/badge.svg)](https://github.com/Luckycat133/crouter/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/version-0.5.3-blue)
+![Version](https://img.shields.io/badge/version-0.7.3-blue)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 `crouter` launches Claude Code against audited Anthropic-compatible providers
@@ -19,9 +19,9 @@ the full [docs index](docs/README.md) for the source matrix, architecture
 contracts, and decisions, plus [llms.txt](llms.txt) /
 [llms-full.txt](llms-full.txt) for machine-readable LLM indexes.
 
-`VERSION` remains 0.5.3; subsequent milestones (`0.6.0`–`0.7.2`) and in-progress
-changes are recorded in [CHANGELOG.md](CHANGELOG.md). The current checkout passes the
-offline contract suite under POSIX `sh` and `dash`. Live catalog access,
+`VERSION` is 0.7.3; release history and in-progress changes are recorded in
+[CHANGELOG.md](CHANGELOG.md). Offline checks run under both POSIX `sh` and `dash`;
+existing development-skill routing validation is red. Live catalog access,
 remaining quota, and account entitlement still require the account owner's
 credentials and may incur provider charges.
 
@@ -676,6 +676,10 @@ This DFlash2 profile does not inject `CLAUDE_CODE_MAX_OUTPUT_TOKENS`.
 Claude Code and Ollama retain their own output limits; crouter adds no
 per-response token cap. The reasoning effort remains `xhigh`. Configure the
 Ollama model with `num_ctx=262144` to match the advertised native window.
+
+`crouter ollama inkling-2-mini:latest` passes 1,048,576 client context while
+sampling/batch/draft defaults remain stored in the Ollama model; crouter adds
+no sampler/cache defaults.
 
 ```sh
 crouter ollama qwen3.8:27b-dflash

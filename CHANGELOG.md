@@ -44,6 +44,13 @@ All notable changes to this local setup are documented in this file.
   set 30-minute `API_TIMEOUT_MS` / `CLAUDE_STREAM_IDLE_TIMEOUT_MS` /
   `CLAUDE_BYTE_STREAM_IDLE_TIMEOUT_MS` in `providers/openrouter.sh`.
 
+## [0.7.3] - 2026-11-27
+
+### Added
+
+- Ollama: pass a 1,048,576-token client context to Claude Code for the exact
+  `inkling-2-mini` and `inkling-2-mini:latest` IDs, with a regression check.
+
 ## [0.7.2] - 2026-11-15
 
 ### Added
