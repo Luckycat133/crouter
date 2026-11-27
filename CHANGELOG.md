@@ -4,6 +4,16 @@ All notable changes to this local setup are documented in this file.
 
 ## [Unreleased]
 
+## [0.7.6] - 2026-11-28
+
+### Changed
+
+- `lib/route-build.js` route context/output ceilings now take the smaller of the declared limit and the account-directory value when both are known. An unknown account limit does not replace a declared ceiling or become a guessed value.
+
+### Fixed
+
+- Antigravity provider declarations now replace the outdated Claude 200K and Neon 524,288-token ceilings. The reviewed local account directory reports a 1,000,000-token context and 128,000-token output ceiling for six Claude 5.5 variants, and a 1,048,576-token context for 21 Gemini variants with outputs of 65,535 / 65,536 / 262,144 tokens. A fixed metadata fixture covers these account-directory bounds.
+
 ## [0.7.5] - 2026-11-28
 
 ### Added

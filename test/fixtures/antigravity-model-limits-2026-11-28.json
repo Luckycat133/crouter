@@ -1,0 +1,142 @@
+{
+  "review_date": "2026-11-28",
+  "source": "Antigravity Cloud Code account metadata projected through loopback /v1/models",
+  "verification": "Read-only metadata; a fixed regression snapshot, not evidence of inference or every account entitlement. No credentials, quota or account identity.",
+  "models": [
+    {
+      "id": "claude-opus-5-5-high",
+      "context_length": 1000000,
+      "max_output_tokens": 128000
+    },
+    {
+      "id": "claude-opus-5-5-low",
+      "context_length": 1000000,
+      "max_output_tokens": 128000
+    },
+    {
+      "id": "claude-opus-5-5-medium",
+      "context_length": 1000000,
+      "max_output_tokens": 128000
+    },
+    {
+      "id": "claude-sonnet-5-5-high",
+      "context_length": 1000000,
+      "max_output_tokens": 128000
+    },
+    {
+      "id": "claude-sonnet-5-5-low",
+      "context_length": 1000000,
+      "max_output_tokens": 128000
+    },
+    {
+      "id": "claude-sonnet-5-5-medium",
+      "context_length": 1000000,
+      "max_output_tokens": 128000
+    },
+    {
+      "id": "gemini-3.5-flash-lite",
+      "context_length": 1048576,
+      "max_output_tokens": 65535
+    },
+    {
+      "id": "gemini-3.8-flash-high",
+      "context_length": 1048576,
+      "max_output_tokens": 65536
+    },
+    {
+      "id": "gemini-3.8-flash-low",
+      "context_length": 1048576,
+      "max_output_tokens": 65536
+    },
+    {
+      "id": "gemini-3.8-flash-medium",
+      "context_length": 1048576,
+      "max_output_tokens": 65536
+    },
+    {
+      "id": "gemini-3.8-flash-tiered",
+      "context_length": 1048576,
+      "max_output_tokens": 65536
+    },
+    {
+      "id": "gemini-4-argon-high",
+      "context_length": 1048576,
+      "max_output_tokens": 65536
+    },
+    {
+      "id": "gemini-4-argon-low",
+      "context_length": 1048576,
+      "max_output_tokens": 65536
+    },
+    {
+      "id": "gemini-4-argon-medium",
+      "context_length": 1048576,
+      "max_output_tokens": 65536
+    },
+    {
+      "id": "gemini-4-carbon-high",
+      "context_length": 1048576,
+      "max_output_tokens": 262144
+    },
+    {
+      "id": "gemini-4-carbon-low",
+      "context_length": 1048576,
+      "max_output_tokens": 262144
+    },
+    {
+      "id": "gemini-4-carbon-medium",
+      "context_length": 1048576,
+      "max_output_tokens": 262144
+    },
+    {
+      "id": "gemini-4-hydrogen-high",
+      "context_length": 1048576,
+      "max_output_tokens": 262144
+    },
+    {
+      "id": "gemini-4-hydrogen-low",
+      "context_length": 1048576,
+      "max_output_tokens": 262144
+    },
+    {
+      "id": "gemini-4-hydrogen-medium",
+      "context_length": 1048576,
+      "max_output_tokens": 262144
+    },
+    {
+      "id": "gemini-4-hydrogen-tiered-high",
+      "context_length": 1048576,
+      "max_output_tokens": 262144
+    },
+    {
+      "id": "gemini-4-hydrogen-tiered-xhigh",
+      "context_length": 1048576,
+      "max_output_tokens": 262144
+    },
+    {
+      "id": "gemini-4-hydrogen-xhigh",
+      "context_length": 1048576,
+      "max_output_tokens": 262144
+    },
+    {
+      "id": "gemini-4-neon-high",
+      "context_length": 1048576,
+      "max_output_tokens": 262144
+    },
+    {
+      "id": "gemini-4-neon-low",
+      "context_length": 1048576,
+      "max_output_tokens": 262144
+    },
+    {
+      "id": "gemini-4-neon-medium",
+      "context_length": 1048576,
+      "max_output_tokens": 262144
+    },
+    {
+      "id": "gemini-4-neon-xhigh",
+      "context_length": 1048576,
+      "max_output_tokens": 262144
+    }
+  ]
+}

@@ -415,7 +415,7 @@ _antigravity_claude_show=$("$GATEWAY" provider show antigravity-claude 2>&1)
 _antigravity_claude_show_rc=$?
 if [ "$_antigravity_claude_show_rc" -eq 0 ] &&
    printf '%s\n' "$_antigravity_claude_show" | grep -q '^default:     claude-opus-5-5-medium$' &&
-   printf '%s\n' "$_antigravity_claude_show" | grep -q '^context:     200000 tokens$' &&
+   printf '%s\n' "$_antigravity_claude_show" | grep -q '^context:     1000000 tokens$' &&
    printf '%s\n' "$_antigravity_claude_show" | grep -q '^  opus:      claude-opus-5-5-medium$' &&
    printf '%s\n' "$_antigravity_claude_show" | grep -q '^  sonnet:    claude-sonnet-5-5-medium$' &&
    printf '%s\n' "$_antigravity_claude_show" | grep -q '^  haiku:     claude-sonnet-5-5-medium$' &&

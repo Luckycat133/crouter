@@ -51,8 +51,11 @@ or another account's directory can never leak into this route's models.
 
 `lib/route-build.js` assembles the metadata from directory catalog metadata,
 account-live catalog metadata, and declared limits
-(`CONTEXT_TOKENS`, `MAX_OUTPUT_TOKENS`, `MODEL_CONTEXT_OVERRIDES`); declared
-limits win, and the primary model's declared output cap is applied when set.
+(`CONTEXT_TOKENS`, `MAX_OUTPUT_TOKENS`, `MODEL_CONTEXT_OVERRIDES`). For each
+exact model the effective context/output bound is the smaller of the declared
+limit and the catalog value — declaration and directory intersect at the
+minimum, and neither side is treated as statically dominant. The primary
+model's declared output cap is applied when set.
 `lib/unified.sh` forwards those declared limits into unified gateway route
 construction but still sets no global 1M window, so `crouter all` exposes
 per-model metadata without forcing every model to a 1M context window.

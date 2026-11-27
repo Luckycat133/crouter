@@ -9,7 +9,8 @@ BASE_URL=$(antigravity_base_url)
 # Only the live account directory supplies selectable model variants.
 MODELS_ACCOUNT_LIVE="1"
 MODEL="claude-opus-5-5-medium"
-CONTEXT_TOKENS="200000"
+# Claude 5.5 account metadata reviewed 2026-11-28 reports a 1M window.
+CONTEXT_TOKENS="1000000"
 
 MODEL_OPUS="claude-opus-5-5-medium"
 MODEL_SONNET="claude-sonnet-5-5-medium"

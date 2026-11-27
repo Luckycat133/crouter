@@ -27,7 +27,9 @@ MODEL_ALIASES="gemini-4-neon-low gemini-4-neon-medium gemini-4-neon-high gemini-
 # Orchestrator is deliberately excluded: it is a multi-model agent mode, not
 # an Anthropic Messages model that this proxy can faithfully provide.
 MODEL_ID_ALIASES="gemini-4-neon=gemini-4-neon-high gemini-4-carbon=gemini-4-carbon-medium gemini-4-argon=gemini-4-argon-medium gemini-4-hydrogen=gemini-4-hydrogen-medium"
-MODEL_CONTEXT_OVERRIDES="gemini-4-neon-low=524288 gemini-4-neon-medium=524288 gemini-4-neon-high=524288 gemini-4-neon-xhigh=524288"
+# Exact live-account metadata reviewed 2026-11-28 reports 1,048,576 for
+# every Neon variant; do not retain the older 512K client ceiling.
+MODEL_CONTEXT_OVERRIDES="gemini-4-neon-low=1048576 gemini-4-neon-medium=1048576 gemini-4-neon-high=1048576 gemini-4-neon-xhigh=1048576"
 MODEL_SELF_ROUTE_MODELS="*"
 
 # Gemini effort is handled internally by the Antigravity proxy, so leave

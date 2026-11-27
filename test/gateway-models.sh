@@ -21,6 +21,19 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+# A live account's tighter bound must constrain a declared provider ceiling;
+# neither a generic directory nor an override may raise the other limit.
+"$NODE_BIN" - "$ROOT_DIR" <<'EOF'
+const assert = require('node:assert/strict');
+const {modelMetadataMap} = require(process.argv[2] + '/lib/route-build.js');
+const limits = {context: 1000000, output: 131072, primary: 'model', overrides: new Map([['model', 1000000]])};
+assert.deepEqual(modelMetadataMap(['model'], limits, new Map([['model', {context_length: 262144, max_output_tokens: 8192}]])),
+  {model: {context_length: 262144, max_output_tokens: 8192}});
+assert.deepEqual(modelMetadataMap(['model'], limits, new Map([['model', {context_length: 2000000, max_output_tokens: 262144}]])),
+  {model: {context_length: 1000000, max_output_tokens: 131072}});
+EOF
+[ "$?" -eq 0 ] || exit 1
+
 # Build two unified routes exactly as cmd_all does: per-provider candidates
 # combined into one routes file. Declared limits flow through CR_* env.
 CR_PREFIX=demo CR_MODELS="big-model small-model" \
