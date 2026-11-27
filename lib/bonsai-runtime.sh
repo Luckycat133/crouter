@@ -11,6 +11,9 @@ bonsai_model_plan() {
       _bonsai_upstream_port=8081
       _bonsai_adapter_port=11439
       _bonsai_inherit_defaults=1
+      # A remembered 2.5 selection becomes MODEL before planning. Do not let
+      # the legacy provider-level output cap become its native output default.
+      MAX_OUTPUT_TOKENS=
       ;;
   esac
   BASE_URL=http://127.0.0.1:$_bonsai_adapter_port

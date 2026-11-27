@@ -80,6 +80,34 @@ printf 'tiers=%s,%s,%s,%s\n' "$ANTHROPIC_DEFAULT_OPUS_MODEL" "$ANTHROPIC_DEFAULT
 printf 'private=%s\n' "${FIXTURE_DIR-clean}"
 CLAUDE
 chmod +x "$TMP_DIR/bin/"* "$TMP_DIR/claude"
+# Persisting 2.5 makes it the provider's primary MODEL on the next process.
+# Its client context must survive while the legacy primary's output cap must not.
+plan_run() {
+  HOME="$TMP_DIR/home" XDG_STATE_HOME="$TMP_DIR/state" CLAUDE_BIN="$TMP_DIR/claude" \
+    BONSAI_DEMO_DIR="$TMP_DIR/demo" PATH="$TMP_DIR/bin:$PATH" \
+    "${TEST_SHELL:-sh}" "$REPO/bin/crouter" bonsai "$@"
+}
+plan_run --plan > "$TMP_DIR/legacy-plan.json"
+plan_run --model ternary-bonsai-2.5-27b --plan > "$TMP_DIR/new-plan.json"
+plan_run --model ternary-bonsai-2.5-27b --apply-only > "$TMP_DIR/saved"
+plan_run --plan > "$TMP_DIR/saved-plan.json"
+node - "$TMP_DIR/legacy-plan.json" "$TMP_DIR/new-plan.json" "$TMP_DIR/saved-plan.json" <<'NODE'
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const [legacy, fresh, saved] = process.argv.slice(2).map(file => JSON.parse(fs.readFileSync(file, 'utf8')));
+assert.equal(legacy.model, 'ternary-bonsai-2-27b');
+assert.equal(legacy.maxOutputTokens, 262144);
+for (const plan of [fresh, saved]) {
+  assert.equal(plan.model, 'ternary-bonsai-2.5-27b');
+  assert.equal(plan.contextTokens, 262144);
+  assert.equal(plan.maxOutputTokens, null, 'Bonsai 2.5 inherited a legacy output cap after saving');
+  assert.equal(plan.source.origin, 'http://127.0.0.1:11439');
+}
+NODE
+[ "$(cat "$TMP_DIR/state/crouter/last-model-bonsai")" = ternary-bonsai-2.5-27b ]
+[ "$(cat "$TMP_DIR/state/crouter/bonsai-context")" = 262144 ]
+[ ! -e "$TMP_DIR/adapter-pid" ]
+[ ! -e "$TMP_DIR/native-pid" ]
 HOME="$TMP_DIR/home" XDG_STATE_HOME="$TMP_DIR/state" USER=crouter-fixture \
   FIXTURE_DIR="$TMP_DIR" FIXTURE_NATIVE_STATE="${FIXTURE_NATIVE_STATE:-compatible}" BONSAI_DEMO_DIR="$TMP_DIR/demo" CLAUDE_BIN="$TMP_DIR/claude" \
   PATH="$TMP_DIR/bin:$PATH" "${TEST_SHELL:-sh}" "$REPO/bin/crouter" \

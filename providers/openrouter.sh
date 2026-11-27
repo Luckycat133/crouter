@@ -1,11 +1,13 @@
 #!/bin/sh
 # Reviewed 2026-11-07 against https://openrouter.ai/api/v1/models.
 # Static seeds are not the complete catalog or account-entitlement proof.
+# Default endpoint output limit verified 2026-11-27 on the model product page.
 PROVIDER_NAME="openrouter"
 PROVIDER_DESC="OpenRouter Anthropic Messages gateway"
 BASE_URL="https://openrouter.ai/api"
 MODEL="nvidia/nemotron-3.5-super-vl:free"
 CONTEXT_TOKENS="1000000"
+MAX_OUTPUT_TOKENS="131072"
 AUTO_COMPACT_TOKENS="786432"
 EFFORT=""
 MODEL_OPUS="$MODEL"
@@ -37,7 +39,8 @@ HEALTH_CHECK_URL=""
 MODEL_ID_ALIASES='nemotron=nvidia/nemotron-3-ultra-550b-a55b:free ultra=nvidia/nemotron-3-ultra-550b-a55b:free nemotron-3-ultra=nvidia/nemotron-3-ultra-550b-a55b:free nemotron-3.5-super=nvidia/nemotron-3.5-super-vl:free nemotron-3.5-super-vl=nvidia/nemotron-3.5-super-vl:free qwen=qwen/qwen3.8-27b qwen3.8=qwen/qwen3.8-27b qwen3.8-27b=qwen/qwen3.8-27b'
 # Normalize the retired label to the blocked free ID so it is refused rather
 # than rewritten to the different, paid model.
-MODEL_LABEL_ALIASES='nemotron 3 ultra=nvidia/nemotron-3-ultra-550b-a55b:free
+MODEL_LABEL_ALIASES='nemotron 3.5 super vl=nvidia/nemotron-3.5-super-vl:free
+nemotron 3 ultra=nvidia/nemotron-3-ultra-550b-a55b:free
 qwen3.8 27b=qwen/qwen3.8-27b
 qwen3.8 27b:free=qwen/qwen3.8-27b:free'
 MODEL_BLOCKED_IDS='qwen3.8-27b:free qwen/qwen3.8-27b:free'

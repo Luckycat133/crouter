@@ -183,6 +183,9 @@ build_launch_plan() {
     CONTEXT_TOKENS= MAX_OUTPUT_TOKENS= AUTO_COMPACT_TOKENS=
   fi
   if [ -n "$MODEL_SETUP" ]; then "$MODEL_SETUP" "$LAUNCH_MODEL" || return $?; fi
+  # Provider policy supplies the static ceiling. Model-bound user settings
+  # and fresh catalog limits may reduce it, but must never be raised by it.
+  apply_model_context_override "$LAUNCH_MODEL"
   _lp_limits=$(model_state_limits "$PROVIDER_NAME" "$LAUNCH_MODEL")
   IFS=' ' read -r _lp_context _lp_output _lp_catalog_context _lp_catalog_output LAUNCH_SELECTION_REVISION <<EOF
 $_lp_limits
@@ -193,7 +196,6 @@ EOF
   if [ "${_lp_output:-0}" -gt 0 ] && { [ -z "$MAX_OUTPUT_TOKENS" ] || [ "$_lp_output" -lt "$MAX_OUTPUT_TOKENS" ]; }; then
     MAX_OUTPUT_TOKENS=$_lp_output
   fi
-  apply_model_context_override "$LAUNCH_MODEL"
   apply_model_effort_override "$LAUNCH_MODEL"
   apply_model_tier_settings "$LAUNCH_MODEL"
   apply_model_self_route "$LAUNCH_MODEL"
