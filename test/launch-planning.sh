@@ -101,6 +101,16 @@ printf 'tiers=%s,%s,%s,%s\n' "$ANTHROPIC_DEFAULT_OPUS_MODEL" "$ANTHROPIC_DEFAULT
 printf 'arg=%s\n' "$@"
 CLAUDE
 rm "$SPY"
+run openrouter 'nemotron 3.5 super vl' --plan > "$TMP_DIR/free-vl.json"
+"$NODE_BIN" - "$TMP_DIR/free-vl.json" <<'NODE'
+const assert = require('node:assert/strict');
+const plan = require(process.argv[2]);
+assert.equal(plan.model, 'nvidia/nemotron-3.5-super-vl:free');
+assert.equal(plan.contextTokens, 1000000);
+assert.equal(plan.maxOutputTokens, 131072);
+assert.equal(plan.constraints.paidFallback, false);
+NODE
+[ ! -e "$SPY" ] || fail 'default free model plan initialized auth or assets'
 saved=$(run openrouter --model 'qwen3.8 27b' --apply-only) || fail 'registered label cannot be saved'
 [ "$saved" = 'openrouter: applied qwen/qwen3.8-27b (context=262144, effort=xhigh); no services started' ] || fail 'saved label plan differs from canonical model plan'
 [ ! -e "$SPY" ] || fail 'OpenRouter apply-only initialized auth or assets'
@@ -112,6 +122,7 @@ assert_qwen_launch() {
   run openrouter "$@" > "$TMP_DIR/openrouter.out" || fail 'OpenRouter launch failed'
   grep -Fxq 'model=qwen/qwen3.8-27b' "$TMP_DIR/openrouter.out" || fail 'child model not canonical'
   grep -Fxq 'context=262144' "$TMP_DIR/openrouter.out" || fail 'child context differs from saved plan'
+  grep -Fxq 'output=' "$TMP_DIR/openrouter.out" || fail 'default model output cap leaked into Qwen'
   grep -Fxq 'compact=' "$TMP_DIR/openrouter.out" || fail 'default compact window leaked'
   grep -Fxq 'tiers=qwen/qwen3.8-27b,qwen/qwen3.8-27b,qwen/qwen3.8-27b,qwen/qwen3.8-27b' "$TMP_DIR/openrouter.out" || fail 'canonical tier configuration lost'
   grep -A 1 -Fx 'arg=--effort' "$TMP_DIR/openrouter.out" | grep -Fxq 'arg=xhigh' || fail 'child effort differs from apply-only preview'
