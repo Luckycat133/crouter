@@ -15,7 +15,7 @@ function fixture() {
   const destination = path.join(temp, String(count++));
   fs.mkdirSync(path.join(destination, '.agents/skills'), {recursive: true});
   fs.cpSync(path.join(root, skillRelative), path.join(destination, skillRelative), {recursive: true});
-  for (const file of ['.agents/SKILLS.md', 'CLAUDE.md', 'docs/development-plan.md', 'test/development-skill.sh']) {
+  for (const file of ['.agents/SKILLS.md', 'AGENTS.md', 'CLAUDE.md', 'docs/development-plan.md', 'test/development-skill.sh']) {
     fs.mkdirSync(path.dirname(path.join(destination, file)), {recursive: true});
     fs.copyFileSync(path.join(root, file), path.join(destination, file));
   }
@@ -43,6 +43,7 @@ try {
   const extension = fixture();
   edit(extension, 'references/roadmap.md', (text) => `${text}\n| DEV-16 | TODO | Additional scoped task | DEV-15 | UX-01 |\n`);
   assert.deepEqual(validatePackage(extension).failures, [], 'new tasks do not require a frozen count change');
+  rejects('missing delegated Claude route', (dir) => fs.writeFileSync(path.join(dir, 'AGENTS.md'), '# unrelated\n'), 'missing CLAUDE.md development routing');
   rejects('missing reference', (dir) => fs.unlinkSync(path.join(dir, skillRelative, 'references/product-and-ux.md')), 'ENOENT');
   rejects('missing handoff', (dir) => fs.unlinkSync(path.join(dir, skillRelative, 'references/implementation-handoff.md')), 'ENOENT');
   rejects('broken handoff link', (dir) => edit(dir, 'references/implementation-handoff.md', (text) => `${text}\n[missing](missing.md)\n`), 'broken local link');
