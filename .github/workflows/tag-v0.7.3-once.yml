@@ -1,0 +1,32 @@
+name: Create crouter v0.7.3 tag once
+on:
+  push:
+    branches: ['dots/tag-v0.7.3-once']
+    paths: ['.github/workflows/tag-v0.7.3-once.yml']
+permissions:
+  contents: write
+jobs:
+  exact-tag:
+    if: github.repository == 'Luckycat133/crouter'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Create exact git ref without overwriting
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: 'v0.7.3'
+          TARGET: '5c7e328fbaed7b1152787d14fcec4b6f0be2964e'
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "Luckycat133/crouter"
+          test "$GITHUB_REF" = "refs/heads/dots/tag-v0.7.3-once"
+          test "$TAG" = "v0.7.3"
+          [[ "$TARGET" =~ ^[a-f0-9]{40}$ ]]
+          main="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)"
+          test "$main" = "$TARGET"
+          version="$(gh api "repos/$GITHUB_REPOSITORY/contents/VERSION?ref=$TARGET" --jq .content | base64 --decode)"
+          test "v$version" = "$TAG"
+          # POST creates a new ref only; it rejects the request if the name exists.
+          created="$(gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$TAG" -f "sha=$TARGET" --jq .object.sha)"
+          test "$created" = "$TARGET"
