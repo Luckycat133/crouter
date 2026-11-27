@@ -10,6 +10,9 @@
 #   crouter <provider> [<model>] [args...] Launch with the provider
 #   crouter <provider> --browse           Choose a model, then launch
 #   crouter <provider> --apply-only       Save selection without starting services
+#   crouter <provider> --set-default      Save the model and default provider together
+#   crouter <provider> --plan            Preview the launch configuration as JSON
+#   crouter <provider> --once            Launch without changing the default model
 #   crouter models <provider> [--list|--refresh|--set <id>]
 #                                         Read/select models without launching Claude
 #   crouter all [--check]                 Unified gateway / redacted route proof
@@ -117,9 +120,9 @@ cmd_claude() { check_claude_binary; exec "$CLAUDE_BIN" "$@"; }
 cmd_run() {
   _p=$1; shift
   load_provider "$_p"
-  _default_model=$MODEL _default_context=$CONTEXT_TOKENS _default_compact=$AUTO_COMPACT_TOKENS
   _main_model= _model_set=0 _pos_model= _pos_idx=0 _seen_flag=0
   _n=$# _i=0 _expect_model=0 _browse=0 _apply_only=0 _refresh=0 _bypass_auth=0 _passthrough=0
+  _show_plan=0 _make_default=0 _once=0
   for _a in "$@"; do
     _i=$((_i + 1))
     [ "$_passthrough" -eq 0 ] || continue
@@ -134,6 +137,9 @@ cmd_run() {
       --model) _expect_model=1; _seen_flag=1 ;;
       --browse) _browse=1; _seen_flag=1 ;;
       --apply-only) _apply_only=1; _seen_flag=1 ;;
+      --plan) _show_plan=1; _seen_flag=1 ;;
+      --set-default) _make_default=1; _apply_only=1; _seen_flag=1 ;;
+      --once) _once=1; _seen_flag=1 ;;
       --refresh) _refresh=1; _seen_flag=1 ;;
       --version|-V|--help|-h) _bypass_auth=1; _seen_flag=1 ;;
       -*) _seen_flag=1 ;;
@@ -142,6 +148,7 @@ cmd_run() {
   done
   [ "$_expect_model" -eq 0 ] || die '--model requires a non-empty model value'
   if [ "$_browse" -eq 1 ] && { [ "$_model_set" -eq 1 ] || [ -n "$_pos_model" ]; }; then die 'choose either a model or --browse, not both'; fi
+  if [ "$_apply_only" -eq 1 ] && { [ "$_show_plan" -eq 1 ] || [ "$_once" -eq 1 ]; }; then die 'choose a single launch or save action'; fi
   # Remove only router-owned flags and the positional model. Claude arguments
   # (including their values) keep their order and byte boundaries.
   _i=0 _skip_model_value=0 _passthrough=0
@@ -153,7 +160,7 @@ cmd_run() {
     case $_first in
       --) _passthrough=1 ;;
       --model) _skip_model_value=1 ;;
-      --model=*|--browse|--apply-only|--refresh) ;;
+      --model=*|--browse|--apply-only|--plan|--set-default|--once|--refresh) ;;
       *) set -- "$@" "$_first" ;;
     esac
   done
@@ -167,37 +174,23 @@ cmd_run() {
   if [ "$_browse" -eq 1 ] && [ "$_bypass_auth" -eq 0 ]; then
     # Directory access may resolve a directory credential, but it never starts
     # PRE_START, inference proxies, MCP servers or Claude.
-    if [ "$_refresh" -eq 1 ]; then catalog_run --refresh --list >/dev/null || return $?; fi
-    catalog_run
-    _pick_rc=$?
+    if [ "$_refresh" -eq 1 ]; then
+      _main_model=$(catalog_run --pick --refresh); _pick_rc=$?
+    else
+      _main_model=$(catalog_run --pick); _pick_rc=$?
+    fi
     if [ "$_pick_rc" -eq 2 ]; then info "$PROVIDER_NAME: model selection cancelled; nothing was started"; return 0; fi
     [ "$_pick_rc" -eq 0 ] || return "$_pick_rc"
-    _main_model=$(load_last_selected_model "$PROVIDER_NAME")
     [ -n "$_main_model" ] || die 'no model selected'
   fi
-  _main_model=$(resolve_model_id "$_main_model") || return 1
-  # A non-default model never inherits an unrelated default/previous context.
-  if [ "$_main_model" = "$_default_model" ]; then
-    CONTEXT_TOKENS=$_default_context AUTO_COMPACT_TOKENS=$_default_compact
-  else
-    CONTEXT_TOKENS= AUTO_COMPACT_TOKENS=
-  fi
-  _bound_context=$(model_state_context "$PROVIDER_NAME" "$_main_model")
-  if [ -n "$_bound_context" ]; then
-    if [ -z "$CONTEXT_TOKENS" ] || [ "$_bound_context" -lt "$CONTEXT_TOKENS" ]; then CONTEXT_TOKENS=$_bound_context; fi
-  fi
-  apply_model_context_override "$_main_model"
-  apply_model_tier_settings "$_main_model"
-  apply_model_self_route "$_main_model"
-  if [ -n "$CONTEXT_TOKENS" ]; then
-    case $CONTEXT_TOKENS in *[!0-9]*|?????????*|'') die 'invalid model context' ;; esac
-    case $AUTO_COMPACT_TOKENS in *[!0-9]*|?????????*) die 'invalid compaction window' ;; esac
-    if [ -n "$AUTO_COMPACT_TOKENS" ] && [ "$AUTO_COMPACT_TOKENS" -gt "$CONTEXT_TOKENS" ]; then AUTO_COMPACT_TOKENS=; fi
-  fi
+  build_launch_plan "$_main_model" || return $?
+  if [ "$_show_plan" -eq 1 ]; then show_launch_plan "$@"; return $?; fi
   if [ "$_apply_only" -eq 1 ] && [ "$_bypass_auth" -eq 0 ]; then
     [ -n "$NODE_BIN" ] || die 'saving a model selection requires Node.js'
-    "$NODE_BIN" "$LIB_DIR/model-state.js" write "$PROVIDER_NAME" "$_main_model" "$CONTEXT_TOKENS" || return $?
-    info "$PROVIDER_NAME: applied $_main_model (context=${CONTEXT_TOKENS:-unknown}, effort=${EFFORT:-unset}); no services started"
+    _save_action='write'
+    [ "$_make_default" -eq 0 ] || _save_action='write-default'
+    "$NODE_BIN" "$LIB_DIR/model-state.js" "$_save_action" "$PROVIDER_NAME" "$LAUNCH_MODEL" "$LAUNCH_SAVED_CONTEXT" "$LAUNCH_SAVED_OUTPUT" || return $?
+    info "$PROVIDER_NAME: applied $LAUNCH_MODEL (context=${CONTEXT_TOKENS:-unknown}, effort=${EFFORT:-unset}); no services started"
     return 0
   fi
   check_claude_binary
@@ -215,7 +208,9 @@ cmd_run() {
     trap '_crouter_prelaunch_cleanup' EXIT
     trap '_crouter_prelaunch_cleanup; exit 130' INT
     trap '_crouter_prelaunch_cleanup; exit 143' TERM
+    _main_model=$LAUNCH_MODEL
     run_pre_start
+    BASE_URL=$LAUNCH_SOURCE_URL
     if is_dual_source; then resolve_dual_source; start_dual_failover
     elif [ "${AUTH_MODE:-}" = surfaces ]; then start_surface_pool
     elif [ "${AUTH_MODE:-}" = keypool ]; then
@@ -227,7 +222,10 @@ cmd_run() {
     else resolve_auth; fi
     prepare_provider_assets
   fi
-  launch_claude "$_main_model" "$_bypass_auth" "$@"
+  LAUNCH_SAVE_ON_SUCCESS=0
+  if [ "$_once" -eq 0 ] && { [ "$_browse" -eq 1 ] || [ "$PROVIDER_NAME" = ollama ]; }; then LAUNCH_SAVE_ON_SUCCESS=1; fi
+  LAUNCH_RECORD_RECENT=1
+  launch_claude "$LAUNCH_MODEL" "$_bypass_auth" "$@"
 }
 
 . "$LIB_DIR/commands.sh"

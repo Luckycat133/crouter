@@ -4,6 +4,8 @@
 # <provider>`; there are no per-provider `claude-<provider>` compatibility
 # shortcuts anymore.
 set -eu
+unset SHORTCUTS
+TEST_SHELL=${TEST_SHELL:-sh}
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 TMP_DIR=$(mktemp -d 2>/dev/null || mktemp -d -t crouter-install-owner)
@@ -18,7 +20,7 @@ printf 'PROVIDER_NAME="demo"\nBASE_URL="https://example.invalid"\nMODEL="demo"\n
   > "$FAKE_ROOT/providers/demo.sh"
 printf 'user command\n' > "$INSTALL_DIR/crouter"
 
-if INSTALL_DIR="$INSTALL_DIR" PATH="$PATH" sh "$FAKE_ROOT/install.sh" >/dev/null 2>&1; then
+if INSTALL_DIR="$INSTALL_DIR" PATH="$PATH" "$TEST_SHELL" "$FAKE_ROOT/install.sh" >/dev/null 2>&1; then
   printf 'FAIL  installer accepted a user-owned command collision\n' >&2
   exit 1
 fi
@@ -30,11 +32,17 @@ grep -q '^user command$' "$INSTALL_DIR/crouter" || {
 printf 'ok    installer preflights and preserves command-name collisions\n'
 
 rm -f "$INSTALL_DIR/crouter"
-if ! INSTALL_DIR="$INSTALL_DIR" PATH="$PATH" sh "$FAKE_ROOT/install.sh" >"$TMP_DIR/install.out" 2>&1; then
+if ! INSTALL_DIR="$INSTALL_DIR" PATH="$PATH" "$TEST_SHELL" "$FAKE_ROOT/install.sh" >"$TMP_DIR/install.out" 2>"$TMP_DIR/install.err"; then
   printf 'FAIL  initial isolated install failed\n' >&2
   cat "$TMP_DIR/install.out" >&2
+  cat "$TMP_DIR/install.err" >&2
   exit 1
 fi
+[ ! -s "$TMP_DIR/install.err" ] || {
+  printf 'FAIL  initial install emitted unexpected errors\n' >&2
+  cat "$TMP_DIR/install.err" >&2
+  exit 1
+}
 [ "$(readlink "$INSTALL_DIR/crouter")" = "$FAKE_ROOT/bin/crouter" ] || {
   printf 'FAIL  initial install omitted crouter\n' >&2
   exit 1
@@ -46,11 +54,17 @@ ln -s "$TMP_DIR/other/bin/crouter" "$INSTALL_DIR/crouter-other-checkout"
 ln -s /usr/bin/true "$INSTALL_DIR/crouter-external"
 printf 'user shortcut\n' > "$INSTALL_DIR/crouter-user"
 
-if ! INSTALL_DIR="$INSTALL_DIR" PATH="$PATH" sh "$FAKE_ROOT/install.sh" >"$TMP_DIR/reinstall.out" 2>&1; then
+if ! INSTALL_DIR="$INSTALL_DIR" PATH="$PATH" "$TEST_SHELL" "$FAKE_ROOT/install.sh" >"$TMP_DIR/reinstall.out" 2>"$TMP_DIR/reinstall.err"; then
   printf 'FAIL  isolated reinstall failed\n' >&2
   cat "$TMP_DIR/reinstall.out" >&2
+  cat "$TMP_DIR/reinstall.err" >&2
   exit 1
 fi
+[ ! -s "$TMP_DIR/reinstall.err" ] || {
+  printf 'FAIL  reinstall emitted unexpected errors\n' >&2
+  cat "$TMP_DIR/reinstall.err" >&2
+  exit 1
+}
 [ "$(readlink "$INSTALL_DIR/crouter")" = "$FAKE_ROOT/bin/crouter" ] || {
   printf 'FAIL  reinstall did not refresh crouter\n' >&2
   exit 1

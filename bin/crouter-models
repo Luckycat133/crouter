@@ -2,7 +2,9 @@
 'use strict';
 // Provider-independent picker. Catalog I/O and normalization live in catalog.js.
 const readline = require('node:readline');
-const {loadCatalog, safeId, isFree, fmtPrice} = require('../lib/catalog.js');
+const {spawnSync} = require('node:child_process');
+const {catalogOptions, loadCatalog, safeId, isFree, fmtPrice} = require('../lib/catalog.js');
+const {accountLiveEnabled, loadAccountLiveCatalog} = require('../lib/account-live-catalog.js');
 
 function parseArgs(args) {
   const o = {provider: process.env.CR_PROVIDER || '', action: '', force: false};
@@ -12,7 +14,7 @@ function parseArgs(args) {
     else if (a.startsWith('--provider=')) o.provider = a.slice(11);
     else if (a === '--refresh') o.force = true;
     else if (a === '--set') { if (o.action) throw new Error('choose one action'); o.action = 'set'; o.model = args[++i]; }
-    else if (['--list', '--list-free', '--current', '--help', '-h'].includes(a)) {
+    else if (['--list', '--list-free', '--current', '--pick', '--help', '-h'].includes(a)) {
       if (o.action) throw new Error('choose one action');
       o.action = a.replace(/^--?/, '');
     } else throw new Error(`unknown argument: ${a}`);
@@ -23,30 +25,21 @@ function parseArgs(args) {
   return o;
 }
 const {statePaths, current, saveSelection} = require('../lib/model-state.js');
-function catalogUrls() {
-  if (process.env.CR_MODELS_DISCOVERY === 'static' || process.env.CR_MODELS_DISCOVERY === 'native') return [];
-  const urls = [];
-  const add = (v) => { if (v && !urls.includes(v)) urls.push(v); };
-  const explicit = process.env.CR_MODELS_API_URL;
-  if (explicit) { add(explicit); return urls; }
-  const base = process.env.CR_BASE_URL;
-  if (base && /^https?:\/\//.test(base)) {
-    const u = new URL(base);
-    const p = u.pathname.replace(/\/+$/, '');
-    u.pathname = p.endsWith('/v1') ? `${p}/models` : `${p}/v1/models`;
-    add(u.toString());
-  }
-  return urls;
-}
 function clean(text) { return String(text).replace(/[\x00-\x1f\x7f-\x9f]/g, ''); }
 
-async function picker(models, provider, selectedId, status) {
+async function picker(models, provider, selectedId, status,
+  {output = process.stdout, allowSave = false, chooseSource = false, plain = false, favorite, order, initialQuery = '', initialFreeOnly = false} = {}) {
   return new Promise((resolve) => {
-    const input = process.stdin, output = process.stdout;
-    let query = '', freeOnly = false, cursor = Math.max(0, models.findIndex((m) => m.id === selectedId));
+    const input = process.stdin;
+    let query = initialQuery, freeOnly = initialFreeOnly, notice = '';
     let finished = false;
     const priorRaw = input.isRaw || false;
-    const filtered = () => models.filter((m) => (!freeOnly || isFree(m)) && `${m.id} ${m.name}`.toLowerCase().includes(query.toLowerCase()));
+    const filtered = () => {
+      const search = query.toLowerCase();
+      const rows = models.filter((m) => (!freeOnly || isFree(m)) && `${m.id} ${m.name}`.toLowerCase().includes(search));
+      return order ? rows.sort(order) : rows;
+    };
+    let cursor = Math.max(0, filtered().findIndex((m) => m.id === selectedId));
     function render() {
       const list = filtered();
       cursor = Math.max(0, Math.min(cursor, list.length - 1));
@@ -54,18 +47,21 @@ async function picker(models, provider, selectedId, status) {
       const width = Math.max(20, output.columns || 80);
       const top = Math.max(0, cursor - height + 1);
       output.write('\x1b[2J\x1b[H');
-      output.write(`${clean(provider)} Model Picker · ${list.length} · ${status}\nFilter: ${clean(query)}\n`);
-      output.write('↑↓ 选择  Tab 免费筛选  Enter 确认  Esc 返回  Ctrl-C 取消\n');
-      output.write('Model ID | Context | Price per 1M tokens\n');
+      output.write(`${clean(provider)}${plain ? '' : ' Model Picker'} · ${list.length} · ${clean(status)}\nFilter: ${clean(query)}\n`);
+      const actions = ['↑↓ 选择', !plain && 'Tab 免费筛选', allowSave ? 'Enter 启动  Ctrl-S 保存为默认' : 'Enter 确认',
+        favorite && 'Ctrl-F 收藏', chooseSource && 'Ctrl-R 选择来源', 'Esc 返回  Ctrl-C 取消'];
+      output.write(actions.filter(Boolean).join('  ') + '\n');
+      if (!plain) output.write('Model ID | Context | Price per 1M tokens\n');
+      if (notice) output.write(clean(notice) + '\n');
       for (let i = top; i < Math.min(list.length, top + height); i++) {
         const m = list[i];
         const context = m.context_length ? String(m.context_length) : '?';
-        const suffix = ` | ${context} | ${fmtPrice(m)}`;
+        const suffix = plain ? '' : ` | ${context} | ${fmtPrice(m)}${m.verification === 'stale-catalog' ? ' · 过期缓存' : ''}${m.detail ? ' · ' + clean(m.detail) : ''}`;
         const nameWidth = Math.max(8, width - suffix.length - 4);
-        const id = clean(m.id);
+        const id = clean(plain ? m.label : (favorite?.has(m) ? '★ ' : '') + m.id);
         output.write(`${i === cursor ? '> ' : '  '}${id.length > nameWidth ? id.slice(0, nameWidth - 1) + '…' : id}${suffix}\n`);
       }
-      if (!list.length) output.write('没有匹配模型。\n');
+      if (!list.length) output.write(plain ? '没有匹配项。\n' : '没有匹配模型。\n');
     }
     function finish(result) {
       if (finished) return;
@@ -85,11 +81,31 @@ async function picker(models, provider, selectedId, status) {
       if (key.name === 'escape' || (key.ctrl && ['c', 'd'].includes(key.name))) return cancel();
       const list = filtered();
       if (key.name === 'return' || key.name === 'enter') { if (list[cursor]) finish(list[cursor]); return; }
+      if (allowSave && key.ctrl && key.name === 's') {
+        if (list[cursor]) finish({...list[cursor], saveDefault: true});
+        return;
+      }
+      if (chooseSource && key.ctrl && key.name === 'r') {
+        finish({chooseSource: true, query, freeOnly, selectedId: list[cursor]?.id});
+        return;
+      }
+      notice = '';
+      if (favorite && key.ctrl && key.name === 'f') {
+        const model = list[cursor];
+        if (model) {
+          try {
+            notice = favorite.toggle(model) ? '已收藏' : '已取消收藏';
+            cursor = filtered().findIndex((m) => m.id === model.id);
+          } catch (error) { notice = error.message; }
+        }
+        render();
+        return;
+      }
       if (key.name === 'up') cursor = Math.max(0, cursor - 1);
       else if (key.name === 'down') cursor = Math.min(list.length - 1, cursor + 1);
       else if (key.name === 'pageup') cursor = Math.max(0, cursor - 10);
       else if (key.name === 'pagedown') cursor = Math.min(list.length - 1, cursor + 10);
-      else if (key.name === 'tab') { freeOnly = !freeOnly; cursor = 0; }
+      else if (!plain && key.name === 'tab') { freeOnly = !freeOnly; cursor = 0; }
       else if (key.name === 'backspace') { query = [...query].slice(0, -1).join(''); cursor = 0; }
       else if (!key.ctrl && !key.meta && text && !/[\x00-\x1f\x7f]/.test(text)) { query += text; cursor = 0; }
       render();
@@ -115,23 +131,30 @@ async function main() {
   }
   const paths = statePaths(args.provider);
   if (args.action === 'current') { console.log(current(paths) || '(none)'); return; }
+  if (args.action === 'pick' && !process.stderr.isTTY) throw new Error('model selection requires a terminal');
   if (!args.action && !args.force && !process.stdout.isTTY) throw new Error('stdout is not a TTY; use --list or --set');
-  const urls = catalogUrls();
+  const options = catalogOptions(process.env, process.env.CR_CATALOG_TOKEN ?? process.env.CR_API_KEY);
   const controller = new AbortController();
   const abort = () => controller.abort();
   process.once('SIGINT', abort); process.once('SIGTERM', abort);
   let result;
   try {
-    result = await loadCatalog({provider: args.provider, urls, staticModels: (process.env.CR_STATIC_MODELS || '').split(/\s+/).filter(Boolean), cacheFile: paths.cache,
-      auth: process.env.CR_MODELS_API_AUTH || 'none', token: process.env.CR_API_KEY || '',
-      authOrigin: process.env.CR_MODELS_AUTH_ORIGIN || (urls[0] ? new URL(urls[0]).origin : ''),
-      surface: process.env.CR_MODELS_API_SURFACE || 'legacy', force: args.force, signal: controller.signal});
+    result = accountLiveEnabled(process.env)
+      ? await loadAccountLiveCatalog(process.env, {signal: controller.signal})
+      : await loadCatalog({...options, provider: args.provider, staticModels: (process.env.CR_STATIC_MODELS || '').split(/\s+/).filter(Boolean), cacheFile: paths.cache,
+        force: args.force, signal: controller.signal});
   } catch (e) {
     if (controller.signal.aborted) { console.log('Cancelled.'); process.exitCode = 2; return; }
     throw e;
   } finally { process.removeListener('SIGINT', abort); process.removeListener('SIGTERM', abort); }
   if (controller.signal.aborted) { console.log('Cancelled.'); process.exitCode = 2; return; }
+  const blocked = new Set((process.env.CR_MODEL_BLOCKED || '').split(/\s+/));
+  result.models = result.models.filter((m) => !blocked.has(m.id));
+  if (accountLiveEnabled(process.env) && result.status !== 'available') {
+    console.error(`${args.provider}: account model availability ${result.status} (${result.reason}); no static models substituted`);
+  }
   if (args.action === 'list' || args.action === 'list-free') {
+    if (result.stale) console.error(`${args.provider}: offline cache · stale; account access has not been verified`);
     console.log(JSON.stringify(args.action === 'list-free' ? result.models.filter(isFree) : result.models, null, 2)); return;
   }
   if (args.force && !args.action) {
@@ -141,10 +164,28 @@ async function main() {
   if (args.action === 'set') {
     model = result.models.find((m) => m.id === args.model);
     if (!model) throw new Error('model is not in this catalog; refresh or configure an explicit model');
-  } else model = await picker(result.models, args.provider, current(paths), `${result.source}${result.stale ? ' · 过期缓存' : ''}`);
-  if (!model) { console.log('Cancelled.'); process.exitCode = 2; return; }
+  } else {
+    const output = args.action === 'pick' ? process.stderr : process.stdout;
+    model = await picker(result.models, args.provider, current(paths), `${result.source}${result.stale ? ' · 过期缓存' : ''}`, {output});
+  }
+  if (!model) {
+    if (args.action !== 'pick') console.log('Cancelled.');
+    process.exitCode = 2;
+    return;
+  }
+  if (args.action === 'pick') { process.stdout.write(model.id); return; }
+  if (process.env.CR_APPLY_SELECTION) {
+    const env = {...process.env};
+    delete env.CR_APPLY_SELECTION;
+    delete env.CR_API_KEY;
+    delete env.CR_CATALOG_TOKEN;
+    const child = spawnSync(process.env.CR_APPLY_SELECTION, [args.provider, '--model', model.id, '--apply-only'], {stdio: 'inherit', env});
+    if (child.error) throw child.error;
+    process.exitCode = child.status ?? 1;
+    return;
+  }
   saveSelection(paths, args.provider, model);
   console.log(`✓ ${args.provider}: model set to ${model.id}`);
 }
-module.exports = {picker, parseArgs, catalogUrls};
+module.exports = {picker, parseArgs};
 if (require.main === module) main().catch((e) => { console.error(`crouter-models: ${e.message}`); process.exitCode = 1; });

@@ -8,7 +8,6 @@ TEST_TMP=$(mktemp -d 2>/dev/null || mktemp -d -t crouter-template-profile)
 trap 'rm -rf "$TEST_TMP"' EXIT INT TERM
 
 fail() { printf 'FAIL  %s\n' "$*" >&2; exit 1; }
-load_last_selected_model() { printf '%s' 'qwen3.8-27b-heretic:q4'; }
 die() { printf 'provider refused: %s\n' "$*" >&2; exit 77; }
 
 curl() {
@@ -52,6 +51,7 @@ run_case() {
   if (
     . "$ROOT_DIR/providers/ollama.sh"
     _main_model=qwen3.8-27b-heretic:q4
+    ollama_model_plan "$_main_model"
     eval "$PRE_START"
   ) >"$TEST_TMP/output" 2>&1; then
     _actual=0

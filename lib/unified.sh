@@ -1,7 +1,7 @@
 #!/bin/sh
 # Unified gateway lifecycle and route snapshots (formerly in bin/crouter).
 build_all_routes() {
-  _routes_dest=$1 _rt=$2
+  _routes_dest=$1 _rt=$2 _route_catalog_network=${3:-0}
   for _n in $(provider_names); do
     case " ${CROUTER_ALL_EXCLUDE_PROVIDERS:-} " in *" $_n "*) continue ;; esac
     if ! (
@@ -51,20 +51,15 @@ build_all_routes() {
         IFS=$_ifs
       fi
       _models="$MODEL $MODEL_OPUS $MODEL_SONNET $MODEL_HAIKU $MODEL_SUBAGENT $MODEL_ALIASES"
-      # Any provider may have a catalog; do not special-case OpenRouter. Read
-      # JSON as data with argv, never interpolate paths into JavaScript source.
-      _cache="${XDG_STATE_HOME:-$HOME/.local/state}/crouter/models-${PROVIDER_NAME}.json"
-      if [ -r "$_cache" ]; then
-        _cached_models=$("$NODE_BIN" "$LIB_DIR/catalog-inventory.js" --models "$_cache" 2>/dev/null || true)
-        [ -z "$_cached_models" ] || _models="$_models $_cached_models"
-      fi
       if [ "$PROVIDER_NAME" = ollama ] && command -v ollama >/dev/null 2>&1; then _models="$_models $(ollama list 2>/dev/null | awk 'NR>1{print $1}')"; fi
+      CR_ACCOUNT_LIVE_NETWORK="$_route_catalog_network" \
       CR_PREFIX="$PROVIDER_NAME" CR_MODELS="$_models" CR_KEYPOOL_KEYS= \
       CR_SURFACE_CANDIDATES="$_surface_candidates" \
       CR_DEFAULT_URL="${DEFAULT_URL:-$BASE_URL}" CR_DEFAULT_TYPE="${DEFAULT_AUTH_TYPE:-}" CR_DEFAULT_TOKEN="$_def_token" \
       CR_API_URL="${API_URL:-$BASE_URL}" CR_API_TYPE="${API_AUTH_TYPE:-}" CR_API_KEY="$_api_key" \
+      CR_EXPLICIT_API="${API_KEY_ENV:-}${API_KEY_REF:-}${API_URL:-}" \
       CR_AUTH_MODE="$AUTH_MODE" CR_AUTH_SCHEME="$_AUTH_SCHEME" CR_NONE_TOKEN="$_te" \
-        "$NODE_BIN" "$LIB_DIR/route-build.js" candidates
+        catalog_exec "$NODE_BIN" "$LIB_DIR/route-build.js" candidates
     ) >> "$_rt"; then die "failed to build unified routes for provider '$_n'"; fi
   done
   "$NODE_BIN" "$LIB_DIR/route-build.js" combine "$_rt" "$_routes_dest" || die 'failed to combine unified provider routes'
@@ -91,7 +86,9 @@ cmd_all() {
   trap '_all_cleanup; exit 143' TERM
   _routes_file=$(mktemp "${TMPDIR:-/tmp}/call-routes-arr.XXXXXX") || die 'failed to create unified route file'
   _build_routes_file=$(mktemp "${TMPDIR:-/tmp}/call-routes.XXXXXX") || die 'failed to create unified route build file'
-  build_all_routes "$_routes_file" "$_build_routes_file" || die 'failed to build unified provider routes'
+  _route_catalog_network=1
+  [ "$_check" -eq 0 ] || _route_catalog_network=0
+  build_all_routes "$_routes_file" "$_build_routes_file" "$_route_catalog_network" || die 'failed to build unified provider routes'
   rm -f "$_build_routes_file"; _build_routes_file=
   [ -s "$_routes_file" ] || die 'no providers found to build the gateway'
   if [ "$_check" -eq 1 ]; then

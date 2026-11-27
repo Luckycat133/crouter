@@ -403,25 +403,27 @@ if [ "$_antigravity_show_rc" -eq 0 ] &&
    printf '%s\n' "$_antigravity_show" | grep -q '^  sonnet:    gemini-3\.8-flash$' &&
    printf '%s\n' "$_antigravity_show" | grep -q '^  haiku:     gemini-3\.8-flash$' &&
    printf '%s\n' "$_antigravity_show" | grep -q '^  subagent:  gemini-3\.8-flash$' &&
-   printf '%s\n' "$_antigravity_show" | grep -q '^  extras:    gemini-3\.8-flash-tiered gemini-3\.7-flash gemini-3\.7-flash-tiered gemini-3\.5-flash-medium gemini-3\.1-pro-low$'; then
+   printf '%s\n' "$_antigravity_show" | grep -q '^  extras:    gemini-4-neon-low gemini-4-neon-medium gemini-4-neon-high gemini-4-neon-xhigh gemini-4-carbon-low gemini-4-carbon-medium gemini-4-carbon-high gemini-4-argon-low gemini-4-argon-medium gemini-4-argon-high gemini-4-hydrogen-low gemini-4-hydrogen-medium gemini-4-hydrogen-high gemini-4-hydrogen-xhigh gemini-3\.8-flash-low gemini-3\.8-flash-medium gemini-3\.8-flash-high gemini-3\.8-flash-tiered gemini-3\.7-flash gemini-3\.7-flash-tiered gemini-3\.5-flash-medium gemini-3\.1-pro-low$'; then
   ok "antigravity exposes the supported Gemini catalog and context"
 else
   bad "antigravity exposes an unsupported Gemini catalog or context"
 fi
 
+# This view describes configured defaults and compatibility IDs. It does not
+# grant model access: selectable variants still require the live account directory.
 _antigravity_claude_show=$("$GATEWAY" provider show antigravity-claude 2>&1)
 _antigravity_claude_show_rc=$?
 if [ "$_antigravity_claude_show_rc" -eq 0 ] &&
-   printf '%s\n' "$_antigravity_claude_show" | grep -q '^default:     claude-opus-4-6-thinking$' &&
+   printf '%s\n' "$_antigravity_claude_show" | grep -q '^default:     claude-opus-5-5-medium$' &&
    printf '%s\n' "$_antigravity_claude_show" | grep -q '^context:     200000 tokens$' &&
-   printf '%s\n' "$_antigravity_claude_show" | grep -q '^  opus:      claude-opus-4-6-thinking$' &&
-   printf '%s\n' "$_antigravity_claude_show" | grep -q '^  sonnet:    claude-sonnet-4-6$' &&
-   printf '%s\n' "$_antigravity_claude_show" | grep -q '^  haiku:     claude-sonnet-4-6$' &&
-   printf '%s\n' "$_antigravity_claude_show" | grep -q '^  subagent:  claude-sonnet-4-6$' &&
-   printf '%s\n' "$_antigravity_claude_show" | grep -q '^  extras:    gpt-oss-120b-medium$'; then
-  ok "antigravity-claude exposes the supported Claude catalog and context"
+   printf '%s\n' "$_antigravity_claude_show" | grep -q '^  opus:      claude-opus-5-5-medium$' &&
+   printf '%s\n' "$_antigravity_claude_show" | grep -q '^  sonnet:    claude-sonnet-5-5-medium$' &&
+   printf '%s\n' "$_antigravity_claude_show" | grep -q '^  haiku:     claude-sonnet-5-5-medium$' &&
+   printf '%s\n' "$_antigravity_claude_show" | grep -q '^  subagent:  claude-sonnet-5-5-medium$' &&
+   printf '%s\n' "$_antigravity_claude_show" | grep -q '^  extras:    claude-opus-5-5-low claude-opus-5-5-high claude-opus-5-5-max claude-sonnet-5-5-low claude-sonnet-5-5-high claude-sonnet-5-5-max claude-opus-4-6-thinking claude-sonnet-4-6$'; then
+  ok "antigravity-claude exposes configured Claude defaults, compatibility IDs and context"
 else
-  bad "antigravity-claude exposes an unsupported Claude catalog or context"
+  bad "antigravity-claude exposes incorrect Claude defaults, compatibility IDs or context"
 fi
 
 # Pin Codex's configured model tiers and context at the public provider view.

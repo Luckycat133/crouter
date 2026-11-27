@@ -4,21 +4,15 @@ PROVIDER_NAME="ollama"
 PROVIDER_DESC="Local models: multimodal MLX Qwen3.8 and Ollama DeepSeek"
 
 BASE_URL="http://127.0.0.1:11435"
-# Default to the selected DFlash profile while preserving explicit selections.
+# Default to the DFlash profile while preserving explicit selections.
 # The exact qwen3.8-27b ID retains the existing MLX route.
 MODEL="qwen3.8:27b-dflash"
-_ollama_last_model=$(load_last_selected_model ollama 2>/dev/null || true)
-if [ -n "$_ollama_last_model" ]; then
-  MODEL="$_ollama_last_model"
-fi
-unset _ollama_last_model
 CONTEXT_TOKENS="65536"
 # Keep context windows scoped to the selected model; both native Qwen routes
 # and the DFlash profile retain their 262K window.
 MODEL_CONTEXT_OVERRIDES="deepseek-v4-flash:q8=373760 deepseek-v4-flash=373760 qwen3.8-27b=262144 qwen3.8-27b-heretic:q4=262144 qwen3.8-27b-heretic:q4-dflash=262144 qwen3.8-27b-heretic=262144 qwen3.8:27b-dflash=262144"
 MODEL_SELF_ROUTE_MODELS="deepseek-v4-flash:q8 deepseek-v4-flash qwen3.8-27b qwen3.8-27b-heretic:q4 qwen3.8-27b-heretic:q4-dflash qwen3.8-27b-heretic qwen3.8:27b-dflash"
-EFFORT="max"
-case $MODEL in qwen3.8:27b-dflash) EFFORT="xhigh" ;; esac
+EFFORT="xhigh"
 
 # DeepSeek V4 receives Claude Code's max effort through output_config. The
 # localhost proxy preserves the thinking request; its telemetry reports the
@@ -40,26 +34,40 @@ API_TIMEOUT_MS=1800000
 CLAUDE_STREAM_IDLE_TIMEOUT_MS=1800000
 CLAUDE_BYTE_STREAM_IDLE_TIMEOUT_MS=1800000"
 
+MODEL_SETUP=ollama_model_plan
+ollama_model_plan() {
+  _ollama_effort_cap=
+  ASSET_PLUGIN_DIRS=
+  MODEL_SERVICE=ollama-heartbeat
+  BASE_URL=http://127.0.0.1:11435
+  EFFORT=max
+  case $1 in
+    qwen3.8-27b)
+      MODEL_SERVICE=mlx-anthropic-adapter
+      BASE_URL=http://127.0.0.1:11436
+      ASSET_PLUGIN_DIRS="$ROOT_DIR/assets/plugins/qwen-local-multimodal"
+      _mlx_upstream_host=${MLX_UPSTREAM_HOST:-10.211.55.2}
+      _mlx_upstream_port=${MLX_UPSTREAM_PORT:-18080}
+      case $_mlx_upstream_port in *[!0-9]*) die 'MLX_UPSTREAM_PORT must be an integer from 1 to 65535' ;; esac
+      while [ "${_mlx_upstream_port#0}" != "$_mlx_upstream_port" ]; do
+        _mlx_upstream_port=${_mlx_upstream_port#0}
+      done
+      case $_mlx_upstream_port in ''|??????*) die 'MLX_UPSTREAM_PORT must be an integer from 1 to 65535' ;; esac
+      [ "$_mlx_upstream_port" -le 65535 ] || die 'MLX_UPSTREAM_PORT must be an integer from 1 to 65535'
+      ;;
+    # The stock Qwen template rejects the high level Ollama maps from xhigh.
+    # The patched DFlash profile can use xhigh. The relay also caps overrides.
+    qwen3.8:27b-dflash) EFFORT=xhigh; _ollama_effort_cap=xhigh ;;
+    qwen3.8*) EFFORT=medium; _ollama_effort_cap=medium ;;
+  esac
+  HEALTH_CHECK_URL=$BASE_URL/health
+}
+
 PRE_START='
 _OLLAMA_HEARTBEAT_PROXY_PID=
 _MLX_PROXY_PID=
 _local_selected_model=${_main_model:-$MODEL}
-if [ "$_local_selected_model" = qwen3.8-27b ]; then
-  ASSET_PLUGIN_DIRS="$ROOT_DIR/assets/plugins/qwen-local-multimodal"
-  BASE_URL=http://127.0.0.1:11436
-  HEALTH_CHECK_URL=$BASE_URL/health
-  _mlx_upstream_host=${MLX_UPSTREAM_HOST:-10.211.55.2}
-  _mlx_upstream_port=${MLX_UPSTREAM_PORT:-18080}
-  case $_mlx_upstream_port in
-    ""|*[!0-9]*) die "MLX_UPSTREAM_PORT must be an integer from 1 to 65535" ;;
-  esac
-  while [ "${_mlx_upstream_port#0}" != "$_mlx_upstream_port" ]; do
-    _mlx_upstream_port=${_mlx_upstream_port#0}
-  done
-  case $_mlx_upstream_port in
-    ""|??????*) die "MLX_UPSTREAM_PORT must be an integer from 1 to 65535" ;;
-  esac
-  [ "$_mlx_upstream_port" -le 65535 ] || die "MLX_UPSTREAM_PORT must be an integer from 1 to 65535"
+if [ "$MODEL_SERVICE" = mlx-anthropic-adapter ]; then
   _mlx_upstream_url="http://$_mlx_upstream_host:$_mlx_upstream_port"
   _mlx_expected_upstream="\"upstream\":\"$_mlx_upstream_host:$_mlx_upstream_port\""
   curl -fsS --max-time 3 "$_mlx_upstream_url/v1/models" >/dev/null 2>&1 || die "MLX-VLM not reachable at $_mlx_upstream_url"
@@ -78,21 +86,6 @@ if [ "$_local_selected_model" = qwen3.8-27b ]; then
   printf "%s\n" "$_mlx_health" | grep -Fq "\"service\":\"crouter-mlx-anthropic-adapter\"" || die "MLX adapter failed to start at $BASE_URL"
   printf "%s\n" "$_mlx_health" | grep -Fq "$_mlx_expected_upstream" || die "MLX adapter at $BASE_URL uses another upstream"
 else
-  BASE_URL=http://127.0.0.1:11435
-  HEALTH_CHECK_URL=$BASE_URL/health
-  # Ollama copies `output_config.effort` into the model chat template
-  # (collapsing xhigh to high) and answers HTTP 500 for a level the template
-  # rejects; Claude Code cannot downgrade on that body, so the session retries
-  # for up to half an hour. The Qwen3.8 template accepts xhigh, medium, and low,
-  # but Ollama turns an incoming xhigh into the rejected `high`, leaving `medium`
-  # as the highest usable level. The heartbeat proxy clamps every request to the
-  # level declared here so a caller-supplied --effort cannot wedge the session.
-  _ollama_effort_cap=""
-  EFFORT="max"
-  case $_local_selected_model in
-    qwen3.8:27b-dflash) EFFORT="xhigh"; _ollama_effort_cap="xhigh" ;;
-    qwen3.8*) EFFORT="medium"; _ollama_effort_cap="medium" ;;
-  esac
   curl -fsS --max-time 3 http://127.0.0.1:11434 >/dev/null 2>&1 || die "Ollama not reachable at http://127.0.0.1:11434 — start it (ollama serve) and pull the selected model first"
   # A model-specific Jinja compatibility patch can preserve late system turns
   # and the preceding cached conversation. Never enable this for an unpatched
@@ -134,15 +127,8 @@ else
       die "Ollama relay uses another model template profile; restart it after its current task finishes"
     fi
     # Reuse the running relay only when it clamps to the level this model needs.
-    printf "%s\n" "$_ollama_health" | grep -Fq "\"effort_cap\":\"$_ollama_effort_cap\"" || {
-      _stale_pid=$(lsof -nP -iTCP:11435 -sTCP:LISTEN -t 2>/dev/null | head -1)
-      [ -n "$_stale_pid" ] && kill "$_stale_pid" 2>/dev/null || true
-      for _ollama_proxy_try in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
-        curl -fsS --max-time 1 "$HEALTH_CHECK_URL" >/dev/null 2>&1 || break
-        sleep 0.2
-      done
-      _ollama_health=
-    }
+    printf "%s\n" "$_ollama_health" | grep -Fq "\"effort_cap\":\"$_ollama_effort_cap\"" || \
+      die "Ollama relay uses another model effort profile; wait for its current task to finish, then restart the relay"
   fi
   if ! printf "%s\n" "$_ollama_health" | grep -q crouter-ollama-heartbeat; then
     OLLAMA_SYSTEM_ORDER_MODELS=$_ollama_system_order_models OLLAMA_EFFORT_MAX=$_ollama_effort_cap OLLAMA_HEARTBEAT_INTERVAL_MS=60000 nohup node "$ROOT_DIR/lib/ollama-heartbeat-proxy.mjs" >>/tmp/crouter-ollama-heartbeat-proxy.log 2>&1 &
@@ -154,7 +140,7 @@ else
   fi
   curl -fsS --max-time 1 "$HEALTH_CHECK_URL" 2>/dev/null | grep -q crouter-ollama-heartbeat || die "Ollama heartbeat proxy failed to start at $BASE_URL"
 fi
-unset _local_selected_model _ollama_effort_cap _ollama_system_order_models _ollama_template_info _ollama_template_mode _ollama_health _stale_pid _mlx_upstream_host _mlx_upstream_port _mlx_upstream_url _mlx_expected_upstream _mlx_health
+unset _local_selected_model _ollama_effort_cap _ollama_system_order_models _ollama_template_info _ollama_template_mode _ollama_health _mlx_upstream_host _mlx_upstream_port _mlx_upstream_url _mlx_expected_upstream _mlx_health
 '
 
 POST_STOP='if [ -n "${_OLLAMA_HEARTBEAT_PROXY_PID:-}" ]; then kill "$_OLLAMA_HEARTBEAT_PROXY_PID" 2>/dev/null || true; wait "$_OLLAMA_HEARTBEAT_PROXY_PID" 2>/dev/null || true; _OLLAMA_HEARTBEAT_PROXY_PID=; fi; if [ -n "${_MLX_PROXY_PID:-}" ]; then kill "$_MLX_PROXY_PID" 2>/dev/null || true; wait "$_MLX_PROXY_PID" 2>/dev/null || true; _MLX_PROXY_PID=; fi'

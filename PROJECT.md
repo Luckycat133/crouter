@@ -17,7 +17,6 @@
 | 6 | Antigravity Tiered Model Aliases | Add `gemini-3.8-flash-tiered` and `gemini-3.7-flash-tiered` to `MODEL_ALIASES` in `providers/antigravity.sh` | M1 | Survey 1 & 2 |
 | 7 | Antigravity Claude Proxy Fallback Map | Add `gemini-3.8-flash`, `gemini-3.8-flash-tiered`, `gemini-3.7-flash-tiered` to `MODEL_FALLBACK_MAP` in `src/constants.js` | M2 | Survey 1 & 2 |
 | 8 | Proxy Example Config Completeness | Include `modelMapping` block in `antigravity-claude-proxy/config.example.json` | M2 | Survey 2 |
-| 9 | GPT-OSS Patch Verification on Launch | Ensure `lib/antigravity-common.sh` checks and runs `bin/antigravity-proxy-patch` if needed | M2 | Survey 2 |
 | 10 | Keypool & Gateway HTTP 400 Prevention | Verify candidate mapping in `bin/keypool-proxy` and `bin/gateway` prevents unmapped model 400 errors | M2 | Survey 2 |
 | 11 | README Documentation Reconcile | Fix context token column in `README.md` table for 7 mainland providers (`983,616` and `262,144` instead of `—`) | M3 | Survey 1 |
 | 12 | Provider Audit Documentation Reconcile | Update stale descriptions in `docs/provider-audit.md` (Qianfan Team defaults, context injection) | M3 | Survey 1 |
@@ -29,7 +28,7 @@
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
 | M1 | Provider Configurations Audit & Auto-Correction | Correct models and aliases in `providers/openrouter.sh`, `siliconflow.sh`, `stepfun.sh`, `huawei.sh`, `moonshot.sh`, `antigravity.sh` | None | IN_PROGRESS |
-| M2 | Proxy Routing Contract Validation & Auto-Correction | Update `antigravity-claude-proxy` fallback map, example config, patch hooks | M1 | IN_PROGRESS |
+| M2 | Proxy Routing Contract Validation & Auto-Correction | Update `antigravity-claude-proxy` fallback map and example config | M1 | IN_PROGRESS |
 | M3 | Test Suite & Documentation Verification | Update `test/provider-matrix.sh`, `README.md`, `docs/provider-audit.md`, verify tests under sh/dash | M1, M2 | IN_PROGRESS |
 | M4 | Final Acceptance Gate & Forensic Audit | Reviewers, Challengers, Forensic Auditor verification of all acceptance criteria | M1, M2, M3 | PLANNED |
 

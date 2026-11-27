@@ -1,22 +1,57 @@
-# Agent entry
+# crouter contributor context
 
-Follow `CLAUDE.md` for repository-specific rules, then use `.agents/SKILLS.md` to select task-specific project Skills. Load only Skills relevant to the current request.
+POSIX `/bin/sh` launcher for Anthropic-compatible providers, with dependency-free Node proxies. `bin/crouter` owns dispatch; `providers/` declares provider contracts; `lib/` handles auth, assets and isolated launches. `install.sh` installs only `crouter`; the retired `claude-<provider>` launchers are not generated.
 
-For crouter product development, interactive UX, model switching, accounts or App reverse-proxy integration, start with [.agents/skills/crouter-development/SKILL.md](.agents/skills/crouter-development/SKILL.md). The product client is Claude Code only; Apps are model sources, not additional clients. See [docs/development-plan.md](docs/development-plan.md) for the current development entry and delivery boundary.
+## 产品主线
 
-<!-- agent-workflow:v1:start -->
-## 通用执行约定（2026-09-13）
+crouter 只服务 Claude Code：API、订阅、多 Key、本地推理和 App 反代是模型来源，不是要启动的其他客户端。下一版交互优先，让用户从 `crouter` 完成模型选择与账户管理；现有 `app` 入口仅保留兼容，不继续扩展。开发该主线时先加载 [.agents/skills/crouter-development/SKILL.md](.agents/skills/crouter-development/SKILL.md)，按需读取参考与验收；人类开发入口见 [docs/development-plan.md](docs/development-plan.md)。计划中的行为不等于当前版本已实现。
 
-- 将行动请求执行到可验证结果；用上下文补齐常规细节，只有答案会实质改变结果时才澄清。新消息用于调整当前目标，不因阶段完成而反复询问是否继续。
-- 系统/开发者限制优先；用户明确授权高于通用 Skill 默认流程。本块统一通用工作流，保留本项目的产品基线、兼容性、发布、凭据和计费专用门禁。缺少必要授权时先完成可审查的前置工作；已有同范围授权不重复索取。
-- 只加载当前任务相关的入口、技能和必要片段；历史日志不是当前状态。规则导致暂停或偏离时，给出准确文件、条款和原因，不把自己的推断说成硬门。
-- 默认用简洁段落报告结果和必要证据。独立子任务在工具与权限允许、且能明显节省时间时并行，先分配文件所有权；小任务不强行委派，不默默创建用户侧边栏任务。
-- 验证覆盖实际改动和风险；小型文档或可逆改动不自动触发全产品测试。协议、发布、数据迁移等仍执行项目相应门禁。通过后停止重复检查；失败、新改动或未解决风险才扩大测试。
-- 分开报告已改、已验证、未执行与阻塞；操作发起不等于结果完成。保留用户工作，未经当前任务授权不提交、推送、发布或改变模型/账户配置。
+## Boundaries
 
-维护：只同步此标记块；各工具专用正文保留，不强求整份入口相同。项目若明确规定完整镜像，仍保持完整镜像。仅在规则更新或交付涉及规则时检查入口/副本一致性。
-<!-- agent-workflow:v1:end -->
+- Preserve POSIX portability, symlink-safe self-location and the allowlisted `env -i` launch environment.
+- Keep each credential bound to its endpoint, auth header and tier model map. Resolve secrets at launch; never log them or store user keys in provider source.
+- `crouter claude` retains native account/login behavior; native Claude account subscription credentials must not enter provider proxies or the unified gateway. Explicitly authorized App reverse-proxy sources keep their own authentication boundary.
+- Managed MCP files are temporary, mode `0600`, and deleted at exit. Skills/assets are session-scoped and namespaced. Cleanup stops only processes started by that session.
+- For auth, routing, lifecycle or provider changes, read [provider and proxy contracts](docs/agent-architecture.md). Provider facts and source provenance live in [provider-audit.md](docs/provider-audit.md); recheck primary sources before changing an audit date.
+- The nested `antigravity-claude-proxy/` has its own `CLAUDE.md` and commands.
+
+## Commands and release
+
+Use focused offline tests for the affected behavior. Before release, run every `test/*.sh` under both `sh` and `dash`; the legacy smoke test alone is insufficient. Run from an isolated checkout, propagate TEST_SHELL and retain failures. Syntax checks must visit each file, not pass later filenames as shell positional arguments.
+
+```sh
+failed=0
+for shell in sh dash; do
+  for test_file in test/*.sh; do
+    TEST_SHELL="$shell" "$shell" "$test_file" || failed=1
+  done
+  for file in bin/crouter install.sh lib/*.sh providers/*.sh test/*.sh; do
+    "$shell" -n "$file" || failed=1
+  done
+done
+test "$failed" -eq 0 || exit 1
+shellcheck --severity=warning --exclude=SC1007,SC1090,SC1091,SC2034,SC2120 \
+  .githooks/pre-push bin/crouter completions/crouter.bash \
+  config.example.sh install.sh lib/*.sh providers/*.sh test/*.sh || exit 1
+for file in bin/gateway bin/keypool-proxy bin/crouter-models bin/openrouter-models lib/*.js lib/*.mjs; do
+  node --check "$file" || exit 1
+done
+./bin/crouter --version || exit 1
+git diff --check
+```
+
+`VERSION` is the only runtime version source. Keep the README badge and newest CHANGELOG release aligned; retain `Unreleased` for pending changes and order published releases newest first. Install with `./install.sh`; command usage belongs in [README.md](README.md).
+
+## 项目技能入口
+
+按当前任务从 `.agents/SKILLS.md` 选择技能；`.claude/skills` 仅提供发现入口，正文维护在项目现有真源。不要一次加载全部技能。
+
+## 当前任务接续提醒（2026-10-06）
+
+按 `AGENTS.md` 与 `.agents/SKILLS.md` 路由；认证/路由/生命周期先读 docs/agent-architecture.md，供应商事实核对 docs/provider-audit.md 及官方资料。凭据与 endpoint/header/tier 绑定，保留 session 隔离，不读写用户凭据来做离线验证。路由或运行时代码变更后，跑受影响离线测试；现有 .githooks/pre-push 保持原样。配置保存、离线契约与真实端到端请求成功分别报告。
+
+此处承载静态上下文；不另设只重复文本的 Claude SessionStart 钩子。
 
 ## 项目接续钩子（2026-10-03）
 
-本项目配置仅用于 SessionStart 的短提示；行为、边界和客户端信任说明见 [.codex/hooks/README.md](.codex/hooks/README.md)。配置自检不等于原生客户端已加载，也不替代当前任务验证。
+本项目 Codex 配置仅用于 SessionStart 的短提示；行为、边界和客户端信任说明见 [.codex/hooks/README.md](.codex/hooks/README.md)。配置自检不等于原生客户端已加载，也不替代当前任务验证。

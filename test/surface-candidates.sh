@@ -45,6 +45,7 @@ assert.deepStrictEqual(candidates, [
       'logical-subagent': 'plan-model',
     },
     label: 'token-plan-1',
+    surface: 'plan',
   },
   {
     url: 'https://plan.example/anthropic',
@@ -58,6 +59,7 @@ assert.deepStrictEqual(candidates, [
       'logical-subagent': 'plan-model',
     },
     label: 'token-plan-2',
+    surface: 'plan',
   },
   {
     url: 'https://api.example/anthropic',
@@ -71,6 +73,7 @@ assert.deepStrictEqual(candidates, [
       'logical-subagent': 'api-model',
     },
     label: 'api-key-1',
+    surface: 'api',
   },
 ]);
 NODE

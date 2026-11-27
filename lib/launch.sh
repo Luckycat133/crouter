@@ -4,7 +4,7 @@
 #   Builds a minimal, terminal-safe "env -i" environment and launches Claude Code
 #   as a child process (so POST_STOP / any local proxy is reaped on exit).
 # Reads these globals at call time: CLAUDE_BIN, EFFORT, EXTRA_ENV, MODEL_*,
-# CONTEXT_TOKENS, AUTO_COMPACT_TOKENS, AUTH_MODE, AUTH_TOKEN, KEYPOOL_URL,
+# CONTEXT_TOKENS, MAX_OUTPUT_TOKENS, AUTO_COMPACT_TOKENS, AUTH_MODE, AUTH_TOKEN, KEYPOOL_URL,
 # BASE_URL, POST_STOP,
 # and the standard shell vars (LANG, TERM, SHELL, PATH, USER, HOME, COLORTERM).
 
@@ -88,18 +88,19 @@ launch_claude() {
 
   # Reasoning effort (Claude Code --effort). Inject the provider default unless
   # the user already passed --effort. Valid levels: low|medium|high|xhigh|max.
-  case "${EFFORT:-}" in
+  _launch_effort=${EFFORT:-}
+  case "$_launch_effort" in
     ""|low|medium|high|xhigh|max) ;;
-    *) info "warn: EFFORT='$EFFORT' is not a valid Claude Code effort level (low|medium|high|xhigh|max); ignoring"; EFFORT="" ;;
+    *) info "warn: EFFORT is not a valid Claude Code effort level (low|medium|high|xhigh|max); ignoring"; _launch_effort= ;;
   esac
-  if [ -n "${EFFORT:-}" ]; then
+  if [ -n "$_launch_effort" ]; then
     _has_effort=0
     for _arg in "$@"; do
       case "$_arg" in --effort|--effort=*) _has_effort=1; break ;; esac
     done
     if [ "$_has_effort" -eq 0 ]; then
       _claude_bin="$1"; shift
-      set -- "$_claude_bin" "--effort" "$EFFORT" "$@"
+      set -- "$_claude_bin" "--effort" "$_launch_effort" "$@"
     fi
   fi
 
@@ -161,6 +162,7 @@ launch_claude() {
   esac
   set -- "ANTHROPIC_MODEL=$_main_model" "$@"
   [ -n "$CONTEXT_TOKENS" ] && set -- "CLAUDE_CODE_MAX_CONTEXT_TOKENS=$CONTEXT_TOKENS" "$@"
+  [ -z "${MAX_OUTPUT_TOKENS:-}" ] || set -- "CLAUDE_CODE_MAX_OUTPUT_TOKENS=$MAX_OUTPUT_TOKENS" "$@"
   [ -n "${AUTO_COMPACT_TOKENS:-}" ] &&
     set -- "CLAUDE_CODE_AUTO_COMPACT_WINDOW=$AUTO_COMPACT_TOKENS" "$@"
 
@@ -236,9 +238,6 @@ launch_claude() {
   trap '_crouter_launch_signal 143' TERM
 
   [ "$_crouter_pending_signal" -eq 0 ] || exit "$_crouter_pending_signal"
-  if [ "${PROVIDER_NAME:-}" = ollama ] && [ "$_bypass" -eq 0 ]; then
-    remember_last_selected_model ollama "$_main_model"
-  fi
   # Save stdin before the asynchronous command: dash may replace fd 0 with
   # /dev/null before applying the child's explicit redirections.
   exec 3<&0
@@ -254,5 +253,18 @@ launch_claude() {
   _rc=$?
   trap - EXIT INT TERM
   _crouter_launch_cleanup
+  if [ "$_rc" -eq 0 ] && [ "$_bypass" -eq 0 ] && [ "${LAUNCH_SAVE_ON_SUCCESS:-0}" -eq 1 ]; then
+    if [ -n "${NODE_BIN:-}" ] && [ -f "$LIB_DIR/model-state.js" ]; then
+      "$NODE_BIN" "$LIB_DIR/model-state.js" write-if-current "$PROVIDER_NAME" "$_main_model" "$LAUNCH_SAVED_CONTEXT" "$LAUNCH_SAVED_OUTPUT" "$LAUNCH_SELECTION_REVISION" ||
+        info 'warn: Claude Code exited successfully; model selection could not be saved'
+    else
+      remember_last_selected_model "$PROVIDER_NAME" "$_main_model" || info 'warn: model selection could not be saved'
+    fi
+  fi
+  if [ "$_rc" -eq 0 ] && [ "$_bypass" -eq 0 ] && [ "${LAUNCH_RECORD_RECENT:-0}" -eq 1 ] &&
+     [ -n "${NODE_BIN:-}" ] && [ -f "$LIB_DIR/model-state.js" ]; then
+    "$NODE_BIN" "$LIB_DIR/model-state.js" recent "$PROVIDER_NAME" "$_main_model" ||
+      info 'warn: Claude Code exited successfully; recent launches could not be updated'
+  fi
   exit "${_rc:-0}"
 }

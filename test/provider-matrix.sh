@@ -34,7 +34,8 @@ load_provider ollama
 [ "$CONTEXT_TOKENS" = 65536 ] || die 'Ollama fallback cap changed'
 word ollama 'qwen3.8:27b-dflash=262144' "$MODEL_CONTEXT_OVERRIDES"
 word ollama 'qwen3.8:27b-dflash' "$MODEL_SELF_ROUTE_MODELS"
-for pattern in 'OLLAMA_HEARTBEAT_INTERVAL_MS=60000' 'assets/plugins/qwen-local-multimodal' 'MLX-VLM not reachable'; do printf '%s' "$PRE_START" | grep -Fq "$pattern" || die "missing local behavior: $pattern"; done
+for pattern in 'OLLAMA_HEARTBEAT_INTERVAL_MS=60000' 'MLX-VLM not reachable'; do printf '%s' "$PRE_START" | grep -Fq "$pattern" || die "missing local behavior: $pattern"; done
+(ollama_model_plan qwen3.8-27b; [ "$ASSET_PLUGIN_DIRS" = "$ROOT_DIR/assets/plugins/qwen-local-multimodal" ]) || die 'MLX plugin selection absent'
 printf '%s' "$POST_STOP" | grep -q '_OLLAMA_HEARTBEAT_PROXY_PID' || die 'local cleanup absent'
 for pattern in 'ANTHROPIC_AUTH_TOKEN=ollama' 'ANTHROPIC_API_KEY=' 'API_TIMEOUT_MS=1800000' 'CLAUDE_STREAM_IDLE_TIMEOUT_MS=1800000'; do printf '%s\n' "$EXTRA_ENV" | grep -Fxq "$pattern" || die "local environment: $pattern"; done
 DASHSCOPE_API_URL=https://workspace-id.cn-beijing.maas.aliyuncs.com/apps/anthropic

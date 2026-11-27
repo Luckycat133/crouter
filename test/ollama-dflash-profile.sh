@@ -3,7 +3,6 @@
 set -eu
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 . "$ROOT_DIR/lib/provider.sh"
-load_last_selected_model() { :; }
 . "$ROOT_DIR/providers/ollama.sh"
 fail() { printf 'FAIL  %s\n' "$*" >&2; exit 1; }
 die() { fail "$*"; }
@@ -48,9 +47,9 @@ MLX_UPSTREAM_HOST=10.211.55.2 MLX_UPSTREAM_PORT=18080
 
 _main_model=qwen3.8:27b-dflash
 CROUTER_TEST_EFFORT_CAP=xhigh
-EFFORT=max
+ollama_model_plan "$_main_model"
 eval "$PRE_START"
-[ "$EFFORT" = xhigh ] || fail 'DFlash2 hook must select xhigh'
+[ "$EFFORT" = xhigh ] || fail 'DFlash2 plan must select xhigh'
 [ "$BASE_URL" = http://127.0.0.1:11435 ] || fail 'DFlash2 must use the Ollama relay'
 assert_no_output_cap
 
@@ -68,6 +67,7 @@ for _incompatible_relay in effort version; do
     else
       CROUTER_TEST_DFLASH_VERSION=old-version
     fi
+    ollama_model_plan "$_main_model"
     eval "$PRE_START"
   } 2>&1); then
     fail 'DFlash2 must reject an incompatible existing relay'
@@ -84,6 +84,7 @@ done
 _main_model=qwen3.8:older-profile
 EXTRA_ENV=$_base_extra_env
 CROUTER_TEST_EFFORT_CAP=medium
+ollama_model_plan "$_main_model"
 eval "$PRE_START"
 [ "$EFFORT" = medium ] || fail 'legacy Qwen effort cap must remain medium'
 assert_no_output_cap
@@ -91,12 +92,14 @@ assert_no_output_cap
 _main_model=deepseek-v4-flash:q8
 EXTRA_ENV=$_base_extra_env
 CROUTER_TEST_EFFORT_CAP=
+ollama_model_plan "$_main_model"
 eval "$PRE_START"
 [ "$EFFORT" = max ] || fail 'DeepSeek effort default must remain max'
 assert_no_output_cap
 
 _main_model=qwen3.8-27b
 EXTRA_ENV=$_base_extra_env
+ollama_model_plan "$_main_model"
 eval "$PRE_START"
 [ "$EFFORT" = max ] || fail 'explicit legacy MLX selection must retain max'
 [ "$BASE_URL" = http://127.0.0.1:11436 ] || fail 'legacy MLX endpoint must remain unchanged'

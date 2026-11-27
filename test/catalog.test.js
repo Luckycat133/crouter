@@ -5,7 +5,9 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const http = require('node:http');
+const {execFile, execFileSync} = require('node:child_process');
 const {once} = require('node:events');
+const {promisify} = require('node:util');
 const {normalizeModels, pricingOf, isFree, fmtPrice, requestJson, loadCatalog, scopeKey} = require('../lib/catalog.js');
 const {statePaths, saveSelection, readContext} = require('../lib/model-state.js');
 
@@ -96,4 +98,123 @@ test('model state binds context to exact selected model and clears unknown', (t)
   saveSelection(paths, 'demo', {id: 'unknown'});
   assert.equal(fs.existsSync(paths.context), false); assert.equal(readContext('demo', 'unknown'), null);
   assert.equal(fs.statSync(paths.record).mode & 0o777, 0o600);
+
+  const stateCli = path.join(__dirname, '..', 'lib', 'model-state.js');
+  const state = (...args) => execFileSync(process.execPath, [stateCli, ...args], {
+    encoding: 'utf8', env: {HOME: dir, XDG_STATE_HOME: dir},
+  });
+  const revision = state('limits', 'demo', 'unknown').trim().split(' ').at(-1);
+  saveSelection(paths, 'demo', {id: 'later-default', context_length: 4096});
+  state('write-if-current', 'demo', 'slow-launch', '', '', revision);
+  assert.equal(fs.readFileSync(paths.model, 'utf8'), 'later-default\n');
+  assert.equal(readContext('demo', 'later-default'), 4096);
+});
+
+test('CAT-06: directory, home inventory, plan and live unified list share one scoped cache', async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'catalog-consumers-'));
+  t.after(() => fs.rmSync(dir, {recursive: true, force: true}));
+  for (const folder of ['bin', 'lib']) fs.cpSync(path.join(__dirname, '..', folder), path.join(dir, folder), {recursive: true});
+  for (const folder of ['providers', 'stubs', 'home', 'state']) fs.mkdirSync(path.join(dir, folder));
+  fs.writeFileSync(path.join(dir, 'VERSION'), 'test\n');
+  const provider = [
+    'PROVIDER_NAME=demo', 'MODEL=declared', 'PROVIDER_DESC="Fixture source"', 'AUTH_MODE=surfaces',
+    'BASE_URL="$FIXTURE_BASE/inference-a"', 'API_URL="$FIXTURE_BASE/${FIXTURE_API_PATH:-inference-a}"',
+    'API_KEY_ENV=FIXTURE_API_KEY', 'API_KEYS=fixture-api', 'API_AUTH_TYPE=x-api-key',
+    'PLAN_URL="$FIXTURE_BASE/plan"', 'PLAN_AUTH_TYPE=bearer', 'PLAN_KEY_ENV=FIXTURE_PLAN_KEY',
+    'MODELS_DISCOVERY=remote', 'MODELS_API_URL="$FIXTURE_BASE/catalog?scope=${FIXTURE_QUERY:-one}"',
+    'MODELS_API_AUTH="${FIXTURE_CATALOG_AUTH:-bearer}"', 'MODELS_API_SURFACE="${FIXTURE_SURFACE:-api}"',
+  ];
+  fs.writeFileSync(path.join(dir, 'providers', 'demo.sh'), provider.join('\n') + '\n');
+  const security = path.join(dir, 'stubs', 'security');
+  const decryptLog = path.join(dir, 'decrypt.log');
+  fs.writeFileSync(security, `#!/bin/sh
+case " $* " in
+  *" -w "*) printf 'decrypt\\n' >> "$FIXTURE_DECRYPT_LOG";;
+esac
+[ -n "$FIXTURE_KEYCHAIN_TOKEN" ] || exit 44
+case " $* " in
+  *" -w "*) printf '%s' "$FIXTURE_KEYCHAIN_TOKEN";;
+esac
+`, {mode: 0o700});
+  const claude = path.join(dir, 'stubs', 'claude');
+  fs.writeFileSync(claude, '#!/bin/sh\nexec curl -fsS "$ANTHROPIC_BASE_URL/v1/models"\n', {mode: 0o700});
+
+  let hits = 0, refused = false;
+  const base = await server(t, (req, res) => {
+    hits++;
+    assert.match(req.url, /^\/catalog\?scope=/);
+    const authorization = req.headers.authorization;
+    if (refused || (authorization && authorization !== 'Bearer fixture-api-account-a')) {
+      res.writeHead(401); res.end('{"data":[]}'); return;
+    }
+    const model = authorization ? 'account-a' : 'public-discovery';
+    res.end(JSON.stringify({data: [{id: model, context_length: 32000, max_output_tokens: 2048}]}));
+  });
+  const env = {PATH: path.join(dir, 'stubs') + ':' + process.env.PATH, LANG: 'C.UTF-8', USER: 'fixture',
+    HOME: path.join(dir, 'home'), XDG_STATE_HOME: path.join(dir, 'state'), TMPDIR: dir,
+    NODE_BIN: process.execPath, CLAUDE_BIN: claude, FIXTURE_BASE: base, FIXTURE_DECRYPT_LOG: decryptLog,
+    FIXTURE_API_KEY: 'fixture-api-account-a', CROUTER_GATEWAY_PORT: '0', CROUTER_PROVIDER_ASSETS: '0'};
+  const exec = promisify(execFile);
+  const run = (args, envOverrides) => exec(process.env.TEST_SHELL || 'sh', [path.join(dir, 'bin', 'crouter'), ...args], {
+    cwd: dir, env: {...env, ...envOverrides}, timeout: 12000,
+  });
+  const inventory = async (override) => JSON.parse((await run(['_inventory'], override)).stdout);
+  const gateway = async (override) => {
+    const lines = (await run(['all'], override)).stdout.trim().split('\n');
+    return JSON.parse(lines[lines.length - 1]).data;
+  };
+  const plan = async (override) => JSON.parse((await run(['demo', '--plan', '--model', 'account-a'], override)).stdout);
+  await run(['models', 'demo', '--list']);
+  assert.equal(hits, 1);
+  const cache = path.join(env.XDG_STATE_HOME, 'crouter', 'models-demo.json');
+  const raw = fs.readFileSync(cache, 'utf8');
+  assert.equal(raw.includes(env.FIXTURE_API_KEY), false);
+  assert.equal((await inventory()).models.find((m) => m.id === 'account-a').verification, 'catalog-only');
+  assert.equal(fs.existsSync(decryptLog), false);
+  const advertised = (await gateway()).find((m) => m.id === 'demo/account-a');
+  assert.equal(advertised.verification, 'catalog-only');
+  assert.equal((await plan()).maxOutputTokens, 2048);
+  assert.equal((await plan()).contextTokens, 32000);
+  await run(['demo', '--model', 'account-a', '--apply-only']);
+  const record = JSON.parse(fs.readFileSync(path.join(env.XDG_STATE_HOME, 'crouter', 'selection-demo.json'), 'utf8'));
+  assert.equal(record.context_length, null, 'directory context was persisted as unscoped state');
+  assert.equal(record.max_output_tokens, null, 'directory output was persisted as unscoped state');
+
+  for (const override of [
+    {FIXTURE_API_KEY: 'fixture-api-account-b'},
+    {FIXTURE_API_PATH: 'inference-b'},
+    {FIXTURE_QUERY: 'two'},
+    {FIXTURE_SURFACE: 'plan', FIXTURE_PLAN_KEY: env.FIXTURE_API_KEY},
+  ]) {
+    assert.equal((await inventory(override)).models.some((m) => m.id === 'account-a'), false);
+    assert.equal((await gateway(override)).some((m) => m.id === 'demo/account-a'), false);
+    assert.equal((await plan(override)).contextTokens, null);
+    assert.equal((await plan(override)).maxOutputTokens, null);
+  }
+  fs.rmSync(decryptLog, {force: true});
+  const keychainOnly = {FIXTURE_API_KEY: '', FIXTURE_KEYCHAIN_TOKEN: env.FIXTURE_API_KEY};
+  assert.equal((await inventory(keychainOnly)).models.some((m) => m.id === 'account-a'), false);
+  assert.equal((await plan(keychainOnly)).contextTokens, null);
+  assert.equal(fs.existsSync(decryptLog), false, 'home inventory or plan decrypted Keychain');
+  assert.equal((await gateway(keychainOnly)).some((m) => m.id === 'demo/account-a'), true);
+  assert.equal((await gateway({...keychainOnly, FIXTURE_KEYCHAIN_TOKEN: 'fixture-second-keychain-account'})).some((m) => m.id === 'demo/account-a'), false);
+  assert.equal(hits, 1, 'cache-only consumers contacted the directory');
+
+  const old = {...JSON.parse(raw), fetched_at: Date.now() - 2 * 86400000};
+  fs.writeFileSync(cache, JSON.stringify(old));
+  assert.equal((await inventory()).models.find((m) => m.id === 'account-a').verification, 'stale-catalog');
+  assert.equal((await gateway()).some((m) => m.id === 'demo/account-a'), false);
+  assert.equal((await plan()).maxOutputTokens, null);
+  refused = true;
+  const offline = await run(['models', 'demo', '--list']);
+  assert.match(offline.stderr, /offline cache · stale/);
+  assert.equal(JSON.parse(offline.stdout)[0].id, 'account-a');
+  assert.equal(hits, 2);
+
+  refused = false;
+  const publicly = {FIXTURE_CATALOG_AUTH: 'none', FIXTURE_SURFACE: 'public'};
+  await run(['models', 'demo', '--list'], publicly);
+  assert.equal((await inventory(publicly)).models.find((m) => m.id === 'public-discovery').verification, 'catalog-only');
+  assert.equal((await gateway(publicly)).some((m) => m.id === 'demo/public-discovery'), false);
+  assert.equal(hits, 3);
 });

@@ -7,6 +7,7 @@ p.add_argument('--eof-after',type=float)
 p.add_argument('--hangup-after',type=float)
 p.add_argument('--stdin')
 p.add_argument('--keys',default='')
+p.add_argument('--send-after', nargs=2, action='append', default=[], metavar=('TEXT', 'KEYS'))
 p.add_argument('command',nargs=argparse.REMAINDER)
 a=p.parse_args(); cmd=a.command[1:] if a.command and a.command[0]=='--' else a.command
 if not cmd: p.error('command required')
@@ -16,6 +17,10 @@ os.close(s)
 if fin: fin.close()
 if a.keys: os.write(m,a.keys.encode())
 start=time.monotonic(); chunks=[]; hung=False; closed=False; timed=False
+steps = iter((prompt.encode(), keys.encode()) for prompt, keys in a.send_after)
+step = next(steps, None)
+observed = bytearray()
+offset = 0
 try:
     while True:
         age=time.monotonic()-start
@@ -32,6 +37,16 @@ try:
             except OSError: break
             if not data: break
             chunks.append(data)
+            if step:
+                observed.extend(data)
+            while step:
+                prompt, keys = step
+                position = observed.find(prompt, offset)
+                if position < 0:
+                    break
+                offset = position + len(prompt)
+                os.write(m, keys)
+                step = next(steps, None)
         elif proc.poll() is not None: break
     try: proc.wait(timeout=3)
     except subprocess.TimeoutExpired: timed=True;proc.kill();proc.wait()
@@ -40,4 +55,6 @@ finally:
     if not closed: os.close(m)
 sys.stdout.write(b''.join(chunks).decode('utf-8','replace'))
 print('\n[pty-helper] '+('TIMEOUT' if timed else 'exit='+str(proc.returncode)))
-sys.exit(124 if timed else 0)
+if step:
+    print('[pty-helper] prompt not observed: ' + step[0].decode(), file=sys.stderr)
+sys.exit(124 if timed else 1 if step else 0)

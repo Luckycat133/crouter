@@ -14,7 +14,9 @@ Load only the Skill whose trigger matches the current task. A Skill may be reuse
 | `crouter-provider-dev` | Universal provider development across all 5 archetypes, using the relevant contract stages (docs audit, parameters, session MCP assets, routing, and verification) |
 | `crouter-provider-plan` | Provider subscription plans (Coding/Agent/Token Plan), dual-surface auth, session MCP assets, and matrix tests |
 | `github-actions` | Shell-project CI workflow design and debugging |
-| `computer-use` | Desktop control, screen capture, mouse/keyboard automation, shell command execution, and desktop application interaction within safe boundaries |
+| `cua-driver` (global) | Native desktop GUI automation via global skill when desktop interaction is needed |
+| `github-release` | GitHub Releases, SemVer tagging, and Keep a Changelog release workflows |
+| `distribution-publisher` (Claude Agent) | Dedicated agent (`~/.claude/agents/distribution-publisher.md`) for MCP/Skill registries, ClawHub, `skills.sh`, GEO/`llms.txt`, and launch copy |
 
 ## Maintenance rules
 

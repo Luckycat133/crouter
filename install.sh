@@ -35,22 +35,7 @@ if [ ! -f "$ROOT_DIR/config.sh" ]; then
 fi
 
 echo "Installed: $INSTALL_DIR/crouter -> $ROOT_DIR/bin/crouter"
-echo "Installed compatibility shortcuts: $(echo "$SHORTCUTS" | tr ' ' ',' | sed 's/,/, /g')"
 echo "crouter $VERSION"
-
-# If the Antigravity proxy checkout is alongside this install, offer to apply
-# the GPT-OSS family patch. This is what lets `crouter antigravity-claude
-# --model gpt-oss-120b-medium` actually reach the proxy; without it the proxy
-# rejects unknown-family names. Idempotent; safe to re-run.
-chmod +x "$ROOT_DIR/bin/antigravity-proxy-patch"
-if [ -d "$ROOT_DIR/antigravity-claude-proxy" ]; then
-  "$ROOT_DIR/bin/antigravity-proxy-patch" --status >/dev/null 2>&1 || \
-    "$ROOT_DIR/bin/antigravity-proxy-patch" 2>&1 | sed 's/^/  /'
-else
-  echo "Note: antigravity-claude-proxy/ not found next to this install."
-  echo "      Run 'crouter antigravity-proxy-patch --proxy-dir <path>' after cloning it,"
-  echo "      to enable GPT-OSS support in the proxy."
-fi
 
 case :$PATH: in
   *:"$INSTALL_DIR":*) ;;

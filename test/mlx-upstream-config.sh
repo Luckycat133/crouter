@@ -34,9 +34,9 @@ PATH=$TEST_DIR/bin:$PATH
 export PATH
 
 # This suite explicitly exercises the MLX route, independent of the default.
-load_last_selected_model() { printf '%s\n' qwen3.8-27b; }
 die() { printf '%s\n' "$*" >&2; exit 1; }
 . "$ROOT_DIR/providers/ollama.sh"
+_main_model=qwen3.8-27b
 
 check_upstream() (
   expected_host=$1 expected_port=$2
@@ -44,6 +44,7 @@ check_upstream() (
   # PRE_START and POST_STOP are repository-owned shell hook strings.
   # shellcheck disable=SC2090
   trap 'eval "$POST_STOP"' EXIT
+  ollama_model_plan "$_main_model"
   eval "$PRE_START"
   [ "$BASE_URL" = http://127.0.0.1:11436 ] || die 'Qwen did not select the MLX adapter'
   [ "$(cat "$PROBE_FILE")" = "http://$expected_host:$expected_port/v1/models" ] || die 'MLX probe used another endpoint'
@@ -71,7 +72,7 @@ SH
 
 for invalid_port in 0 65536 abc 1.5 '80/path' -1; do
   rm -f "$PROBE_FILE" "$NODE_ENV_FILE"
-  if (MLX_UPSTREAM_PORT=$invalid_port; eval "$PRE_START") 2>"$TEST_DIR/error"; then
+  if (MLX_UPSTREAM_PORT=$invalid_port; ollama_model_plan "$_main_model") 2>"$TEST_DIR/error"; then
     die "accepted invalid MLX port: $invalid_port"
   fi
   grep -q 'MLX_UPSTREAM_PORT must be an integer from 1 to 65535' "$TEST_DIR/error" || die 'invalid MLX port gave an unclear error'
@@ -80,7 +81,7 @@ done
 
 printf '%s|%s|%s\n' stale.example 18080 qwen3.8-27b > "$NODE_ENV_FILE"
 MLX_UPSTREAM_HOST=127.0.0.1 MLX_UPSTREAM_PORT=8080
-if (eval "$PRE_START") 2>"$TEST_DIR/error"; then
+if (ollama_model_plan "$_main_model"; eval "$PRE_START") 2>"$TEST_DIR/error"; then
   die 'reused an adapter connected to another upstream'
 fi
 grep -q 'uses another upstream' "$TEST_DIR/error" || die 'stale adapter gave an unclear error'

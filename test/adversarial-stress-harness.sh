@@ -307,12 +307,8 @@ fi
 
 echo "=== STRESS TEST 4: OpenRouter Model Resolution and Slug Audit ==="
 
-"$TEST_SHELL" -c '
-set -eu
-# die 只在 bin/crouter 里定义（bin/crouter:85），裸 shell 里补一个等价实现，
-# 才能断言 PRE_START 对退役 :free 路由的拒绝行为。
-die() { printf "REFUSED: %s\n" "$*" >&2; _refused=1; }
-ROOT_DIR="'"$ROOT_DIR"'"
+"$TEST_SHELL" -eu <<'SH_OPENROUTER'
+die() { printf 'REFUSED: %s\n' "$*" >&2; exit 1; }
 . "$ROOT_DIR/lib/provider.sh"
 PROVIDERS_DIR="$ROOT_DIR/providers"
 load_provider openrouter
@@ -328,11 +324,12 @@ case " $MODEL_ALIASES " in
   *) : ;;
 esac
 
-# 2. Test PRE_START rewriting across all legacy and current input variants
+# 2. Resolve legacy and current inputs before launch or save.
 test_rewrite() {
   _input="$1"
-  _main_model="$_input"
-  eval "$PRE_START"
+  _main_model=$(resolve_model_id "$_input")
+  apply_model_context_override "$_main_model"
+  apply_model_effort_override "$_main_model"
   if [ "$_main_model" != "qwen/qwen3.8-27b" ]; then
     echo "Rewrite failed for input $_input -> got $_main_model" >&2
     exit 23
@@ -349,12 +346,8 @@ test_rewrite() {
 
 # 退役的 :free 路由必须被拒绝，不能改写成付费 slug
 test_refused() {
-  _input="$1"
-  _main_model="$_input"
-  _refused=
-  eval "$PRE_START"
-  if [ -z "$_refused" ]; then
-    echo "Retired route was not refused for input $_input -> got $_main_model" >&2
+  if (resolve_model_id "$1") >/dev/null 2>&1; then
+    echo "Retired route was not refused for input $1" >&2
     exit 26
   fi
 }
@@ -368,7 +361,7 @@ test_rewrite "qwen3.8"
 test_refused "qwen3.8-27b:free"
 test_refused "qwen/qwen3.8-27b:free"
 test_refused "qwen3.8 27b:free"
-'
+SH_OPENROUTER
 if [ $? -eq 0 ]; then
   pass "OpenRouter qwen/qwen3.8-27b is cleanly set, supported aliases rewrite cleanly and retired :free slugs are refused"
 else

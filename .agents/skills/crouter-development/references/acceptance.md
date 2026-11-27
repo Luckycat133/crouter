@@ -80,7 +80,16 @@
 | 隔离与迁移 | 原有 key registry、assets、cleanup、lifecycle、migration、安装卸载断言 | 新多账号 schema/多会话额度协调、真实 macOS Keychain 锁定和共享进程完整场景 |
 | skill | 包结构检查、16 个校验器 fixture；CI 记录 18 个行为案例的格式存在 | 18 个案例未实际运行 LLM；本次新增案例也不等于行为评测通过 |
 
-不能把上表的部分覆盖变成整行验收完成。新 CFG-07/CAT-06/UX-07/UX-08 是本次审查补充要求，尚无本轮产品执行记录。
+2026-11-15 在 `31eed75d691c910a94e94bd51f13935046e721bd` 基线的实现上执行了以下补充回归。历史 CI 证据仍按上表范围记录。
+
+| 本轮覆盖 | 命令和证据 | 仍待验收 |
+| --- | --- | --- |
+| CFG-01～CFG-04、CFG-06、CFG-07 的本地启动切片 | `test/launch-planning.sh`、`test/model-picker.sh` 从真实 CLI 比较 JSON、磁盘和 Claude 测试替身的 env/argv，核对 Ollama 服务切换与失败前的零副作用。 | 真实 Claude 版本的模型能力、会话资产与原生菜单 |
+| CAT-04、CAT-06 的目录消费切片 | `test/catalog.sh` 的目录服务、首页 inventory、计划和真实本地网关覆盖账号、目录与推理 endpoint、计费面、过期、公开目录；仅 Keychain 时首页与预览无密码读取。 | 真实 Keychain 锁定和供应商账号权限 |
+| UX-08 的首页切片 | `test/model-picker.sh` 从裸命令进入首页，验证退出失败返回并保留默认值、一次成功启动写最近、Ctrl-S 显式保存。 | 真实终端走查与其他交互验收 |
+| UX-01、UX-03、UX-05、UX-07 的本地首页切片 | `test/model-picker.sh` 在 stdin/stdout 均连 PTY 时验证按来源收藏与取消、来源箭头选择和启动、取消筛选恢复搜索、内置来源入口。仅 stdout 为 TTY 时保留 Claude stdin。 | 实机终端和自定义 URL/协议/认证向导 |
+
+三项脚本在 `sh` 和 `dash` 均运行。
 
 ## 测试层级和命令
 

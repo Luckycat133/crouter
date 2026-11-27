@@ -5,6 +5,16 @@
 antigravity_port() { printf '%s' "${ANTIGRAVITY_PORT:-18080}"; }
 antigravity_base_url() { printf 'http://127.0.0.1:%s' "$(antigravity_port)"; }
 
+antigravity_proxy_dir() {
+  if [ -n "${ANTIGRAVITY_PROXY_DIR:-}" ]; then
+    printf '%s' "$ANTIGRAVITY_PROXY_DIR"
+  elif [ -d "$ROOT_DIR/antigravity-claude-proxy" ]; then
+    printf '%s' "$ROOT_DIR/antigravity-claude-proxy"
+  else
+    printf '%s' "${XDG_DATA_HOME:-$HOME/.local/share}/crouter/antigravity-claude-proxy"
+  fi
+}
+
 antigravity_gateway_running() {
   curl -fsS --max-time 2 "$(antigravity_base_url)/health" >/dev/null 2>&1
 }
@@ -24,23 +34,12 @@ antigravity_ensure_gateway() {
   ANTIGRAVITY_GATEWAY_OWNED=0
   ANTIGRAVITY_GATEWAY_PID=""
 
-  _proxy_dir=${ANTIGRAVITY_PROXY_DIR:-$ROOT_DIR/antigravity-claude-proxy}
+  _proxy_dir=$(antigravity_proxy_dir)
   [ -d "$_proxy_dir" ] || {
     echo "Antigravity proxy directory not found: $_proxy_dir (set ANTIGRAVITY_PROXY_DIR in config.sh)" >&2
     return 1
   }
   command -v npm >/dev/null 2>&1 || { echo "npm not found; cannot start Antigravity gateway." >&2; return 1; }
-
-  # Ensure proxy patch is applied when GPT-OSS or patchable models are configured.
-  case "${_main_model:-} ${MODEL:-} ${MODEL_ALIASES:-}" in
-    *gpt-oss*)
-      if [ -x "$ROOT_DIR/bin/antigravity-proxy-patch" ]; then
-        if ! grep -qF "gpt-oss" "$_proxy_dir/src/constants.js" 2>/dev/null; then
-          "$ROOT_DIR/bin/antigravity-proxy-patch" --proxy-dir "$_proxy_dir" >/dev/null 2>&1 || true
-        fi
-      fi
-      ;;
-  esac
 
   _log_dir=${LOG_DIR:-$ROOT_DIR/logs}
   mkdir -p "$_log_dir"

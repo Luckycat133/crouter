@@ -1,0 +1,77 @@
+{
+  "reviewedAt": "2026-11-21",
+  "sources": [
+    {
+      "url": "https://antigravity.google/docs/models",
+      "evidence": "Standalone Gemini 4 Neon/Carbon/Argon/Hydrogen, Neon 512K window, Neon CLI gemini-4-neon-xhigh, supported thinking levels, Claude 5.5 models."
+    },
+    {
+      "url": "https://antigravity.google/docs/enterprise",
+      "evidence": "Claude Opus/Sonnet 5.5 exact CLI IDs claude-{opus,sonnet}-5-5-{low,medium,high,max}."
+    },
+    {
+      "path": "/Applications/Antigravity.app/Contents/Resources/bin/language_server",
+      "evidence": "Literal membership confirmed for Carbon/Argon low-medium-high, Hydrogen low-medium-high-xhigh, Gemini 3.8 Flash low-medium-high, and both Claude 5.5 low-medium-high-max. Installed binary predates Neon; Neon follows the documented CLI family and effort suffix."
+    },
+    {
+      "url": "https://github.com/badri-s2001/antigravity-claude-proxy/tree/252da0d428113bf728f6fe1d7f0c7785cd42c7f5",
+      "evidence": "Proxy 2.7.7 supports dynamic fetchAvailableModels metadata; bare Claude 5.5 aliases still resolve to 4.6, so crouter normalizes to explicit 5.5 tier IDs before forwarding."
+    }
+  ],
+  "keptGeminiDefault": "gemini-3.8-flash",
+  "claudeDefault": "claude-opus-5-5-medium",
+  "schedulerChanged": false,
+  "orchestratorAdvertised": false,
+  "upstreamModelEntitlementVerified": false,
+  "inferenceRequests": 0,
+  "proxyRevision": "252da0d428113bf728f6fe1d7f0c7785cd42c7f5",
+  "proxyPath": "/Users/jack/.local/share/crouter/antigravity-claude-proxy",
+  "proxyPid": 16412,
+  "proxyHealthStatus": 200,
+  "proxyModelsStatus": 503,
+  "proxyModelsError": "No accounts available",
+  "verification": {
+    "providerShell": {
+      "sh": "passed",
+      "dash": "passed"
+    },
+    "smoke": {
+      "sh": "passed",
+      "dash": "passed"
+    },
+    "unifiedRoutes": {
+      "sh": "passed",
+      "dash": "passed"
+    },
+    "realPayloadAndHeadersOfflineChecks": 29,
+    "syntax": "passed",
+    "diffCheck": "passed"
+  },
+  "locallyExcludedModels": [],
+  "accountCatalogPolicy": {
+    "providers": [
+      "antigravity",
+      "antigravity-claude"
+    ],
+    "source": "Existing loopback proxy /v1/models only; precise returned model IDs and thinking variants, never static completion.",
+    "consumerDeadlineMs": 7000,
+    "proxyColdAccountCheckBoundMs": 6000,
+    "proxyMetadataCacheTtlMs": 300000,
+    "consumerCacheFallback": false,
+    "unknownPricingMeansFree": false,
+    "unavailableBehavior": "401, 503, empty directory or transport failure yields no selectable models, with unavailable/unknown status. all --check does not query the network.",
+    "verification": {
+      "sh": "passed 5 account-live test groups",
+      "dash": "passed 5 account-live test groups",
+      "realLocalProxyCatalog": "HTTP 503 No accounts available; both providers correctly expose zero candidates",
+      "inferenceRequests": 0
+    }
+  },
+  "argonAvailabilityCorrection": {
+    "reviewedAt": "2026-11-21",
+    "reason": "User clarified the account is Google AI Ultra and Argon remains available. The primary agent then observed Gemini 4 Argon Medium in the native Antigravity app model selector.",
+    "decision": "Removed the local Argon hard block and restored known low/medium/high IDs and bare-to-medium alias. Actual selectable variants still require the live proxy account directory; no static fallback is permitted.",
+    "verificationLevel": "Native app availability was observed by the primary agent; proxy account authentication/inference remains unverified.",
+    "consumerRegression": "A real loopback proxy response offering Argon is preserved by models, inventory, and unified gateway consumers. Generic blocking uses a synthetic fixture ID."
+  }
+}

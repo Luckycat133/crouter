@@ -22,6 +22,11 @@ cp "$ROOT_DIR/lib/"*.sh "$ROOT_DIR/lib/"*.js "$FAKE_ROOT/lib/"
 cp "$ROOT_DIR/providers/openrouter.sh" "$ROOT_DIR/providers/antigravity.sh" \
   "$ROOT_DIR/providers/antigravity-claude.sh" "$ROOT_DIR/providers/anthropic.sh" \
   "$FAKE_ROOT/providers/"
+# These routes have no logged-in fixture proxy. Never consult the host proxy
+# or treat the providers' declared seeds as account model availability.
+for _antig in antigravity antigravity-claude; do
+  printf '\nBASE_URL="http://127.0.0.1:1"\n' >> "$FAKE_ROOT/providers/$_antig.sh"
+done
 cat > "$FAKE_ROOT/providers/zz-demo.sh" <<'EOF'
 PROVIDER_NAME="zz-demo"
 PROVIDER_DESC="Alias-leak sentinel"
@@ -202,19 +207,13 @@ const body = JSON.parse(fs.readFileSync(process.env.CAPTURE_FILE, 'utf8'));
 const ids = body.data.map((entry) => entry.id);
 const expected = [
   'openrouter/nvidia/nemotron-3-ultra-550b-a55b:free',
-  'antigravity/gemini-3.8-flash',
-  'antigravity/gemini-3.7-flash',
-  'antigravity/gemini-3.5-flash-medium',
-  'antigravity/gemini-3.1-pro-low',
-  'antigravity-claude/claude-opus-4-6-thinking',
-  'antigravity-claude/claude-sonnet-4-6',
-  'antigravity-claude/gpt-oss-120b-medium',
   'aa-surface/logical-model',
   'aa-surface/logical-fast',
   'zz-demo/demo-only',
 ];
 if (expected.some((id) => !ids.includes(id))) process.exit(1);
 if (ids.some((id) => id.startsWith('native-demo/'))) process.exit(4);
+if (ids.some((id) => id.startsWith('antigravity/') || id.startsWith('antigravity-claude/'))) process.exit(6);
 if (new Set(ids).size !== ids.length) process.exit(2);
 if (ids.some((id) => id.startsWith('zz-demo/') && id !== 'zz-demo/demo-only')) process.exit(3);
 EOF
@@ -231,7 +230,7 @@ if ROOT_DIR="$FAKE_ROOT" PROVIDERS_DIR="$FAKE_ROOT/providers" sh <<'EOF'
 die() { printf '%s\n' "$*" >&2; exit 1; }
 . "$ROOT_DIR/lib/provider.sh"
 load_provider antigravity
-[ "$MODEL_ALIASES" = 'gemini-3.8-flash-tiered gemini-3.7-flash gemini-3.7-flash-tiered gemini-3.5-flash-medium gemini-3.1-pro-low' ] || exit 1
+[ "$MODEL_ALIASES" = 'gemini-4-neon-low gemini-4-neon-medium gemini-4-neon-high gemini-4-neon-xhigh gemini-4-carbon-low gemini-4-carbon-medium gemini-4-carbon-high gemini-4-argon-low gemini-4-argon-medium gemini-4-argon-high gemini-4-hydrogen-low gemini-4-hydrogen-medium gemini-4-hydrogen-high gemini-4-hydrogen-xhigh gemini-3.8-flash-low gemini-3.8-flash-medium gemini-3.8-flash-high gemini-3.8-flash-tiered gemini-3.7-flash gemini-3.7-flash-tiered gemini-3.5-flash-medium gemini-3.1-pro-low' ] || exit 1
 load_provider zz-demo
 [ -z "${MODEL_ALIASES:-}" ]
 EOF
