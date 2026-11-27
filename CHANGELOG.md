@@ -4,6 +4,8 @@ All notable changes to this local setup are documented in this file.
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-11-27
+
 ### Added
 
 - `crouter <provider> --plan` previews the resolved model, token bounds,
@@ -24,6 +26,9 @@ All notable changes to this local setup are documented in this file.
   the existing loopback proxy's live `/v1/models` account directory.
 
 ### Fixed
+
+- Respect the tighter saved model ceiling in both preview and launch, including headless launches with no user-name environment (`#5`).
+- Pin the OpenRouter free Nemotron Super VL output ceiling to its exact route without affecting alternate models (`#6`).
 
 - Align Antigravity Claude test fixtures with the existing 5.5 defaults and
   compatibility aliases; remove the retired GPT-OSS expectation while retaining

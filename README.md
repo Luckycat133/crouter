@@ -1,7 +1,7 @@
 # crouter
 
 [![CI](https://github.com/Luckycat133/crouter/actions/workflows/ci.yml/badge.svg)](https://github.com/Luckycat133/crouter/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/version-0.5.3-blue)
+![Version](https://img.shields.io/badge/version-0.7.3-blue)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 `crouter` launches Claude Code against audited Anthropic-compatible providers
