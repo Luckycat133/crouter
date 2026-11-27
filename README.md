@@ -1,7 +1,7 @@
 # crouter
 
 [![CI](https://github.com/Luckycat133/crouter/actions/workflows/ci.yml/badge.svg)](https://github.com/Luckycat133/crouter/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/version-0.7.3-blue)
+![Version](https://img.shields.io/badge/version-0.5.3-blue)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 `crouter` launches Claude Code against audited Anthropic-compatible providers
@@ -19,9 +19,9 @@ the full [docs index](docs/README.md) for the source matrix, architecture
 contracts, and decisions, plus [llms.txt](llms.txt) /
 [llms-full.txt](llms-full.txt) for machine-readable LLM indexes.
 
-`VERSION` is 0.7.3; release history and in-progress changes are recorded in
-[CHANGELOG.md](CHANGELOG.md). Offline contract checks support POSIX `sh`
-and `dash`. Live catalog access,
+`VERSION` remains 0.5.3; subsequent milestones (`0.6.0`–`0.7.2`) and in-progress
+changes are recorded in [CHANGELOG.md](CHANGELOG.md). The current checkout passes the
+offline contract suite under POSIX `sh` and `dash`. Live catalog access,
 remaining quota, and account entitlement still require the account owner's
 credentials and may incur provider charges.
 
@@ -314,7 +314,6 @@ limit; the selected vendor model or native backend remains authoritative.
 | `antigravity-claude` | local proxy | `claude-opus-5-5-medium` | 200,000 | — |
 | `bedrock` | native AWS credentials | `sonnet` alias | — | — |
 | `bonsai` | local MLX 2-bit | `ternary-bonsai-2-27b` | 262,144 | — |
-| `bonsai25` | local MLX 2.5 | `ternary-bonsai-2.5-27b` | 262,144 | — |
 | `codex` | local ChatGPT subscription proxy | `gpt-5.6-sol` | 1,050,000 | — |
 | `dashscope` | Token Plan + API | `qwen3.8-max` | 983,616 | Plan media skill + API WebSearch MCP |
 | `dashscope-coding` | Coding Plan | `qwen3.7-plus` | — | — |
@@ -682,10 +681,6 @@ Ollama model with `num_ctx=262144` to match the advertised native window.
 crouter ollama qwen3.8:27b-dflash
 ```
 
-`crouter ollama inkling-2-mini:latest` reuses stored Ollama defaults — the
-11435 → 11434 relay, 60s heartbeat, and `max` effort — and now declares a
-1,048,576-token client context for Inkling's saved parameters.
-
 An explicitly selected `qwen3.8-27b` retains the MLX adapter at port 11436,
 `max` effort and its 262,144-token cap. That preset expects an OpenAI-compatible MLX
 server at `10.211.55.2:18080` by default (the existing local VM setup). Set
@@ -727,25 +722,6 @@ The 373,760-token cap applies only to the exact `deepseek-v4-flash:q8` and
 `deepseek-v4-flash` model IDs validated locally. Other explicitly selected
 Ollama models retain the conservative 65,536-token fallback unless another
 exact override is added to `MODEL_CONTEXT_OVERRIDES`.
-
-`crouter bonsai25` uses the dedicated `ternary-bonsai-2.5-27b` profile
-(`providers/bonsai25.sh` with `lib/bonsai25-runtime.sh`, a 262,144-token
-client context). Set `BONSAI25_DEMO_DIR` and `BONSAI25_MODEL_DIR` in private
-`config.sh` to the existing Bonsai demo checkout and the existing Bonsai 2.5
-MLX weights — both absolute paths; the profile verifies them at launch and
-refuses to run without them.
-
-The session starts the MLX server and the Anthropic adapter itself, owns both
-processes, and stops only them when Claude Code exits; an already-running
-server, adapter, or loaded Ollama model is never stopped or replaced. Launch
-applies prefill-step-size 256, APC memory-only (4 GiB, 2 checkpoints), and the
-native sampler temperature 1 / top_p 0.95 / top_k 20 / min_p 0 / repetition
-penalty 1 with `xhigh` reasoning effort. MTP is intentionally off because the
-new runtime's prefix-cache pairing is not yet proven.
-
-`crouter bonsai25 --plan` checks the resolved config without loading models or
-making network requests; it does not demonstrate inference or caching success.
-The existing `bonsai` (MLX 2-bit) and Ollama/Qwen behavior is unchanged.
 
 Codex requires `icebear0828/codex-proxy` on port 19000 and a completed ChatGPT
 OAuth PKCE login. Its available catalog remains account-dependent.

@@ -26,11 +26,6 @@
 #MLX_UPSTREAM_HOST=127.0.0.1
 #MLX_UPSTREAM_PORT=18080
 
-# Existing Bonsai 2.5 MLX runtime checkout and downloaded weights. The bonsai25
-# profile starts the existing runtime with saved agent defaults; no downloads.
-#BONSAI25_DEMO_DIR="/absolute/path/to/Bonsai-demo"
-#BONSAI25_MODEL_DIR="/absolute/path/to/Ternary-Bonsai-2.5-27B-mlx-2bit"
-
 # Provider-owned MCPs and skills are activated only for the current crouter
 # session; crouter never edits ~/.claude.json or globally installs a plugin.
 # Disable all managed assets with 0. Default: 1.
