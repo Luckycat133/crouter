@@ -202,7 +202,7 @@ launch_claude() {
   set -- "TERM=${TERM:-xterm-256color}" "$@"
   set -- "SHELL=${SHELL:-/bin/zsh}" "$@"
   set -- "PATH=$PATH" "$@"
-  set -- "USER=$USER" "$@"
+  set -- "USER=${USER:-${LOGNAME:-$(id -un)}}" "$@"
   set -- "HOME=$HOME" "$@"
 
   # Run as a child (not exec) so POST_STOP and any local auth proxy are cleaned
