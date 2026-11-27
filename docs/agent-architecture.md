@@ -39,8 +39,38 @@ Directory snapshots bind a provider, canonical directory URLs, the inference end
 
 The unified gateway forwards client cancellation to its upstream HTTP request and response and stops pending retry waits. A normal completed request body is not a cancellation. Once response headers are forwarded, an upstream body error or premature close terminates the client response without changing candidates or replaying the request. Cancellation is scoped to one request and preserves other concurrent requests.
 
+## Model context metadata
+
+`bin/gateway` annotates `GET /v1/models` rows with `context_length` and
+`max_input_tokens` (an Anthropic-compatible alias of the same input-side
+bound), plus `max_output_tokens`, only when the route's model metadata holds
+a known, valid limit for that exact model — e.g. 1,048,576 or 262,144
+tokens. Unknown limits are omitted rather than guessed. Metadata is scoped
+per provider, endpoint, origin, surface and credential digest: a stale cache
+or another account's directory can never leak into this route's models.
+
+`lib/route-build.js` assembles the metadata from directory catalog metadata,
+account-live catalog metadata, and declared limits
+(`CONTEXT_TOKENS`, `MAX_OUTPUT_TOKENS`, `MODEL_CONTEXT_OVERRIDES`); declared
+limits win, and the primary model's declared output cap is applied when set.
+`lib/unified.sh` forwards those declared limits into unified gateway route
+construction but still sets no global 1M window, so `crouter all` exposes
+per-model metadata without forcing every model to a 1M context window.
+
+Claude Code 2.1.316 gateway discovery reads only `id`, `display_name` and
+`description`; the extra context fields do not change any model's window in
+Claude Code. They are intended for HAPI and other integration consumers.
+Per-provider `MAX_CONTEXT` environment variables continue to apply as before;
+do not claim `crouter all` natively applies per-model windows.
+
 ## Ollama transport
 
 Current model defaults, effort and per-model window caps are defined in `providers/ollama.sh`; read that file instead of copying a dated model catalog into instructions. The session-owned relay in `lib/ollama-heartbeat-proxy.mjs` listens on port 11435 and sends transport-only SSE comments every 60 seconds during upstream silence. Preserve upstream response events and session-owned cleanup.
 
 DeepSeek request handling preserves the requested thinking/effort fields and reports effective local behavior without claiming unsupported budget control. Its text-only image fallback is deliberately model-scoped; other models retain their multimodal input. Changes here need focused offline coverage for model selection/caps, thinking pass-through, image scope, heartbeat interval, relay fidelity and cleanup.
+
+The exact Ollama IDs `qwen3.8-abliterated:27b-dflash` (declared 262,144-token client window) and `qwen3.6-hauhau:35b-a3b-q4_k_p` (declared 131,072-token client window) are registered in `providers/ollama.sh` alongside the DFlash and `inkling` profiles; tiers pin to the selected ID through `MODEL_SELF_ROUTE_MODELS`, and native Ollama definitions keep sampler/cache/MTP defaults, so crouter injects no extra inference settings. Declared windows are scoped per exact ID in `MODEL_CONTEXT_OVERRIDES`; selections without a declared override keep the 65,536-token fallback.
+
+## Bonsai transport
+
+`crouter bonsai` exposes local Ternary Bonsai MLX models (27B, 2-bit) to Claude Code through the session-owned Anthropic-compatible adapter. The default `ternary-bonsai-2-27b` profile (alias `bonsai`) uses adapter port 11438 → native port 8000 against the legacy PrismML MLX runtime, which crouter keeps but neither starts nor stops; its declared client window is 262,144 tokens. `ternary-bonsai-2.5-27b` uses a separate adapter port 11439 → native port 8081 and declares a 262,144-token client window (native `MAX_OUTPUT_TOKENS` is not explicitly set by crouter). It resolves the native pack under `$BONSAI_DEMO_DIR/models/Ternary-Bonsai-2.5-27B-mlx-2bit` (default the `Bonsai-demo` sibling of this repository). Before the adapter starts, port 8081 `/health` and `/v1/models` must both identify that pack by realpath. If no native listener is verifiable, crouter starts the existing native launcher with family `bonsai25`, size `27B` and port `8081` only; an already compatible listener is reused and never replaced or owned, and `bonsai_stop` stops only PIDs started by this session. The adapter runs with `MLX_INHERIT_DEFAULTS=1`, so it inherits the native sampler, cache and MTP defaults and keeps the selected local model ID (a wrong model is rejected). Tiers pin to the selected model and no extra crouter inference settings are added. Launch with `crouter bonsai --model ternary-bonsai-2.5-27b`; these are direct provider launches only, and `crouter all` does not yet perform per-model local service startup.

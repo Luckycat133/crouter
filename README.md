@@ -1,7 +1,7 @@
 # crouter
 
 [![CI](https://github.com/Luckycat133/crouter/actions/workflows/ci.yml/badge.svg)](https://github.com/Luckycat133/crouter/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/version-0.7.3-blue)
+![Version](https://img.shields.io/badge/version-0.7.5-blue)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 `crouter` launches Claude Code against audited Anthropic-compatible providers
@@ -19,9 +19,11 @@ the full [docs index](docs/README.md) for the source matrix, architecture
 contracts, and decisions, plus [llms.txt](llms.txt) /
 [llms-full.txt](llms-full.txt) for machine-readable LLM indexes.
 
-`VERSION` is 0.7.3; release history and in-progress changes are recorded in
+`VERSION` is 0.7.5; release history and in-progress changes are recorded in
 [CHANGELOG.md](CHANGELOG.md). Offline checks run under both POSIX `sh` and `dash`;
-existing development-skill routing validation is red. Live catalog access,
+the `crouter-development` skill routing validator and its 24 isolated fixture
+checks pass under both `sh` and `dash` (package structure only; live-client and
+LLM evaluations were not executed). Live catalog access,
 remaining quota, and account entitlement still require the account owner's
 credentials and may incur provider charges.
 
@@ -679,7 +681,12 @@ Ollama model with `num_ctx=262144` to match the advertised native window.
 
 `crouter ollama inkling-2-mini:latest` passes 1,048,576 client context while
 sampling/batch/draft defaults remain stored in the Ollama model; crouter adds
-no sampler/cache defaults.
+no sampler/cache defaults. Two more exact IDs are registered:
+`qwen3.8-abliterated:27b-dflash` (declared 262,144-token client window) and
+`qwen3.6-hauhau:35b-a3b-q4_k_p` (declared 131,072-token client window);
+tiers pin to the selected ID and crouter adds no sampler/cache or MTP
+settings beyond what the model stores. Select models with
+`crouter ollama --model <id>`.
 
 ```sh
 crouter ollama qwen3.8:27b-dflash
@@ -726,6 +733,23 @@ The 373,760-token cap applies only to the exact `deepseek-v4-flash:q8` and
 `deepseek-v4-flash` model IDs validated locally. Other explicitly selected
 Ollama models retain the conservative 65,536-token fallback unless another
 exact override is added to `MODEL_CONTEXT_OVERRIDES`.
+
+Bonsai serves local Ternary Bonsai MLX models (27B, 2-bit) through the
+session-owned Anthropic-compatible adapter. The default `ternary-bonsai-2-27b`
+profile (alias `bonsai`) uses adapter port 11438 → native port 8000 against
+the legacy PrismML runtime, which crouter keeps but neither starts nor owns;
+its declared client window is 262,144 tokens. `ternary-bonsai-2.5-27b` uses a
+separate adapter port 11439 → native port 8081 and declares a 262,144-token
+client window (native `MAX_OUTPUT_TOKENS` is not explicitly set by crouter).
+It resolves the native pack at `$BONSAI_DEMO_DIR/models/Ternary-Bonsai-2.5-27B-mlx-2bit`
+(default sibling `Bonsai-demo`); port 8081 `/health` and `/v1/models` must
+identify the pack by realpath before the adapter starts, an already compatible
+native listener is reused and never replaced or owned, and only session-started
+processes are stopped at exit. The adapter runs with `MLX_INHERIT_DEFAULTS=1`,
+inheriting native sampler/cache/MTP defaults and keeping the selected model ID.
+Select with `crouter bonsai --model ternary-bonsai-2.5-27b`. These are direct
+provider launches only; `crouter all` does not yet perform per-model local
+service startup, so full all-mode support is not claimed.
 
 Codex requires `icebear0828/codex-proxy` on port 19000 and a completed ChatGPT
 OAuth PKCE login. Its available catalog remains account-dependent.

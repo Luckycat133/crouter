@@ -2,6 +2,59 @@
 
 All notable changes to this local setup are documented in this file.
 
+## [0.7.5] - 2026-11-28
+
+### Added
+
+- Ollama registers exact local model IDs `qwen3.8-abliterated:27b-dflash`
+  (declared 262,144-token client window) and
+  `qwen3.6-hauhau:35b-a3b-q4_k_p` (declared 131,072-token client window);
+  tiers pin to the selected ID through `MODEL_SELF_ROUTE_MODELS`, and native
+  Ollama definitions keep sampler/cache/MTP defaults, so crouter injects no
+  extra inference settings. Launch with `crouter ollama --model <id>`.
+- Bonsai adds `ternary-bonsai-2.5-27b` (declared 262,144-token client
+  window) beside the legacy `ternary-bonsai-2-27b` profile. The legacy
+  profile uses adapter port 11438 → native port 8000 against the PrismML
+  runtime (retained, not owned by crouter); `ternary-bonsai-2.5-27b` uses a
+  separate adapter port 11439 → native port 8081. The 2.5 native pack
+  resolves under `$BONSAI_DEMO_DIR/models/Ternary-Bonsai-2.5-27B-mlx-2bit`
+  (default sibling `Bonsai-demo`); port 8081 `/health` and `/v1/models` must
+  identify the pack by realpath before the adapter starts, on-demand native
+  startup takes family, size and port only, an already compatible listener is
+  reused without owning it, and only session-owned PIDs are stopped at exit.
+  `MLX_INHERIT_DEFAULTS=1` inherits native sampler/cache/MTP and keeps the
+  selected local model ID. Launch with `crouter bonsai --model ternary-bonsai-2.5-27b`.
+  These are direct provider launches only; `crouter all` does not yet perform
+  per-model local service startup.
+
+## [0.7.4] - 2026-11-28
+
+### Changed
+
+- `bin/gateway GET /v1/models` now annotates each model row with
+  `context_length`, `max_input_tokens` (the Anthropic-compatible alias of the
+  same input-side bound) and `max_output_tokens` only when the route carries a
+  known, valid limit for that exact model — e.g. 1,048,576 or 262,144 tokens.
+  Unknown limits are omitted instead of guessed. Metadata is scoped per
+  provider, endpoint, origin, billing surface and credential digest, and is
+  never adopted across endpoints, accounts, surfaces or stale directory
+  snapshots.
+- `lib/route-build.js` includes `modelMetadata` in route JSON, built from
+  directory catalog metadata and account-live catalog metadata; declared
+  `CONTEXT_TOKENS`/`MAX_OUTPUT_TOKENS`/`MODEL_CONTEXT_OVERRIDES` take
+  precedence, and a declared output cap is applied to the primary model.
+- `lib/unified.sh` forwards declared context and output limits into unified
+  gateway route construction; it still sets no global 1M window, so the
+  gateway exposes per-model metadata without forcing every model to a 1M
+  context window.
+
+### Fixed
+
+- `.agents/skills/crouter-development/scripts/validate.mjs` now follows the
+  in-repo `@AGENTS.md` canonical pointer so `CLAUDE.md` routes to the real
+  development skill; the validator and its 24 isolated fixture checks pass
+  under `sh` and `dash` (package structure only; live inference not tested).
+
 ## [Unreleased]
 
 ### Added
