@@ -1,0 +1,103 @@
+name: Publish crouter v0.7.3 once
+on:
+  push:
+    branches: ['dots/release-v0.7.3-once']
+    paths: ['.github/workflows/publish-v0.7.3-once.yml']
+permissions: {}
+env:
+  TAG: 'v0.7.3'
+  TARGET: '5c7e328fbaed7b1152787d14fcec4b6f0be2964e'
+  TREE: 'a3949a1e95e7c7beb513527ec9720dd5124c0525'
+  NAME: 'crouter-v0.7.3-source.tar.gz'
+jobs:
+  verify:
+    if: github.repository == 'Luckycat133/crouter'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.TARGET }}
+          persist-credentials: false
+
+      - name: Build twice and verify static release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TARGET"
+          test "$(git rev-parse 'HEAD^{tree}')" = "$TREE"
+          test "v$(cat VERSION)" = "$TAG"
+          mkdir -p "$RUNNER_TEMP/dist"
+          a="$(mktemp -d)"; b="$(mktemp -d)"
+          for d in "$a" "$b"; do
+            git archive --format=tar --prefix="crouter-$TAG/" "$TARGET" | gzip -n > "$d/$NAME"
+          done
+          cmp "$a/$NAME" "$b/$NAME"
+          cp "$a/$NAME" "$RUNNER_TEMP/dist/"
+          tar -xzf "$b/$NAME" -C "$b"
+          INSTALL_DIR="$b/bin" "$b/crouter-$TAG/install.sh"
+          test "$("$b/bin/crouter" --version)" = "crouter ${TAG#v}"
+          mkdir -p "$RUNNER_TEMP/dist"
+          {
+            printf 'repository %s\nversion %s\ncommit %s\nsource-tree %s\n\n' "$GITHUB_REPOSITORY" "$TAG" "$TARGET" "$TREE"
+            git ls-tree -r "$TARGET"
+          } > "$RUNNER_TEMP/dist/SOURCE-MANIFEST.txt"
+          cd "$RUNNER_TEMP/dist"
+          sha256sum "$NAME" SOURCE-MANIFEST.txt > SHA256SUMS
+          sha256sum -c SHA256SUMS
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: verified-distribution
+          path: ${{ runner.temp }}/dist/*
+          if-no-files-found: error
+          retention-days: 1
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: verified-distribution
+          path: dist
+      - name: Verify draft downloads, publish once and download again
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "Luckycat133/crouter"
+          test "$GITHUB_REF" = "refs/heads/dots/release-v0.7.3-once"
+          test "$TAG" = "v0.7.3"
+          (cd dist && sha256sum -c SHA256SUMS)
+          test "$(find dist -maxdepth 1 -type f | wc -l)" -eq 3
+          tags="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases" --jq '.[].tag_name')"
+          if grep -Fxq "$TAG" <<< "$tags"; then echo "Refusing to replace an existing release"; exit 1; fi
+          # Publish only against the original tag; never retarget it.
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq .object.sha)" = "$TARGET"
+          gh release create "$TAG" "dist/$NAME" dist/SOURCE-MANIFEST.txt dist/SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" --verify-tag --draft --title "crouter v0.7.3" \
+            --notes 'Source distribution for the existing immutable v0.7.3 tag, with exact source-tree manifest and SHA-256. Two clean archive builds matched; the extracted launcher was smoke-tested in an isolated directory. No live provider requests.'
+          verify_download() {
+            local out
+            out="$(mktemp -d)"
+            gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir "$out"
+            cmp dist/SHA256SUMS "$out/SHA256SUMS"
+            (cd "$out" && sha256sum -c SHA256SUMS)
+          }
+          draft_dir="$(mktemp -d)"
+          for filename in "$NAME" SOURCE-MANIFEST.txt SHA256SUMS; do
+            id="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases" \
+              --jq ".[] | select(.draft and .tag_name == \"$TAG\") | .assets[] | select(.name == \"$filename\") | .id")"
+            [[ "$id" =~ ^[0-9]+$ ]]
+            gh api -H 'Accept: application/octet-stream' "repos/$GITHUB_REPOSITORY/releases/assets/$id" > "$draft_dir/$filename"
+          done
+          cmp dist/SHA256SUMS "$draft_dir/SHA256SUMS"
+          (cd "$draft_dir" && sha256sum -c SHA256SUMS)
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+          test "$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets,isDraft,isPrerelease --jq '.isDraft == false and .isPrerelease == false and (.assets | length) == 3')" = true
+          verify_download
