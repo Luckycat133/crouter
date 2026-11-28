@@ -141,6 +141,43 @@ and lifecycle, not actual model inference or cache hit performance. This
 startup path applies only to direct `crouter mlx-vlm` launches; `crouter all`
 does not implement per-model native startup.
 
+## Inkling Unbound llama.cpp transport
+
+`providers/llama-cpp.sh` is independent of Ollama and the original `mlx-vlm`
+provider. Its static catalog contains only `inkling-2-mini-unbound-v3`, with
+`:latest` normalized to the same ID, a 524,288-token (512K) client window and all
+tiers self-routed. Unknown selections fail before state is saved or services
+are started. `lib/llama-cpp-runtime.sh` consumes the sealed plan and uses
+adapter 11441 → native 8085. The native directory is
+`INKLING_UNBOUND_RUNTIME_DIR` or
+`$HOME/.local/share/local-llm/inkling-unbound-llama`.
+
+Only `PRE_START` executes native `start-server.sh --check`, whose JSON declares
+`model_path`, `alias` and `context_tokens`. The declaration must name this exact
+alias and 512K window; the declared model path must be absolute, native health
+must be `ok`, `/props.model_path` must match the declared file by realpath,
+the actual per-slot `n_ctx` must meet the declared window, and `/v1/models`
+must contain the alias. This checks
+allocation/identity, not quality at that context. The 1M Q8 KV profile failed
+memory allocation on the 64GB host; the reduced declaration alone does not
+verify that 512K allocation succeeds. Compatible native listeners are reused.
+A native launch receives no crouter inference arguments, and the
+adapter uses `MLX_INHERIT_DEFAULTS=1`. Its health must match selected ID,
+upstream, upstream ID and inheritance mode. Conflicting listeners are rejected
+without replacement; cleanup stops only session-created PIDs. Planning,
+save-only and catalog operations remain offline. Unified mode does not add
+per-model startup.
+
+The shared Anthropic/OpenAI adapter translates explicit
+`output_config.effort` only for the exact native Bonsai 2/2.5 and Inkling IDs.
+Bonsai accepts `low`, `medium`, `xhigh` (Claude high/max map to `xhigh`);
+Inkling preserves named levels, including `max` which its template maps to
+0.99. Both top-level `reasoning_effort` and template kwargs carry the same
+translated value. Missing effort preserves native defaults, explicit fields
+override legacy adapter defaults, invalid levels return 400 before an upstream
+request, and unrelated model IDs retain prior behavior. Budget and hard-disable
+semantics are not added by this translation.
+
 ## Bonsai transport
 
 `crouter bonsai` exposes local Ternary Bonsai models to Claude Code through the session-owned Anthropic-compatible adapter. The default `ternary-bonsai-2-27b` profile (alias `bonsai`) uses adapter port 11438 → native port 8000 against the legacy PrismML MLX runtime, which crouter keeps but neither starts nor stops; its declared client window is 262,144 tokens. `ternary-bonsai-2.5-27b` uses adapter port 11439 → native port 8081 with the same client window. Tiers pin to the selected model; native output, sampler, cache, KV and MTP settings remain owned by the backend, with `MLX_INHERIT_DEFAULTS=1` and no additional crouter inference defaults.

@@ -4,6 +4,33 @@ All notable changes to this local setup are documented in this file.
 
 ## [Unreleased]
 
+## [0.7.13] - 2026-11-28
+
+### Added
+
+- Independent `llama-cpp` provider for the configured Inkling 2 Mini Unbound
+  v3 GGUF runtime: native launcher on 8085 and a session-owned Anthropic adapter
+  on 11441. Static discovery and all tiers use `inkling-2-mini-unbound-v3`;
+  `:latest` normalizes to that ID. Unknown models are rejected.
+- Native reuse checks health, the launcher's declared model-file realpath,
+  exact alias, and at least the declared 512K per-slot allocation. The 1M Q8 KV
+  profile failed memory allocation on the 64GB host; the 512K declaration does
+  not itself claim successful allocation. Relative model declarations are
+  rejected. Incompatible listeners are rejected without replacement; cleanup
+  stops only owned PIDs.
+  Planning and save-only do not run the launcher or contact model services.
+  Native sampler, KV, cache and drafting defaults remain in the separate
+  runtime, with no Ollama dependency or change to the stock `mlx-vlm` provider.
+
+### Fixed
+
+- Translate explicit Claude Code `output_config.effort` for the exact native
+  Bonsai 2/2.5 and Inkling model IDs. Bonsai high/max map to its supported
+  `xhigh`; Inkling preserves named levels. Missing fields keep native defaults,
+  invalid levels fail before an upstream call, and unrelated models keep their
+  previous behavior. No hard thinking-budget or disable guarantee is added.
+- Describe Bonsai's supported MLX/GGUF backends in its provider catalog entry.
+
 ## [0.7.12] - 2026-11-28
 
 ### Fixed

@@ -1,7 +1,7 @@
 # crouter
 
 [![CI](https://github.com/Luckycat133/crouter/actions/workflows/ci.yml/badge.svg)](https://github.com/Luckycat133/crouter/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/version-0.7.12-blue)
+![Version](https://img.shields.io/badge/version-0.7.13-blue)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 `crouter` launches Claude Code against audited Anthropic-compatible providers
@@ -22,7 +22,7 @@ the full [docs index](docs/README.md) for the source matrix, architecture
 contracts, and decisions, plus [llms.txt](llms.txt) /
 [llms-full.txt](llms-full.txt) for machine-readable LLM indexes.
 
-`VERSION` is 0.7.12; release history and in-progress changes are recorded in
+`VERSION` is 0.7.13; release history and in-progress changes are recorded in
 [CHANGELOG.md](CHANGELOG.md). Offline checks run under both POSIX `sh` and `dash`;
 the `crouter-development` skill routing validator and its 24 isolated fixture
 checks pass under both `sh` and `dash` (package structure only; live-client and
@@ -320,6 +320,7 @@ limit; the selected vendor model or native backend remains authoritative.
 | `bedrock` | native AWS credentials | `sonnet` alias | — | — |
 | `bonsai` | local MLX / GGUF | `ternary-bonsai-2-27b` | 262,144 | — |
 | `mlx-vlm` | local official MLX-VLM | `inkling-2-mini:latest` | 1,048,576 | native APC / DSpark defaults |
+| `llama-cpp` | local llama.cpp GGUF | `inkling-2-mini-unbound-v3` | 524,288 | native cache / drafting defaults |
 | `codex` | local ChatGPT subscription proxy | `gpt-5.6-sol` | 1,050,000 | — |
 | `dashscope` | Token Plan + API | `qwen3.8-max` | 983,616 | Plan media skill + API WebSearch MCP |
 | `dashscope-coding` | Coding Plan | `qwen3.7-plus` | — | — |
@@ -715,8 +716,50 @@ this official version; this backend retains BF16 KV.**
 `start-server.sh --check` inspects native defaults without loading a model.
 Selecting, planning or saving the crouter profile also starts no services;
 a normal direct launch starts the native backend only when needed and stops
-only session-owned processes. Real model inference/cache speedup still needs
-verification during normal use. `crouter all` does not start this backend.
+only session-owned processes. A local Claude Code smoke test passed a real
+Read tool call, its tool result and an exact nonce answer; the backend reported
+3,573 reused prefix tokens. This does not verify quality with a 1M-token input
+or a speed comparison against the previous backend. `crouter all` does not
+start this backend.
+
+The separately configured **Inkling 2 Mini Unbound v3 GGUF** uses the
+independent `llama-cpp` provider:
+
+```sh
+crouter llama-cpp
+crouter llama-cpp --model inkling-2-mini-unbound-v3
+```
+
+`inkling-2-mini-unbound-v3:latest` also normalizes to the untagged ID. The
+catalog is static and accepts only this configured model, with every tier
+on the same ID. The Anthropic adapter uses 11441 → native llama.cpp on 8085;
+there is no Ollama dependency, and `mlx-vlm` keeps the original Inkling model.
+The native entry point is
+`$HOME/.local/share/local-llm/inkling-unbound-llama/start-server.sh`, or
+`$INKLING_UNBOUND_RUNTIME_DIR/start-server.sh`. Its pure `--check` JSON declares
+the model file, alias and context. crouter starts it without inference arguments
+and inherits its sampler, KV, cache and drafting defaults.
+
+This profile declares a 524,288-token (512K) client window. The 1M Q8 KV
+profile failed memory allocation on the 64GB host. The 512K profile then passed
+native allocation and a local Claude Code Read → tool result → exact nonce
+smoke test, with 3,695 reused prefix tokens. Startup requires the
+native server's actual per-slot allocation to meet that declaration, health
+`ok`, an absolute declared model path whose realpath matches `/props.model_path`,
+and the exact friendly alias in `/v1/models`. Allocation is not a 512K-input
+quality or throughput result. Correct existing native/adapter services can be
+reused without ownership; incompatible occupied ports are rejected. Only
+session-started PIDs are stopped on exit. Catalog reads, `--plan` and
+`--apply-only` never execute the launcher or load a model. `crouter all` does
+not perform per-model native startup for this provider.
+
+For these exact native Inkling IDs and Bonsai 2/2.5, explicit Claude Code
+`output_config.effort` is translated to the model template. Bonsai keeps
+`low`/`medium` and maps `high`/`xhigh`/`max` to `xhigh`; Inkling preserves the
+named level (`max` is 0.99 in its template). An omitted field keeps native
+defaults, and explicit levels override legacy adapter environment defaults.
+Invalid levels return 400 before contacting the native server. This does not
+add hard thinking-budget enforcement or guarantee that thinking can be disabled.
 
 Two more exact IDs are registered:
 `qwen3.8-abliterated:27b-dflash` (declared 262,144-token client window) and

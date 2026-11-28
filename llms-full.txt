@@ -328,7 +328,15 @@ $$\text{cooldownMs} = \max\left(\text{CROUTER\_CANDIDATE\_COOLDOWN\_MS},\, \text
 - **Transport**: Anthropic adapter 11440 → native service 8082; static catalog, no Ollama dependency.
 - **Context**: 1,048,576 tokens; all tiers use the selected model.
 - **Runtime**: Existing Bonsai-demo `.venv-vlm`, upgraded in place to official 0.8.1. Native APC/DSpark/sampling defaults apply; Inkling KV stays BF16 because Q8 is incompatible.
-- **Verification**: Offline configuration/transport only; real inference and cache speedup remain unverified.
+- **Verification**: A local Claude Code smoke test passed a real Read tool call, its tool result and an exact nonce answer, with 3,573 reused prefix tokens reported. Neither quality with a 1M-token input nor a speed comparison against the previous backend has been verified.
+
+#### Inkling Unbound Native llama.cpp (`llama-cpp`)
+- **Launch**: `crouter llama-cpp`; model `inkling-2-mini-unbound-v3`, with `:latest` normalized to the same ID. Unconfigured models are rejected.
+- **Transport**: Anthropic adapter 11441 → native llama.cpp 8085; static catalog with no Ollama dependency. The original Inkling model remains under `mlx-vlm`.
+- **Native ownership**: `$INKLING_UNBOUND_RUNTIME_DIR/start-server.sh` or the default `$HOME/.local/share/local-llm/inkling-unbound-llama/start-server.sh` owns sampler/KV/cache/drafting settings. crouter starts it without inference arguments and uses `MLX_INHERIT_DEFAULTS=1`.
+- **Context and identity**: Declared 512K (524,288-token) client window after the 1M Q8 KV profile failed memory allocation on the 64GB host. Startup requires native health `ok`, an absolute model path matching the launcher's no-load `--check` declaration by realpath, actual per-slot allocation at least that window, and the exact friendly alias. Local 512K native allocation and a Claude Code Read → tool result → exact nonce smoke passed, with 3,695 reused prefix tokens reported. This does not verify 512K-input quality or a speed comparison against the previous backend.
+- **Lifecycle**: Compatible services are reused without ownership. Incompatible listeners are rejected; exit stops only session-created PIDs. Catalog, plan and save-only do not start models. Unified mode does not implement per-model startup.
+- **Explicit reasoning control**: The shared adapter maps exact Bonsai high/max efforts to its supported `xhigh`, and preserves named levels for original/Unbound Inkling (`max` means 0.99 in the template). Missing fields inherit native defaults; no hard budget/disable guarantee is introduced.
 
 #### 34-36. Native Cloud SDK Integrations (`bedrock`, `vertex`, `foundry`)
 - **No Local Proxy**: Directly drives Claude Code's native AWS, Google Cloud, and Azure SDK integrations.

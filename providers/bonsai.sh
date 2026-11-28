@@ -1,7 +1,7 @@
 #!/bin/sh
 # Provider: native Bonsai MLX models exposed to Claude Code.
 PROVIDER_NAME="bonsai"
-PROVIDER_DESC="Local Ternary Bonsai 2 / 2.5 (27B MLX 2-bit Hadamard)"
+PROVIDER_DESC="Local Ternary Bonsai 2 / 2.5 (27B MLX / GGUF)"
 
 BASE_URL="http://127.0.0.1:11438"
 MODEL="ternary-bonsai-2-27b"

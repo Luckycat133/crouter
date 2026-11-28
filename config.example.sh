@@ -33,6 +33,9 @@
 # Independent mlx-vlm provider: native launcher/model link and shared env.
 # Default model: inkling-2-mini:latest; see README.
 #INKLING_MLX_RUNTIME_DIR="$HOME/.local/share/local-llm/inkling-mlx-vlm"
+# Independent llama-cpp provider: configured Inkling Unbound v3 GGUF runtime.
+# Native wrapper owns inference defaults; crouter does not set KV/cache/drafting.
+#INKLING_UNBOUND_RUNTIME_DIR="$HOME/.local/share/local-llm/inkling-unbound-llama"
 
 # Provider-owned MCPs and skills are activated only for the current crouter
 # session; crouter never edits ~/.claude.json or globally installs a plugin.

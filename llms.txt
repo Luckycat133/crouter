@@ -8,7 +8,7 @@ crouter launches Anthropic Claude Code and native coding agents against audited 
 - **Project**: crouter
 - **Repository**: https://github.com/Luckycat133/crouter
 - **License**: MIT
-- **Version**: 0.5.3
+- **Version**: 0.7.13
 - **Primary Runtime**: POSIX sh / dash / zsh / bash (zero daemon requirement for direct routes)
 - **Supported Platforms**: macOS (native Keychain support), Linux, BSD
 - **Core Integrations**: Anthropic Claude Code, Cursor, OpenAI Codex, Windsurf, Cline, Gemini CLI, OpenCode, Copilot CLI
@@ -27,6 +27,7 @@ crouter launches Anthropic Claude Code and native coding agents against audited 
 - **Global Gateways & Aggregators**: Anthropic Console API, OpenRouter, Fireworks AI, Requesty AI, Vercel AI Gateway, 302.AI, AIHubMix, NagaAI.
 - **Local Inference & Reverse Proxies**: Ollama (DFlash2 / DeepSeek), MLX-VLM (Inkling 2 Mini), Bonsai 2 (MLX Hadamard), Antigravity (Gemini 3.8/Claude), Antigravity Claude, Codex Proxy (`icebear0828/codex-proxy`).
 - **Optional Bonsai 2.5**: `crouter bonsai --model ternary-bonsai-2.5-27b` prefers the installed native `start_bonsai25_agent_server.sh` GGUF launcher; sampler/cache/MTP/context defaults stay native, with legacy MLX reuse and startup compatibility.
+- **Inkling Unbound GGUF**: `crouter llama-cpp` selects `inkling-2-mini-unbound-v3`, adapter 11441 → native 8085. Static catalog, declared 512K window with native allocation/identity checks, no Ollama dependency; all inference defaults remain in the configured native launcher. Original Inkling remains under `mlx-vlm`.
 - **Native Cloud Providers**: Amazon Bedrock, Google Vertex AI, Microsoft Foundry.
 
 ## Core CLI Usage
