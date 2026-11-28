@@ -4,6 +4,16 @@ All notable changes to this local setup are documented in this file.
 
 ## [Unreleased]
 
+## [0.7.12] - 2026-11-28
+
+### Fixed
+
+- The unified gateway preserves the final upstream 401/402/403/429 response,
+  including its error body and `Retry-After`, when no allowed candidate remains.
+  OpenRouter's free daily quota errors no longer become a generic local 502.
+  Earlier rejected candidates still rotate normally; transport failures retain
+  their gateway error behavior, and cancellation never replays a partial response.
+
 ## [0.7.11] - 2026-11-28
 
 ### Changed

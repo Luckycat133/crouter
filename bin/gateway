@@ -265,7 +265,7 @@ function handleMessage(clientReq, clientRes) {
     const RETRY_BACKOFF_MS = 400;
     // Returns { kind: 'retry' } to retry same candidate, { kind: 'response', res }
     // for a final upstream response, or { kind: 'failover' } to try next candidate.
-    function attemptCand(candidateIndex, attempt) {
+    function attemptCand(candidateIndex, attempt, hasNextCandidate) {
       return new Promise((resolve) => {
         let settled = false;
         const onAbort = () => settle({ kind: 'cancelled' });
@@ -312,8 +312,10 @@ function handleMessage(clientReq, clientRes) {
           const serverError = status >= 500 && status < 600;
           if (authFailure || serverError) route._candidateCooldown.fail(candidateIndex, upRes.headers);
           else route._candidateCooldown.clear(candidateIndex);
-          if (authFailure) {
-            // Exhausted candidate: fail over immediately, no retry.
+          if (authFailure && hasNextCandidate) {
+            // Fail over immediately when another candidate is available.
+            // The final auth/quota response must reach the client unchanged,
+            // including its status, body and Retry-After; it is not a local 502.
             upRes.resume();
             settle({ kind: 'failover' });
             return;
@@ -349,7 +351,7 @@ function handleMessage(clientReq, clientRes) {
           clientRes.writeHead(502, { 'content-type': 'application/json' });
           clientRes.end(
             JSON.stringify({
-              error: { type: 'all_candidates_failed', message: 'all auth candidates for ' + prefix + ' failed' },
+              error: { type: 'all_candidates_failed', message: 'no final upstream response available for ' + prefix },
             })
           );
         }
@@ -358,7 +360,7 @@ function handleMessage(clientReq, clientRes) {
       const candidateIndex = candidateOrder[position];
       for (let attempt = 0; attempt <= MAX_CANDIDATE_RETRIES; attempt++) {
         if (stopped()) return;
-        const result = await attemptCand(candidateIndex, attempt);
+        const result = await attemptCand(candidateIndex, attempt, position + 1 < candidateOrder.length);
         if (stopped() || result.kind === 'cancelled') return;
         if (result.kind === 'failover') {
           return tryCand(position + 1);

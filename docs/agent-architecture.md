@@ -37,6 +37,14 @@ Directory snapshots bind a provider, canonical directory URLs, the inference end
 
 `crouter all` switches model traffic only and defaults to a strict empty MCP profile. Native Claude login, Bedrock/Vertex/Foundry and provider session assets require direct launches. `all --check` checks configured structure and credential discovery; it neither proves live entitlement nor starts local providers.
 
+If the final allowed candidate returns HTTP 401/402/403/429, the unified gateway
+forwards that response's status, body and headers (including `Retry-After`)
+unchanged. Earlier rejected candidates still fail over before any response is
+committed to the client. If the final attempt instead fails at the transport
+layer without an HTTP response, a local 502 remains appropriate; earlier
+discarded errors are not replayed. Existing gateway processes must be recreated
+to load updated code.
+
 The unified gateway forwards client cancellation to its upstream HTTP request and response and stops pending retry waits. A normal completed request body is not a cancellation. Once response headers are forwarded, an upstream body error or premature close terminates the client response without changing candidates or replaying the request. Cancellation is scoped to one request and preserves other concurrent requests.
 
 ## Model context metadata

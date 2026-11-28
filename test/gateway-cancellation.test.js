@@ -314,3 +314,67 @@ test('gateway: an ordinary pre-response auth failure still uses the next candida
   assert.equal(f.calls.length, 2);
   f.assertNoErrors();
 });
+
+for (const status of [401, 402, 403, 429]) {
+  test(`gateway: exhausted HTTP ${status} preserves the final upstream error and Retry-After`, {timeout: 5000}, async (t) => {
+    const bodies = [
+      JSON.stringify({error: {type: 'first_error', message: 'first candidate rejected'}}),
+      JSON.stringify({error: {type: 'rate_limit_error', message: 'Rate limit exceeded: free-models-per-day-high-balance.'}}),
+    ];
+    const f = await fixture(t, ({request, response}) => {
+      const index = request.url.startsWith('/first/') ? 0 : 1;
+      response.writeHead(index === 0 ? 401 : status, {'Content-Type': 'application/json', 'Retry-After': '3600', 'X-Upstream-Fixture': String(index)});
+      response.end(bodies[index]);
+    });
+    // A streaming inference request must still receive an ordinary HTTP error,
+    // not a fabricated SSE response or a generic local 502.
+    const c = f.client({stream: true});
+    await waitFor(() => c.ended, 'final upstream error must finish', 2000);
+    assert.equal(c.status, status);
+    assert.equal(c.text, bodies[1]);
+    assert.equal(c.response.headers['retry-after'], '3600');
+    assert.equal(c.response.headers['x-upstream-fixture'], '1');
+    assert.equal(f.calls.length, 2, 'auth/quota failures rotate once without same-candidate retries');
+    assert.equal(f.calls[0].body.model, 'upstream-first');
+    assert.equal(f.calls[1].body.model, 'upstream-second');
+    assert.equal(f.calls[0].headers.authorization, 'Bearer fixture-plan-token');
+    assert.equal(f.calls[1].headers['x-api-key'], 'fixture-api-token');
+    f.assertNoErrors();
+  });
+}
+
+test('gateway: quota failure does not prevent the next allowed candidate succeeding', {timeout: 5000}, async (t) => {
+  const body = JSON.stringify({id: 'fixture-success', content: [{type: 'text', text: 'OK'}]});
+  const f = await fixture(t, ({request, response}) => {
+    if (request.url.startsWith('/first/')) {
+      response.writeHead(429, {'Content-Type': 'application/json', 'Retry-After': '60'});
+      response.end(JSON.stringify({error: {message: 'first quota exhausted'}}));
+    } else {
+      response.writeHead(200, {'Content-Type': 'application/json'});
+      response.end(body);
+    }
+  });
+  const c = f.client({stream: false});
+  await waitFor(() => c.ended, 'allowed second candidate must complete');
+  assert.equal(c.status, 200);
+  assert.equal(c.text, body);
+  assert.equal(c.response.headers['retry-after'], undefined, 'discarded candidate headers must not leak');
+  assert.equal(f.calls.length, 2);
+  f.assertNoErrors();
+});
+
+test('gateway: final quota response streams without buffering and cancellation stops it', {timeout: 5000}, async (t) => {
+  const f = await fixture(t, ({request, response}) => {
+    response.writeHead(429, {'Content-Type': 'application/json', 'Retry-After': '10'});
+    if (request.url.startsWith('/first/')) response.end('{"error":{"message":"first rejected"}}');
+    else response.write('{"error":{"message":"slow final error');
+  });
+  const c = f.client();
+  await waitFor(() => c.text.includes('slow final error'), 'final error headers and body must reach the client');
+  assert.equal(c.status, 429);
+  c.destroy();
+  await waitFor(() => f.calls[1].closedBeforeFinish, 'cancel must close the final error response');
+  assert.equal(f.calls.length, 2, 'a partly delivered error must not be replayed');
+  assert.ok(f.healthy(), f.diagnostics());
+  f.assertNoErrors();
+});

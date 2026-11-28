@@ -1,7 +1,7 @@
 # crouter
 
 [![CI](https://github.com/Luckycat133/crouter/actions/workflows/ci.yml/badge.svg)](https://github.com/Luckycat133/crouter/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/version-0.7.11-blue)
+![Version](https://img.shields.io/badge/version-0.7.12-blue)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 `crouter` launches Claude Code against audited Anthropic-compatible providers
@@ -10,6 +10,9 @@ keys, pay-as-you-go API keys, endpoints, auth headers, and model mappings as
 separate routing surfaces. It fails over on HTTP 401/402/403/429 without
 restarting Claude Code and temporarily cools down an exhausted candidate so
 the next request does not immediately spend another retry on it.
+When every allowed candidate rejects a request, the unified gateway preserves
+the final upstream HTTP status, error body and `Retry-After` header. A daily
+quota error remains 429 rather than becoming a misleading local 502.
 
 The original catalog was checked against vendor documentation on 2026-08-08,
 updated on 2026-09-26, and refreshed across all 36 provider contracts on
@@ -19,7 +22,7 @@ the full [docs index](docs/README.md) for the source matrix, architecture
 contracts, and decisions, plus [llms.txt](llms.txt) /
 [llms-full.txt](llms-full.txt) for machine-readable LLM indexes.
 
-`VERSION` is 0.7.11; release history and in-progress changes are recorded in
+`VERSION` is 0.7.12; release history and in-progress changes are recorded in
 [CHANGELOG.md](CHANGELOG.md). Offline checks run under both POSIX `sh` and `dash`;
 the `crouter-development` skill routing validator and its 24 isolated fixture
 checks pass under both `sh` and `dash` (package structure only; live-client and
