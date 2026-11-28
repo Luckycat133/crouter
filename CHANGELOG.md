@@ -4,6 +4,20 @@ All notable changes to this local setup are documented in this file.
 
 ## [Unreleased]
 
+## [0.7.11] - 2026-11-28
+
+### Changed
+
+- Bonsai 2.5 prefers the separately installed executable native
+  `start_bonsai25_agent_server.sh` launcher, which owns the GGUF backend and
+  persisted inference defaults. crouter retains adapter 11439 → native 8081
+  and adds no sampler, MTP, KV or native context settings.
+- GGUF service reuse requires healthy status `ok`, a `/props.model_path`
+  realpath matching the launcher's model declaration, and the exact friendly
+  model alias in `/v1/models`. Existing correct MLX services remain reusable,
+  and installations without the new launcher retain the old MLX startup path.
+  Incompatible occupied ports are rejected; cleanup retains session ownership.
+
 ## [0.7.10] - 2026-11-28
 
 ### Changed

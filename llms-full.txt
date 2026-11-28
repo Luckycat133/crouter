@@ -321,6 +321,7 @@ $$\text{cooldownMs} = \max\left(\text{CROUTER\_CANDIDATE\_COOLDOWN\_MS},\, \text
 - **Base Endpoint**: `http://127.0.0.1:11438`
 - **Engine**: 27B MLX 2-bit Hadamard quantized model running locally.
 - **Model**: `ternary-bonsai-2-27b` (262,144 context). Effort = `max`.
+- **Optional Bonsai 2.5**: `crouter bonsai --model ternary-bonsai-2.5-27b`, adapter 11439 → native 8081. If installed, `scripts/start_bonsai25_agent_server.sh` is preferred and owns persisted sampler/cache/MTP/context defaults. GGUF reuse verifies health `ok`, props model-file realpath against `--check.model_path`, and the exact friendly alias. Existing correct MLX listeners remain reusable; absent-wrapper startup retains MLX. The generic provider default stays Bonsai 2.
 
 #### MLX-VLM Local Inference (`mlx-vlm`)
 - **Launch**: `crouter mlx-vlm`; default `inkling-2-mini:latest`, also accepts `inkling-2-mini`.

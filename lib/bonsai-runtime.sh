@@ -21,25 +21,54 @@ bonsai_model_plan() {
   HEALTH_CHECK_URL=$BASE_URL/health
 }
 
-# A model listing alone does not prove which model is loaded. Both endpoints
-# must identify the installed pack (symlink paths are compared by realpath).
+# A model listing alone does not prove which model is loaded. MLX identifies
+# its pack in health; GGUF identifies its model file in props. Compare realpaths.
 bonsai_native_identity() {
   _bonsai_native_health=$(curl -fsS --max-time 3 "http://127.0.0.1:8081/health" 2>/dev/null) || return 1
   _bonsai_native_models=$(curl -fsS --max-time 3 "http://127.0.0.1:8081/v1/models" 2>/dev/null) || return 1
+  _bonsai_native_status=$(node -e 'try { process.stdout.write(JSON.parse(process.argv[1]).status || ""); } catch { process.exit(1); }' "$_bonsai_native_health") || return 1
+  _bonsai_native_props=
+  _bonsai_gguf_model=
+  case $_bonsai_native_status in
+    healthy) ;;
+    ok)
+      # The native launcher declares the expected file without loading it. Do
+      # not run it for an existing MLX service, which remains valid on upgrades.
+      [ -x "$_bonsai_demo_dir/scripts/start_bonsai25_agent_server.sh" ] || return 1
+      _bonsai_native_plan=$("$_bonsai_demo_dir/scripts/start_bonsai25_agent_server.sh" --check) || return 1
+      _bonsai_gguf_model=$(node -e '
+        try {
+          const path = JSON.parse(process.argv[1]).model_path;
+          if (typeof path !== "string" || !path) process.exit(1);
+          process.stdout.write(path);
+        } catch { process.exit(1); }
+      ' "$_bonsai_native_plan") || return 1
+      _bonsai_native_props=$(curl -fsS --max-time 3 "http://127.0.0.1:8081/props" 2>/dev/null) || return 1
+      ;;
+    *) return 1 ;;
+  esac
   node -e '
     const fs = require("fs");
     try {
-      const expected = fs.realpathSync(process.argv[1]);
       const health = JSON.parse(process.argv[2]);
       const models = JSON.parse(process.argv[3]);
-      if (health.status !== "healthy" || fs.realpathSync(health.loaded_model) !== expected) process.exit(1);
-      const match = models.data?.find(row => {
-        try { return fs.realpathSync(row.id) === expected; } catch { return false; }
-      });
+      let match;
+      if (health.status === "healthy") {
+        const expected = fs.realpathSync(process.argv[1]);
+        if (fs.realpathSync(health.loaded_model) !== expected) process.exit(1);
+        match = models.data?.find(row => {
+          try { return fs.realpathSync(row.id) === expected; } catch { return false; }
+        });
+      } else if (health.status === "ok") {
+        const expected = fs.realpathSync(process.argv[5]);
+        const props = JSON.parse(process.argv[4]);
+        if (fs.realpathSync(props.model_path) !== expected) process.exit(1);
+        match = models.data?.find(row => row.id === process.argv[6]);
+      }
       if (!match) process.exit(1);
       process.stdout.write(match.id);
     } catch { process.exit(1); }
-  ' "$_bonsai_demo_dir/models/Ternary-Bonsai-2.5-27B-mlx-2bit" "$_bonsai_native_health" "$_bonsai_native_models"
+  ' "$_bonsai_demo_dir/models/Ternary-Bonsai-2.5-27B-mlx-2bit" "$_bonsai_native_health" "$_bonsai_native_models" "$_bonsai_native_props" "$_bonsai_gguf_model" "$_bonsai_selected_model"
 }
 
 bonsai_start() {
@@ -56,8 +85,12 @@ bonsai_start() {
       if lsof -nP -iTCP:8081 -sTCP:LISTEN >/dev/null 2>&1; then
         die 'Bonsai native service on port 8081 cannot be verified as the selected Bonsai 2.5 model'
       fi
-      [ -x "$_bonsai_demo_dir/scripts/start_mlx_server.sh" ] || die "Bonsai native launcher not found in $_bonsai_demo_dir"
-      BONSAI_FAMILY=bonsai25 BONSAI_MODEL=27B PORT=8081 nohup "$_bonsai_demo_dir/scripts/start_mlx_server.sh" >>/tmp/crouter-bonsai-native.log 2>&1 &
+      if [ -x "$_bonsai_demo_dir/scripts/start_bonsai25_agent_server.sh" ]; then
+        nohup "$_bonsai_demo_dir/scripts/start_bonsai25_agent_server.sh" >>/tmp/crouter-bonsai-native.log 2>&1 &
+      else
+        [ -x "$_bonsai_demo_dir/scripts/start_mlx_server.sh" ] || die "Bonsai native launcher not found in $_bonsai_demo_dir"
+        BONSAI_FAMILY=bonsai25 BONSAI_MODEL=27B PORT=8081 nohup "$_bonsai_demo_dir/scripts/start_mlx_server.sh" >>/tmp/crouter-bonsai-native.log 2>&1 &
+      fi
       _BONSAI_NATIVE_PID=$!
       _bonsai_wait=0
       while [ "$_bonsai_wait" -lt 180 ]; do

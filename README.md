@@ -1,7 +1,7 @@
 # crouter
 
 [![CI](https://github.com/Luckycat133/crouter/actions/workflows/ci.yml/badge.svg)](https://github.com/Luckycat133/crouter/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/version-0.7.10-blue)
+![Version](https://img.shields.io/badge/version-0.7.11-blue)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 `crouter` launches Claude Code against audited Anthropic-compatible providers
@@ -19,7 +19,7 @@ the full [docs index](docs/README.md) for the source matrix, architecture
 contracts, and decisions, plus [llms.txt](llms.txt) /
 [llms-full.txt](llms-full.txt) for machine-readable LLM indexes.
 
-`VERSION` is 0.7.10; release history and in-progress changes are recorded in
+`VERSION` is 0.7.11; release history and in-progress changes are recorded in
 [CHANGELOG.md](CHANGELOG.md). Offline checks run under both POSIX `sh` and `dash`;
 the `crouter-development` skill routing validator and its 24 isolated fixture
 checks pass under both `sh` and `dash` (package structure only; live-client and
@@ -315,7 +315,7 @@ limit; the selected vendor model or native backend remains authoritative.
 | `antigravity` | local proxy | `gemini-3.8-flash` | 1,048,576 | — |
 | `antigravity-claude` | local proxy | `claude-opus-5-5-medium` | 200,000 | — |
 | `bedrock` | native AWS credentials | `sonnet` alias | — | — |
-| `bonsai` | local MLX 2-bit | `ternary-bonsai-2-27b` | 262,144 | — |
+| `bonsai` | local MLX / GGUF | `ternary-bonsai-2-27b` | 262,144 | — |
 | `mlx-vlm` | local official MLX-VLM | `inkling-2-mini:latest` | 1,048,576 | native APC / DSpark defaults |
 | `codex` | local ChatGPT subscription proxy | `gpt-5.6-sol` | 1,050,000 | — |
 | `dashscope` | Token Plan + API | `qwen3.8-max` | 983,616 | Plan media skill + API WebSearch MCP |
@@ -795,19 +795,29 @@ The 373,760-token cap applies only to the exact `deepseek-v4-flash:q8` and
 Ollama models retain the conservative 65,536-token fallback unless another
 exact override is added to `MODEL_CONTEXT_OVERRIDES`.
 
-Bonsai serves local Ternary Bonsai MLX models (27B, 2-bit) through the
+Bonsai serves local Ternary Bonsai models through the
 session-owned Anthropic-compatible adapter. The default `ternary-bonsai-2-27b`
 profile (alias `bonsai`) uses adapter port 11438 → native port 8000 against
 the legacy PrismML runtime, which crouter keeps but neither starts nor owns;
 its declared client window is 262,144 tokens. `ternary-bonsai-2.5-27b` uses a
 separate adapter port 11439 → native port 8081 and declares a 262,144-token
 client window (native `MAX_OUTPUT_TOKENS` is not explicitly set by crouter).
-It resolves the native pack at `$BONSAI_DEMO_DIR/models/Ternary-Bonsai-2.5-27B-mlx-2bit`
-(default sibling `Bonsai-demo`); port 8081 `/health` and `/v1/models` must
-identify the pack by realpath before the adapter starts, an already compatible
-native listener is reused and never replaced or owned, and only session-started
-processes are stopped at exit. The adapter runs with `MLX_INHERIT_DEFAULTS=1`,
-inheriting native sampler/cache/MTP defaults and keeping the selected model ID.
+When a native service is needed, crouter prefers the installed executable
+`$BONSAI_DEMO_DIR/scripts/start_bonsai25_agent_server.sh` (default sibling
+`Bonsai-demo`). This native wrapper owns the Bonsai 2.5 GGUF backend and its
+persisted sampler, cache, MTP and context defaults. Its `--check` output declares
+the expected `model_path` without loading a model. GGUF identity requires
+`/health` status `ok`, `/props.model_path` matching that file by realpath, and
+`/v1/models` containing the exact `ternary-bonsai-2.5-27b` alias.
+
+Without that wrapper, startup falls back to `scripts/start_mlx_server.sh` with
+family `bonsai25`, size `27B` and port `8081`. An existing correct MLX service
+also remains reusable after installing the wrapper: `/health.loaded_model` and
+`/v1/models` must identify `models/Ternary-Bonsai-2.5-27B-mlx-2bit` by realpath.
+Compatible native listeners are reused without ownership; incompatible occupied
+ports are rejected, and only session-started processes are stopped at exit.
+The adapter runs with `MLX_INHERIT_DEFAULTS=1`, keeping the selected model ID
+and leaving inference defaults to the native backend.
 Select with `crouter bonsai --model ternary-bonsai-2.5-27b`. These are direct
 provider launches only; `crouter all` does not yet perform per-model local
 service startup, so full all-mode support is not claimed.
