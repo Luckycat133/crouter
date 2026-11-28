@@ -114,7 +114,8 @@ session are stopped; the native launcher's exec chain preserves that PID.
 Planning and save-only use pure model selection and never start a service.
 Both IDs keep the 1,048,576 client window and all tiers on the same ID.
 
-The separately installed local backend pins official mlx-vlm 0.8.1, uses
+The local launcher reuses Bonsai-demo’s existing `.venv-vlm`, upgraded in
+place to official mlx-vlm 0.8.1; it has no separate Inkling venv. It uses
 original weights and bundled DSpark, and retains BF16 KV because the
 Inkling-specific Q8 path is incompatible. Offline fixtures verify transport
 and lifecycle, not actual model inference or cache hit performance. This

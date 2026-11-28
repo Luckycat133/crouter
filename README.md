@@ -680,13 +680,14 @@ per-response token cap. The reasoning effort remains `xhigh`. Configure the
 Ollama model with `num_ctx=262144` to match the advertised native window.
 
 `crouter ollama inkling-2-mini:latest` passes 1,048,576 client context.
-By default it uses the saved Ollama model. To use a separately installed
-official mlx-vlm Inkling backend, set `OLLAMA_INKLING_MLX_VLM=1` in the local
+By default it uses the saved Ollama model. To use the official
+mlx-vlm Inkling backend, set `OLLAMA_INKLING_MLX_VLM=1` in the local
 `config.sh`. Both `inkling-2-mini` and `inkling-2-mini:latest` then use the
 Anthropic adapter on 11440 → native service on 8082. The native launcher is
 `$HOME/.local/share/local-llm/inkling-mlx-vlm/start-server.sh`; override its
 directory with `INKLING_MLX_RUNTIME_DIR`. Its `model` link must identify the
-original local Inkling checkpoint. This backend is installed separately;
+original local Inkling checkpoint. The local launcher uses Bonsai-demo’s
+existing `.venv-vlm`, upgraded in place to official mlx-vlm 0.8.1; there is no separate Inkling venv.
 crouter does not download weights or install Python packages.
 
 Sampling, cache and draft defaults belong to that native backend. The local

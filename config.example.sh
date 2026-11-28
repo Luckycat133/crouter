@@ -30,8 +30,8 @@
 # Create the native Ollama aliases documented in README before enabling.
 #OLLAMA_QWEN38_PRICING_ALIASES=1
 
-# Optional dedicated official mlx-vlm Inkling backend. Default: 0 (Ollama).
-# Install its native launcher/model link separately; see README.
+# Optional official mlx-vlm Inkling backend. Default: 0 (Ollama).
+# Configure its native launcher/model link and shared environment; see README.
 #OLLAMA_INKLING_MLX_VLM=1
 #INKLING_MLX_RUNTIME_DIR="$HOME/.local/share/local-llm/inkling-mlx-vlm"
 
