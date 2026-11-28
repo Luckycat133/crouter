@@ -7,7 +7,7 @@ description: Develop, review and validate crouter, the interactive model and acc
 
 ## 产品边界
 
-使用端只有 Claude Code。API、订阅、多 Key、本地推理与 App 反代是模型来源，不是其他客户端。日常操作以裸 `crouter` 交互为主，脚本保留 `run` 等入口。不另造多客户端平台、强制 Profile 或大型 Web 控制台；现有 app 冻结兼容。只安装 crouter，不恢复退役快捷入口、不覆盖原生 claude。
+使用端只有 Claude Code。API、订阅、多 Key、本地推理与 App 反代是模型来源，不是其他客户端。日常操作以裸 `crouter` 交互为主，脚本通过 `crouter <provider>` 直接指定来源。不另造多客户端平台、强制 Profile 或大型 Web 控制台；现有 app 冻结兼容。只安装 crouter，不恢复退役快捷入口、不覆盖原生 claude。
 
 ## 开始任务
 

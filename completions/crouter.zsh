@@ -18,7 +18,7 @@ _crouter_providers() {
 _crouter_complete() {
   local -a cmds providers native_apps candidates
   local app
-  cmds=(run use claude app all list doctor add remove provider config migrate logs uninstall help --version)
+  cmds=(use claude app all list doctor add remove provider config migrate logs uninstall help --version)
   providers=(${(f)"$(_crouter_providers)"})
   native_apps=(claude codex gemini opencode copilot cursor kiro qoder kimi qwen amp vibe muse kilo)
   if (( CURRENT == 2 )); then

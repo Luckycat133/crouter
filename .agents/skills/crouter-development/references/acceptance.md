@@ -6,7 +6,7 @@
 
 | ID | Given / When | Then |
 | --- | --- | --- |
-| UX-01 | TTY 裸 crouter；无选择、有选择、管道 stdin 分别运行 | 主页/向导正确；非 TTY 不挂起、不消费 Claude stdin，run 脚本兼容 |
+| UX-01 | TTY 裸 crouter；无选择、有选择、管道 stdin 分别运行 | 主页/向导正确，非 TTY 时启动已保存的目标，保留供客户端读取的 stdin |
 | UX-02 | 搜索 qwen、中文名称、粘贴多字符、逐字与分片输入 | q 不退出，Unicode 不截断，结果稳定；复用已有 picker 回归 |
 | UX-03 | 有旧模型时取消选择，或向导中返回/取消 | 不启动旧模型、不产生部分保存、不写真实凭证；另以 CFG-03 测启动前副作用 |
 | UX-04 | 小终端、resize、无颜色、异常、SIGINT/SIGTERM | 界面可用，raw mode、光标和屏幕恢复 |
@@ -52,7 +52,7 @@
 | ID | Given / When | Then |
 | --- | --- | --- |
 | BUILD-01 | 当前 SHA 的 CI；带空格路径；同时考虑成功和提前失败 | 按实际 job/步骤/断言记录结果；失败后的 skipped 不算通过，成功也不代表未写反例已覆盖 |
-| CLI-01 | crouter provider、run、use、原生 claude 路径及参数转发 | 保持有效契约；stub 的 argv/stdin/env/退出码准确，帮助无启动副作用 |
+| CLI-01 | crouter provider、use、裸 crouter、原生 claude 路径及参数转发 | 保持有效契约；stub 的 argv/stdin/env/退出码准确，帮助无启动副作用 |
 | CLI-02 | 脚本以 claude 命名，PATH 中包含包装器；显式/未设真实 CLAUDE_BIN | provider 分发与原生子命令可区分；防止自调用循环，不覆盖真实 CLI |
 | CLI-03 | 安装/卸载，旧 claude-* 残留、另一 checkout 链接和同名普通文件 | 不新建退役入口；不删除无关文件，残留迁移策略明确且可重复 |
 | CLI-04 | helper 调用有缺失、stderr 有错误但后续命令返回 0 | 回归能捕获缺失 helper 与错误映射，不能只检查最终退出码 |

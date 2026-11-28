@@ -25,7 +25,7 @@ _crouter_complete() {
   local cur cmds providers native_apps candidates app
   COMPREPLY=()
   cur="${COMP_WORDS[COMP_CWORD]:-}"
-  cmds="run use claude app all list doctor add remove provider config migrate logs uninstall help --version"
+  cmds="use claude app all list doctor add remove provider config migrate logs uninstall help --version"
   providers="$(_crouter_providers)"
   native_apps="claude codex gemini opencode copilot cursor kiro qoder kimi qwen amp vibe muse kilo"
   candidates=""

@@ -3,7 +3,6 @@
 #
 # Usage:
 #   crouter                               Interactive home (TTY); selected target (pipes)
-#   crouter run [args...]                 Launch the selected target without a menu
 #   crouter use [<provider>|app/<name>]    Show or select a persistent target
 #   crouter use --clear                   Clear the persistent target
 #   crouter claude [args...]              Native Claude Code login/passthrough
@@ -63,15 +62,14 @@ if [ "${1:-}" = app ]; then
   native_app_dispatch "$@"
   exit $?
 fi
-# Bare crouter is interactive only when BOTH streams are terminals. Never eat
-# stdin belonging to a piped Claude prompt, and never change crouter run.
+# Bare crouter is interactive only when BOTH streams are terminals. Leave
+# stdin belonging to a piped Claude prompt for the selected target to read.
 if [ $# -eq 0 ] && [ -t 0 ] && [ -t 1 ]; then set -- home; fi
 case ${1:-} in
-  use|run|'')
+  use|'')
     . "$LIB_DIR/native-apps.sh"
     . "$LIB_DIR/selection.sh"
     if [ "${1:-}" = use ]; then shift; selection_dispatch "$@"; exit $?; fi
-    [ "${1:-}" = run ] && shift
     selection_require || exit $?
     if [ "$CROUTER_SELECTION_KIND" = app ]; then native_app_run "$CROUTER_SELECTION_NAME" "$@"; exit $?; fi
     set -- "$CROUTER_SELECTION_NAME" "$@"

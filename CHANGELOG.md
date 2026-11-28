@@ -4,6 +4,15 @@ All notable changes to this local setup are documented in this file.
 
 ## [Unreleased]
 
+## [0.7.14] - 2026-11-28
+
+### Removed
+
+- Remove the `crouter run` subcommand. Scripts that pass arguments should call
+  `crouter <provider>` or `crouter app <name>` directly. Bare `crouter` opens
+  the interactive home in a terminal and launches the saved target when stdin
+  or stdout is redirected.
+
 ## [0.7.13] - 2026-11-28
 
 ### Added

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Persistent default target for `crouter` and `crouter run`. Sourced before
+# Persistent default target for `crouter`. Sourced before
 # config.sh so a selected native app follows the same isolated dispatch as
 # `crouter app <name>`. The file is data, never shell code.
 

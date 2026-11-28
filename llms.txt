@@ -8,7 +8,7 @@ crouter launches Anthropic Claude Code and native coding agents against audited 
 - **Project**: crouter
 - **Repository**: https://github.com/Luckycat133/crouter
 - **License**: MIT
-- **Version**: 0.7.13
+- **Version**: 0.7.14
 - **Primary Runtime**: POSIX sh / dash / zsh / bash (zero daemon requirement for direct routes)
 - **Supported Platforms**: macOS (native Keychain support), Linux, BSD
 - **Core Integrations**: Anthropic Claude Code, Cursor, OpenAI Codex, Windsurf, Cline, Gemini CLI, OpenCode, Copilot CLI
@@ -45,7 +45,9 @@ crouter all --check
 # Persistent target selection
 crouter use minimax
 crouter use app/codex
-crouter run -p "Audit security posture"
+
+# Pass arguments to an explicit provider
+crouter minimax -p "Audit security posture"
 
 # Provider catalog and environment diagnostics
 crouter list --all

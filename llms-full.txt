@@ -351,14 +351,14 @@ $$\text{cooldownMs} = \max\left(\text{CROUTER\_CANDIDATE\_COOLDOWN\_MS},\, \text
 ### 4.1 Launching & Execution
 
 ```sh
-# Launch current persistent target
+# Open the interactive home, or launch the saved target with redirected I/O
 crouter
-crouter run [claude-args...]
 
 # Launch specific provider with optional model override
 crouter <provider>
 crouter <provider> <model> [claude-args...]
 crouter deepseek
+crouter minimax -p 'hello'
 crouter dashscope qwen3.8-max
 crouter openrouter --model nvidia/nemotron-3.5-super-vl:free
 
@@ -504,10 +504,9 @@ Cursor can route model calls through `crouter` via custom OpenAI/Anthropic endpo
    ```sh
    crouter app codex [args...]
    ```
-2. Or persistent selection:
+2. Save Codex as the target for bare `crouter` when stdin or stdout is redirected:
    ```sh
    crouter use app/codex
-   crouter run
    ```
 3. To route Claude Code through ChatGPT subscription:
    ```sh

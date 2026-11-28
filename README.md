@@ -1,7 +1,7 @@
 # crouter
 
 [![CI](https://github.com/Luckycat133/crouter/actions/workflows/ci.yml/badge.svg)](https://github.com/Luckycat133/crouter/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/version-0.7.13-blue)
+![Version](https://img.shields.io/badge/version-0.7.14-blue)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 `crouter` launches Claude Code against audited Anthropic-compatible providers
@@ -22,7 +22,7 @@ the full [docs index](docs/README.md) for the source matrix, architecture
 contracts, and decisions, plus [llms.txt](llms.txt) /
 [llms-full.txt](llms-full.txt) for machine-readable LLM indexes.
 
-`VERSION` is 0.7.13; release history and in-progress changes are recorded in
+`VERSION` is 0.7.14; release history and in-progress changes are recorded in
 [CHANGELOG.md](CHANGELOG.md). Offline checks run under both POSIX `sh` and `dash`;
 the `crouter-development` skill routing validator and its 24 isolated fixture
 checks pass under both `sh` and `dash` (package structure only; live-client and
@@ -197,8 +197,7 @@ crouter app list                   # installed coding-agent CLIs
 crouter app codex --help           # run Codex with its own login and flags
 crouter app muse                   # run Muse Code with its own login
 crouter use app/codex              # select Codex for future launches
-crouter                            # open the interactive home, or run the saved target from a pipe
-crouter run --help                 # forward arguments to the selected target
+crouter                            # open the interactive home, or launch the saved target with redirected I/O
 crouter use                       # show the selected target
 crouter use minimax               # select a Claude Code provider instead
 crouter use --clear               # remove the selection
@@ -243,13 +242,12 @@ For provider launches, the first bare argument before any flag is a
 primary-model override. Remaining arguments are forwarded to Claude Code.
 
 `crouter use <provider>` selects a provider from `crouter list --all`, while
-`crouter use app/<name>` selects a native CLI from `crouter app list`. The
-selection affects future bare `crouter` and `crouter run [args...]` launches;
-it does not change an already running client. Direct `crouter <provider>` and
-`crouter app <name>` launches remain available and do not change the selection.
-For example, `crouter use minimax` followed by `crouter run -p 'hello'` uses
-the MiniMax provider through Claude Code, while `crouter use app/gemini`
-followed by `crouter run --help` invokes Gemini with its own account.
+`crouter use app/<name>` selects a native CLI from `crouter app list`. Bare
+`crouter` opens the interactive home when stdin and stdout are terminals. With
+either stream redirected, it launches the saved target and passes stdin through.
+To pass arguments in a script, select the target on the command line, such as
+`crouter minimax -p 'hello'` or `crouter app gemini --help`. These direct launches
+leave the saved selection in place.
 
 The selected target is stored as a single mode-600 file at
 `${XDG_STATE_HOME:-$HOME/.local/state}/crouter/selection`. If it is missing,

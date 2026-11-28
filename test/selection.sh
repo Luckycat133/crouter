@@ -64,7 +64,6 @@ assert_rejected() {
 [ "$("$CLI" use)" = none ] || fail 'unselected state not shown'
 assert_rejected 'bare launch without selection'
 grep -q 'run crouter use' "$TEST_DIR/rejected.out"
-assert_rejected 'run without selection' run --help
 assert_no_setup
 
 [ "$("$CLI" use app/codex)" = 'selected: app/codex' ] || fail 'app selection output'
@@ -79,11 +78,11 @@ grep -qx '' "$FAKE_ROOT/capture/url"
 grep -qx '' "$FAKE_ROOT/capture/model"
 assert_no_setup
 
-OPENAI_API_KEY=native-secret "$CLI" run '' 'two words' --model 'a*b'
+OPENAI_API_KEY=native-secret "$CLI" app codex '' 'two words' --model 'a*b'
 printf '%s\000' '' 'two words' --model 'a*b' > "$TEST_DIR/expected-args"
 cmp "$TEST_DIR/expected-args" "$FAKE_ROOT/capture/args"
 assert_no_setup
-if APP_EXIT_CODE=23 "$CLI" run --probe > "$TEST_DIR/status.out" 2>&1; then
+if APP_EXIT_CODE=23 "$CLI" app codex --probe > "$TEST_DIR/status.out" 2>&1; then
   fail 'native exit status was dropped'
 else
   _status=$?
@@ -113,8 +112,8 @@ if CLAUDE_BIN=$FAKE_ROOT/bin/claude "$CLI" use > "$TEST_DIR/removed-app.out" 2>&
 fi
 grep -q 'not installed or executable' "$TEST_DIR/removed-app.out"
 grep -q 'crouter use --clear' "$TEST_DIR/removed-app.out"
-if CLAUDE_BIN=$FAKE_ROOT/bin/claude "$CLI" run --probe > "$TEST_DIR/removed-app.out" 2>&1; then
-  fail 'run accepted a removed selected CLI'
+if CLAUDE_BIN=$FAKE_ROOT/bin/claude "$CLI" > "$TEST_DIR/removed-app.out" 2>&1; then
+  fail 'bare launch accepted a removed selected CLI'
 fi
 grep -q 'not installed or executable' "$TEST_DIR/removed-app.out"
 [ "$(cat "$STATE")" = app/claude ] || fail 'removed CLI changed saved selection'
@@ -125,7 +124,7 @@ cp "$FAKE_ROOT/bin/codex" "$FAKE_ROOT/bin/claude"
 # Switching apps changes only future launches; direct app launches do not
 # rewrite the saved target.
 "$CLI" use app/gemini > /dev/null
-"$CLI" run --probe
+"$CLI" > /dev/null
 grep -qx gemini "$FAKE_ROOT/capture/binary"
 "$CLI" app codex --probe
 [ "$(cat "$STATE")" = app/gemini ] || fail 'direct app launch changed selection'
@@ -136,7 +135,7 @@ assert_no_setup
 # A provider selection uses the existing config and cmd_run environment.
 "$CLI" use demo > /dev/null
 rm -f "$FAKE_ROOT/config-sourced" "$FAKE_ROOT/provider-lib-sourced"
-"$CLI" run --model custom -p 'two words'
+"$CLI" demo --model custom -p 'two words'
 grep -qx sourced "$FAKE_ROOT/config-sourced"
 grep -qx sourced "$FAKE_ROOT/provider-lib-sourced"
 grep -qx claude "$FAKE_ROOT/capture/binary"
@@ -149,7 +148,7 @@ printf '%s\000' -p 'two words' > "$TEST_DIR/expected-args"
 cmp "$TEST_DIR/expected-args" "$FAKE_ROOT/capture/args"
 "$CLI" > /dev/null
 grep -qx demo-model "$FAKE_ROOT/capture/model"
-"$CLI" run alternate -p prompt > /dev/null
+"$CLI" demo alternate -p prompt > /dev/null
 grep -qx alternate "$FAKE_ROOT/capture/model"
 printf '%s\000' -p prompt > "$TEST_DIR/expected-args"
 cmp "$TEST_DIR/expected-args" "$FAKE_ROOT/capture/args"
@@ -164,30 +163,30 @@ chmod 644 "$STATE"
 # A removed provider and malformed records fail with a repair instruction;
 # stored shell syntax must never execute.
 rm "$FAKE_ROOT/providers/demo.sh"
-assert_rejected 'removed provider' run
+assert_rejected 'removed provider'
 grep -q 'run crouter use' "$TEST_DIR/rejected.out"
 cp "$TEST_DIR/demo-provider.sh" "$FAKE_ROOT/providers/demo.sh"
 rm -f "$FAKE_ROOT/config-sourced" "$FAKE_ROOT/provider-lib-sourced"
 printf 'app/codex\nextra\n' > "$STATE"
-assert_rejected 'multiline state' run
+assert_rejected 'multiline state'
 grep -q 'crouter use --clear' "$TEST_DIR/rejected.out"
 assert_no_setup
 # shellcheck disable=SC2016
 printf '\$(touch "$ROOT_DIR/selection-pwned")\n' > "$STATE"
-assert_rejected 'shell syntax in state' run
+assert_rejected 'shell syntax in state'
 [ ! -e "$FAKE_ROOT/selection-pwned" ] || fail 'stored state was executed'
 printf 'app/codex\000\n' > "$STATE"
-assert_rejected 'NUL in state' run
+assert_rejected 'NUL in state'
 ln -s "$TEST_DIR/symlink-target" "$TEST_DIR/symlink-record"
 rm "$STATE"
 ln -s "$TEST_DIR/symlink-record" "$STATE"
-assert_rejected 'symlink state' run
+assert_rejected 'symlink state'
 assert_no_setup
 
 "$CLI" use --clear > /dev/null
 [ ! -e "$STATE" ] && [ ! -L "$STATE" ] || fail 'clear left selection state'
 [ "$("$CLI" use)" = none ] || fail 'clear did not reset displayed selection'
-assert_rejected 'run after clear' run
+assert_rejected 'bare launch after clear'
 grep -q 'no target selected' "$TEST_DIR/rejected.out"
 "$CLI" use --clear > /dev/null
 
@@ -198,5 +197,10 @@ grep -q 'XDG_STATE_HOME must be an absolute path' "$TEST_DIR/relative.out"
 HOME=$TEST_DIR/home XDG_STATE_HOME= "$CLI" use app/codex > /dev/null
 [ "$(cat "$TEST_DIR/home/.local/state/crouter/selection")" = app/codex ] ||
   fail 'HOME fallback state path'
+
+"$CLI" use demo > /dev/null
+assert_rejected 'removed run subcommand' run --help
+grep -q "unknown provider 'run'" "$TEST_DIR/rejected.out"
+[ "$(cat "$STATE")" = demo ] || fail 'removed subcommand changed selection'
 
 printf 'ok    persistent provider and native-app target selection\n'

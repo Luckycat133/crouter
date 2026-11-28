@@ -18,7 +18,7 @@
 | DEV-03 | IN_PROGRESS | 目录、首页、计划和统一网关均校验 scope 与时效；供应商真实目录权益、能力和费率仍待验收 | DEV-01, DEV-15 | CAT-01, CAT-02, CAT-03, CAT-04, CAT-05, CAT-06, CFG-06 |
 | DEV-04 | IN_PROGRESS | 裸双 TTY 首页已验证收藏、最近成功、按来源筛选、启动失败后返回及内置来源入口；真实终端走查和自定义来源向导待完成 | DEV-02, DEV-03 | UX-01, UX-02, UX-03, UX-04, UX-05, UX-07, UX-08 |
 | DEV-05 | IN_PROGRESS | 复用 Key 增删和计费面选择；补批量、用户标签/账号、补偿和拒绝语义 | DEV-04 | UX-06, AUTH-01, AUTH-02, AUTH-03 |
-| DEV-06 | IN_PROGRESS | 现有 run/use、stdin/argv、防递归、安装/迁移离线回归通过；新交互集成和真实平台验收仍待完成 | DEV-04, DEV-05, DEV-15 | UX-01, STATE-01, CLI-01, CLI-02, CLI-03 |
+| DEV-06 | IN_PROGRESS | 现有目标选择、stdin/argv、防递归、安装/迁移离线回归通过；新交互集成和真实平台验收仍待完成 | DEV-04, DEV-05, DEV-15 | UX-01, STATE-01, CLI-01, CLI-02, CLI-03 |
 
 不可将 OpenRouter hook 测试当作带空格别名从 `bin/crouter` 可达的证明；不可将 loadCatalog 的 scope 测试当作主页/统一网关已隔离的证明。新反例归入对应功能任务，不回退已确认的历史基线。
 
