@@ -10,9 +10,17 @@ MODEL="qwen3.8:27b-dflash"
 CONTEXT_TOKENS="65536"
 # Keep context windows scoped to the selected model; both native Qwen routes
 # and the DFlash profile retain their 262K window.
-MODEL_CONTEXT_OVERRIDES="deepseek-v4-flash:q8=373760 deepseek-v4-flash=373760 qwen3.8-27b=262144 qwen3.8-27b-heretic:q4=262144 qwen3.8-27b-heretic:q4-dflash=262144 qwen3.8-27b-heretic=262144 qwen3.8:27b-dflash=262144 inkling-2-mini=1048576 inkling-2-mini:latest=1048576 qwen3.6-hauhau:35b-a3b-q4_k_p=262144 qwen3.8-abliterated:27b-dflash=262144"
-MODEL_SELF_ROUTE_MODELS="deepseek-v4-flash:q8 deepseek-v4-flash qwen3.8-27b qwen3.8-27b-heretic:q4 qwen3.8-27b-heretic:q4-dflash qwen3.8-27b-heretic qwen3.8:27b-dflash qwen3.8-abliterated:27b-dflash qwen3.6-hauhau:35b-a3b-q4_k_p inkling-2-mini inkling-2-mini:latest"
-MODEL_ALIASES="qwen3.8:27b-dflash qwen3.8-abliterated:27b-dflash qwen3.6-hauhau:35b-a3b-q4_k_p inkling-2-mini:latest"
+MODEL_CONTEXT_OVERRIDES="deepseek-v4-flash:q8=373760 deepseek-v4-flash=373760 qwen3.8-27b=262144 qwen3.8-27b-heretic:q4=262144 qwen3.8-27b-heretic:q4-dflash=262144 qwen3.8-27b-heretic=262144 qwen3.8:27b-dflash=262144 dflash/qwen3.8-27b=262144 inkling-2-mini=1048576 inkling-2-mini:latest=1048576 qwen3.6-hauhau:35b-a3b-q4_k_p=262144 qwen3.8-abliterated:27b-dflash=262144 abliterated-dflash/qwen3.8-27b=262144"
+MODEL_SELF_ROUTE_MODELS="deepseek-v4-flash:q8 deepseek-v4-flash qwen3.8-27b qwen3.8-27b-heretic:q4 qwen3.8-27b-heretic:q4-dflash qwen3.8-27b-heretic qwen3.8:27b-dflash dflash/qwen3.8-27b qwen3.8-abliterated:27b-dflash abliterated-dflash/qwen3.8-27b qwen3.6-hauhau:35b-a3b-q4_k_p inkling-2-mini inkling-2-mini:latest"
+MODEL_ALIASES="qwen3.8:27b-dflash dflash/qwen3.8-27b qwen3.8-abliterated:27b-dflash abliterated-dflash/qwen3.8-27b qwen3.6-hauhau:35b-a3b-q4_k_p inkling-2-mini:latest"
+# Ollama's catalog appends :latest to these exact copies; keep their standard
+# basenames in the selected ID without stripping tags from other models.
+MODEL_ID_ALIASES="abliterated-dflash/qwen3.8-27b:latest=abliterated-dflash/qwen3.8-27b dflash/qwen3.8-27b:latest=dflash/qwen3.8-27b"
+# Opt in only after installing the corresponding Ollama copies. Each keeps its
+# variant while exposing a standard basename for usage pricing.
+if [ "${OLLAMA_QWEN38_PRICING_ALIASES:-0}" = 1 ]; then
+  MODEL_ID_ALIASES="$MODEL_ID_ALIASES qwen3.8:27b-dflash=dflash/qwen3.8-27b qwen3.8-abliterated:27b-dflash=abliterated-dflash/qwen3.8-27b"
+fi
 EFFORT="xhigh"
 
 # DeepSeek V4 receives Claude Code's max effort through output_config. The
@@ -58,7 +66,8 @@ ollama_model_plan() {
       ;;
     # The stock Qwen template rejects the high level Ollama maps from xhigh.
     # The patched DFlash profile can use xhigh. The relay also caps overrides.
-    qwen3.8:27b-dflash) EFFORT=xhigh; _ollama_effort_cap=xhigh ;;
+    qwen3.8:27b-dflash|dflash/qwen3.8-27b) EFFORT=xhigh; _ollama_effort_cap=xhigh ;;
+    abliterated-dflash/qwen3.8-27b) EFFORT=medium; _ollama_effort_cap=medium ;;
     qwen3.8*) EFFORT=medium; _ollama_effort_cap=medium ;;
   esac
   HEALTH_CHECK_URL=$BASE_URL/health
@@ -116,11 +125,14 @@ else
   esac
   _ollama_health=$(curl -fsS --max-time 1 "$HEALTH_CHECK_URL" 2>/dev/null || true)
   if printf "%s\n" "$_ollama_health" | grep -q crouter-ollama-heartbeat; then
-    if [ "$_local_selected_model" = qwen3.8:27b-dflash ]; then
+    case $_local_selected_model in qwen3.8:27b-dflash|dflash/qwen3.8-27b)
+      _ollama_dflash_versions=qwen38-dflash-named-effort-v2
+      [ "$_local_selected_model" != qwen3.8:27b-dflash ] || _ollama_dflash_versions="qwen38-dflash-named-effort-v[12]"
       printf "%s\n" "$_ollama_health" | grep -Fq "\"effort_cap\":\"xhigh\"" &&
-        printf "%s\n" "$_ollama_health" | grep -Fq "\"dflash_effort_rewrite\":\"qwen38-dflash-named-effort-v1\"" ||
+        printf "%s\n" "$_ollama_health" | grep -Eq "\"dflash_effort_rewrite\":\"$_ollama_dflash_versions\"" ||
         die "Ollama relay uses another DFlash effort profile; wait for its current task to finish, then restart the relay"
-    fi
+      ;;
+    esac
     if [ -n "$_ollama_system_order_models" ]; then
       printf "%s\n" "$_ollama_health" | grep -Fq "\"system_order_models\":\"$_ollama_system_order_models\"" || \
         die "Ollama relay predates the selected model template; restart the relay after its current task finishes"
@@ -141,7 +153,7 @@ else
   fi
   curl -fsS --max-time 1 "$HEALTH_CHECK_URL" 2>/dev/null | grep -q crouter-ollama-heartbeat || die "Ollama heartbeat proxy failed to start at $BASE_URL"
 fi
-unset _local_selected_model _ollama_effort_cap _ollama_system_order_models _ollama_template_info _ollama_template_mode _ollama_health _mlx_upstream_host _mlx_upstream_port _mlx_upstream_url _mlx_expected_upstream _mlx_health
+unset _local_selected_model _ollama_effort_cap _ollama_dflash_versions _ollama_system_order_models _ollama_template_info _ollama_template_mode _ollama_health _mlx_upstream_host _mlx_upstream_port _mlx_upstream_url _mlx_expected_upstream _mlx_health
 '
 
 POST_STOP='if [ -n "${_OLLAMA_HEARTBEAT_PROXY_PID:-}" ]; then kill "$_OLLAMA_HEARTBEAT_PROXY_PID" 2>/dev/null || true; wait "$_OLLAMA_HEARTBEAT_PROXY_PID" 2>/dev/null || true; _OLLAMA_HEARTBEAT_PROXY_PID=; fi; if [ -n "${_MLX_PROXY_PID:-}" ]; then kill "$_MLX_PROXY_PID" 2>/dev/null || true; wait "$_MLX_PROXY_PID" 2>/dev/null || true; _MLX_PROXY_PID=; fi'

@@ -1,7 +1,7 @@
 # crouter
 
 [![CI](https://github.com/Luckycat133/crouter/actions/workflows/ci.yml/badge.svg)](https://github.com/Luckycat133/crouter/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/version-0.7.7-blue)
+![Version](https://img.shields.io/badge/version-0.7.8-blue)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 `crouter` launches Claude Code against audited Anthropic-compatible providers
@@ -19,7 +19,7 @@ the full [docs index](docs/README.md) for the source matrix, architecture
 contracts, and decisions, plus [llms.txt](llms.txt) /
 [llms-full.txt](llms-full.txt) for machine-readable LLM indexes.
 
-`VERSION` is 0.7.7; release history and in-progress changes are recorded in
+`VERSION` is 0.7.8; release history and in-progress changes are recorded in
 [CHANGELOG.md](CHANGELOG.md). Offline checks run under both POSIX `sh` and `dash`;
 the `crouter-development` skill routing validator and its 24 isolated fixture
 checks pass under both `sh` and `dash` (package structure only; live-client and
@@ -687,6 +687,33 @@ no sampler/cache defaults. Two more exact IDs are registered:
 tiers pin to the selected ID and crouter adds no sampler/cache or MTP
 settings beyond what the model stores. Select models with
 `crouter ollama --model <id>`.
+
+For Qwen3.8 reference-cost tracking in Vibe Usage, optional native Ollama
+aliases keep the variant in the namespace and the standard model basename:
+
+```sh
+ollama cp qwen3.8-abliterated:27b-dflash abliterated-dflash/qwen3.8-27b
+ollama cp qwen3.8:27b-dflash dflash/qwen3.8-27b
+```
+
+After creating both local aliases, set `OLLAMA_QWEN38_PRICING_ALIASES=1` in
+this checkout's gitignored `config.sh`. The default is off, so other installs
+keep their existing IDs. When enabled, the old IDs resolve to these aliases,
+with all tiers pinned to the selected variant and a 262,144-token window.
+The two new aliases also normalize their directory-listed `:latest` forms
+to the untagged names; other tags are not rewritten.
+The abliterated variant retains medium effort; the standard DFlash variant
+retains xhigh and its named-effort rewrite. Both use the Ollama relay on
+11435, separate from the bare `qwen3.8-27b` MLX profile.
+
+Vibe's current pricing matcher recognizes the aliases **without `:latest`**
+as `qwen3.8-27b`. These are reference API-cost estimates for local use;
+creating an alias does not incur an API charge. Historical Vibe rows are not
+rewritten. `ollama cp` shares the source manifest/blobs and preserves its
+saved parameters; repeat the copy commands after replacing a source model
+or changing its saved defaults to refresh the corresponding alias. Creating,
+previewing or saving these aliases does not load a model. Actual inference
+and subsequent Vibe cloud ingestion must be checked during normal use.
 
 ```sh
 crouter ollama qwen3.8:27b-dflash

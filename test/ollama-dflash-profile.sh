@@ -3,6 +3,7 @@
 set -eu
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 . "$ROOT_DIR/lib/provider.sh"
+OLLAMA_QWEN38_PRICING_ALIASES=0
 . "$ROOT_DIR/providers/ollama.sh"
 fail() { printf 'FAIL  %s\n' "$*" >&2; exit 1; }
 die() { fail "$*"; }
@@ -30,7 +31,7 @@ curl() {
   case $_stub_url in
     http://127.0.0.1:11434) printf 'Ollama running\n' ;;
     http://127.0.0.1:11435/health)
-      printf '{"service":"crouter-ollama-heartbeat","effort_cap":"%s","dflash_effort_rewrite":"%s"}' "$CROUTER_TEST_EFFORT_CAP" "${CROUTER_TEST_DFLASH_VERSION-qwen38-dflash-named-effort-v1}"
+      printf '{"service":"crouter-ollama-heartbeat","effort_cap":"%s","dflash_effort_rewrite":"%s"}' "$CROUTER_TEST_EFFORT_CAP" "${CROUTER_TEST_DFLASH_VERSION-qwen38-dflash-named-effort-v2}"
       ;;
     http://10.211.55.2:18080/v1/models) printf '{}\n' ;;
     http://127.0.0.1:11436/health)
@@ -53,6 +54,19 @@ eval "$PRE_START"
 [ "$BASE_URL" = http://127.0.0.1:11435 ] || fail 'DFlash2 must use the Ollama relay'
 assert_no_output_cap
 
+CROUTER_TEST_DFLASH_VERSION=qwen38-dflash-named-effort-v1
+ollama_model_plan "$_main_model"
+eval "$PRE_START"
+[ "$EFFORT" = xhigh ] || fail 'the original DFlash ID must keep v1 relay compatibility'
+CROUTER_TEST_DFLASH_VERSION=qwen38-dflash-named-effort-v2
+
+_main_model=dflash/qwen3.8-27b
+CROUTER_TEST_EFFORT_CAP=xhigh
+ollama_model_plan "$_main_model"
+eval "$PRE_START"
+[ "$EFFORT" = xhigh ] || fail 'DFlash copy must retain xhigh'
+[ "$BASE_URL" = http://127.0.0.1:11435 ] || fail 'DFlash copy must keep its Ollama route'
+
 _relay_side_effects=$(mktemp)
 trap 'rm -f "$_relay_side_effects"' 0
 for _incompatible_relay in effort version; do
@@ -61,11 +75,11 @@ for _incompatible_relay in effort version; do
     lsof() { printf 'lsof\n' >>"$_relay_side_effects"; exit 88; }
     kill() { printf 'kill\n' >>"$_relay_side_effects"; exit 88; }
     CROUTER_TEST_EFFORT_CAP=xhigh
-    CROUTER_TEST_DFLASH_VERSION=qwen38-dflash-named-effort-v1
+    CROUTER_TEST_DFLASH_VERSION=qwen38-dflash-named-effort-v2
     if [ "$_incompatible_relay" = effort ]; then
       CROUTER_TEST_EFFORT_CAP=medium
     else
-      CROUTER_TEST_DFLASH_VERSION=old-version
+      CROUTER_TEST_DFLASH_VERSION=qwen38-dflash-named-effort-v1
     fi
     ollama_model_plan "$_main_model"
     eval "$PRE_START"
@@ -88,6 +102,17 @@ ollama_model_plan "$_main_model"
 eval "$PRE_START"
 [ "$EFFORT" = medium ] || fail 'legacy Qwen effort cap must remain medium'
 assert_no_output_cap
+
+for _abliterated_id in qwen3.8-abliterated:27b-dflash abliterated-dflash/qwen3.8-27b; do
+  _main_model=$(resolve_model_id "$_abliterated_id")
+  EXTRA_ENV=$_base_extra_env
+  CROUTER_TEST_EFFORT_CAP=medium
+  ollama_model_plan "$_main_model"
+  eval "$PRE_START"
+  [ "$EFFORT" = medium ] || fail 'abliterated copy must retain medium effort'
+  [ "$BASE_URL" = http://127.0.0.1:11435 ] || fail 'abliterated copy must keep its Ollama route'
+  assert_no_output_cap
+done
 
 _main_model=deepseek-v4-flash:q8
 EXTRA_ENV=$_base_extra_env

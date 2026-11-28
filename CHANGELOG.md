@@ -4,6 +4,23 @@ All notable changes to this local setup are documented in this file.
 
 ## [Unreleased]
 
+## [0.7.8] - 2026-11-28
+
+### Added
+
+- Opt-in Qwen3.8 reference-price aliases for Vibe Usage:
+  `abliterated-dflash/qwen3.8-27b` and `dflash/qwen3.8-27b`. After native
+  Ollama copy setup, `OLLAMA_QWEN38_PRICING_ALIASES=1` resolves the legacy
+  IDs to these variant-preserving names, with 256K windows and self-routed
+  tiers. Their explicit `:latest` catalog forms normalize to the untagged
+  aliases. Other installs keep their existing legacy IDs by default.
+
+### Fixed
+
+- The standard DFlash alias retains the existing named-effort behavior;
+  the abliterated alias retains its medium cap. The relay capability marker
+  advances to v2 so an older relay is not reused for the new standard alias.
+
 ## [0.7.7] - 2026-11-28
 
 ### Changed

@@ -48,7 +48,7 @@ cat > "$TMP_DIR/claude" <<'CLAUDE'
 printf 'native\n'
 CLAUDE
 chmod +x "$TMP_DIR/claude" "$REPO/bin/crouter"
-export HOME="$TMP_DIR/home" XDG_STATE_HOME="$TMP_DIR/state" SPY="$TMP_DIR/spy" CLAUDE_BIN="$TMP_DIR/claude"
+export HOME="$TMP_DIR/home" XDG_STATE_HOME="$TMP_DIR/state" SPY="$TMP_DIR/spy" CLAUDE_BIN="$TMP_DIR/claude" OLLAMA_QWEN38_PRICING_ALIASES=0
 export NODE_BIN
 NODE_BIN=$(command -v node)
 run() { "${TEST_SHELL:-sh}" "$REPO/bin/crouter" "$@"; }
@@ -177,7 +177,7 @@ case $url in
   http://mlx.fixture.invalid:8080/v1/models) printf '{}\n' ;;
   http://127.0.0.1:11436/health) printf '{"service":"crouter-mlx-anthropic-adapter","upstream":"mlx.fixture.invalid:8080"}\n' ;;
   http://127.0.0.1:11434) printf 'Ollama running\n' ;;
-  http://127.0.0.1:11435/health) printf '{"service":"crouter-ollama-heartbeat","effort_cap":"xhigh","dflash_effort_rewrite":"qwen38-dflash-named-effort-v1"}\n' ;;
+  http://127.0.0.1:11435/health) printf '{"service":"crouter-ollama-heartbeat","effort_cap":"%s","dflash_effort_rewrite":"qwen38-dflash-named-effort-v2"}\n' "${CROUTER_TEST_EFFORT_CAP:-xhigh}" ;;
   *) exit 99 ;;
 esac
 CURL
@@ -209,6 +209,7 @@ grep -Fxq 'curl:http://mlx.fixture.invalid:8080/v1/models' "$SPY" || fail 'MLX h
 ! grep -Fq ':11435' "$SPY" || fail 'MLX launch used the old relay'
 rm "$SPY"
 run ollama --model qwen3.8:27b-dflash > "$TMP_DIR/ollama.out"
+grep -Fxq 'model=qwen3.8:27b-dflash' "$TMP_DIR/ollama.out" || fail 'DFlash ID changed without local opt-in'
 grep -Fxq 'base=http://127.0.0.1:11435' "$TMP_DIR/ollama.out" || fail 'DFlash endpoint did not reach Claude'
 grep -A 1 -Fx 'arg=--effort' "$TMP_DIR/ollama.out" | grep -Fxq 'arg=xhigh' || fail 'DFlash effort did not reach Claude'
 ! grep -Fq ':11436' "$SPY" || fail 'DFlash launch used the old adapter'
@@ -218,6 +219,36 @@ if (MLX_UPSTREAM_PORT=invalid run ollama --model qwen3.8-27b --apply-only) >"$TM
 fi
 [ ! -e "$SPY" ] || fail 'invalid local plan reached an external boundary'
 [ "$(cat "$selection_dir/last-model-ollama")" = qwen3.8:27b-dflash ] || fail 'failed apply-only changed the saved local plan'
+
+run ollama --model qwen3.8-abliterated:27b-dflash --plan > "$TMP_DIR/abliterated-default.json"
+"$NODE_BIN" - "$TMP_DIR/abliterated-default.json" <<'NODE'
+const assert = require('node:assert/strict');
+const plan = require(process.argv[2]);
+assert.equal(plan.model, 'qwen3.8-abliterated:27b-dflash');
+assert.equal(plan.contextTokens, 262144);
+assert.equal(plan.effort, 'medium');
+assert.equal(plan.source.origin, 'http://127.0.0.1:11435');
+NODE
+[ ! -e "$SPY" ] || fail 'default abliterated preview started a resource'
+# Local installation opts in after its native copies exist. Other installs
+# retain the original IDs, including old saved selections.
+printf 'OLLAMA_QWEN38_PRICING_ALIASES=1\n' > "$REPO/config.sh"
+
+run ollama --plan > "$TMP_DIR/dflash-saved.json"
+run ollama --model dflash/qwen3.8-27b --plan > "$TMP_DIR/dflash-canonical.json"
+"$NODE_BIN" - "$TMP_DIR/dflash-saved.json" "$TMP_DIR/dflash-canonical.json" <<'NODE'
+const assert = require('node:assert/strict');
+for (const file of process.argv.slice(2)) {
+  const plan = require(file);
+  assert.equal(plan.model, 'dflash/qwen3.8-27b');
+  assert.equal(plan.contextTokens, 262144);
+  assert.equal(plan.effort, 'xhigh');
+  assert.equal(plan.source.origin, 'http://127.0.0.1:11435');
+  assert.deepEqual(plan.services, ['ollama-heartbeat']);
+  assert.deepEqual(Object.values(plan.tiers), Array(4).fill(plan.model));
+}
+NODE
+[ ! -e "$SPY" ] || fail 'DFlash preview started a resource'
 
 # The full Hauhau window must be visible through the real CLI without
 # contacting Ollama, starting the relay, or invoking Claude.
@@ -236,6 +267,71 @@ for (const file of process.argv.slice(2)) {
 }
 NODE
 [ ! -e "$SPY" ] || fail 'Hauhau preview or save started a resource'
+
+# The installed namespaced copy preserves the abliterated variant while its
+# standard basename is recognizable by usage pricing. Old CLI/saved IDs must
+# resolve to the copy, never the unrelated exact-name MLX route.
+abliterated_legacy=qwen3.8-abliterated:27b-dflash
+abliterated_canonical=abliterated-dflash/qwen3.8-27b
+"$NODE_BIN" "$REPO/lib/model-state.js" write ollama "$abliterated_legacy" 262144 ''
+run ollama --plan > "$TMP_DIR/abliterated-saved.json"
+run ollama --model "$abliterated_legacy" --plan > "$TMP_DIR/abliterated-old.json"
+run ollama --model "$abliterated_canonical" --plan > "$TMP_DIR/abliterated-new.json"
+"$NODE_BIN" - "$TMP_DIR/abliterated-saved.json" "$TMP_DIR/abliterated-old.json" "$TMP_DIR/abliterated-new.json" <<'NODE'
+const assert = require('node:assert/strict');
+const expected = 'abliterated-dflash/qwen3.8-27b';
+for (const file of process.argv.slice(2)) {
+  const plan = require(file);
+  assert.equal(plan.model, expected);
+  assert.equal(plan.contextTokens, 262144);
+  assert.equal(plan.maxOutputTokens, null);
+  assert.equal(plan.effort, 'medium');
+  assert.equal(plan.source.origin, 'http://127.0.0.1:11435');
+  assert.deepEqual(plan.services, ['ollama-heartbeat']);
+  assert.deepEqual(plan.assets.plugins, []);
+  assert.deepEqual(Object.values(plan.tiers), Array(4).fill(expected));
+}
+NODE
+run ollama --model "$abliterated_legacy" --apply-only > "$TMP_DIR/abliterated-applied"
+[ "$(cat "$selection_dir/last-model-ollama")" = "$abliterated_canonical" ] || fail 'legacy abliterated ID was not saved canonically'
+[ ! -e "$SPY" ] || fail 'abliterated preview or save started a resource'
+(export CROUTER_TEST_EFFORT_CAP=medium; run ollama --model "$abliterated_legacy") > "$TMP_DIR/abliterated.out"
+grep -Fxq "model=$abliterated_canonical" "$TMP_DIR/abliterated.out" || fail 'abliterated alias was not sent to Claude'
+grep -Fxq 'base=http://127.0.0.1:11435' "$TMP_DIR/abliterated.out" || fail 'abliterated copy used the wrong endpoint'
+grep -Fxq 'context=262144' "$TMP_DIR/abliterated.out" || fail 'abliterated copy lost its context'
+grep -Fxq "tiers=$abliterated_canonical,$abliterated_canonical,$abliterated_canonical,$abliterated_canonical" "$TMP_DIR/abliterated.out" || fail 'abliterated copy lost its selected tiers'
+grep -A 1 -Fx 'arg=--effort' "$TMP_DIR/abliterated.out" | grep -Fxq 'arg=medium' || fail 'abliterated copy lost its effort cap'
+! grep -Eq ':11436|/api/show' "$SPY" || fail 'abliterated copy used MLX or another template profile'
+rm "$SPY"
+
+# Ollama's directory adds :latest to these installed copies. Normalize only
+# those exact catalog IDs, with or without the legacy-name opt-in, before
+# planning, saving or relaunching the selected model.
+for pricing_flag in 0 1; do
+  printf 'OLLAMA_QWEN38_PRICING_ALIASES=%s\n' "$pricing_flag" > "$REPO/config.sh"
+  for pricing_pair in abliterated-dflash/qwen3.8-27b=medium dflash/qwen3.8-27b=xhigh; do
+    pricing_model=${pricing_pair%=*}
+    pricing_effort=${pricing_pair#*=}
+    run ollama --model "$pricing_model:latest" --plan > "$TMP_DIR/tagged.json"
+    run ollama --model "$pricing_model:latest" --apply-only > "$TMP_DIR/tagged-applied"
+    run ollama --plan > "$TMP_DIR/tagged-saved.json"
+    "$NODE_BIN" - "$TMP_DIR/tagged.json" "$TMP_DIR/tagged-saved.json" "$pricing_model" "$pricing_effort" <<'NODE'
+const assert = require('node:assert/strict');
+const [freshFile, savedFile, expectedModel, expectedEffort] = process.argv.slice(2);
+for (const file of [freshFile, savedFile]) {
+  const plan = require(file);
+  assert.equal(plan.model, expectedModel);
+  assert.equal(plan.contextTokens, 262144);
+  assert.equal(plan.effort, expectedEffort);
+  assert.equal(plan.source.origin, 'http://127.0.0.1:11435');
+  assert.deepEqual(plan.services, ['ollama-heartbeat']);
+  assert.deepEqual(Object.values(plan.tiers), Array(4).fill(expectedModel));
+}
+NODE
+    [ "$(cat "$selection_dir/last-model-ollama")" = "$pricing_model" ] || fail 'catalog latest tag was saved instead of canonical ID'
+  done
+done
+[ ! -e "$SPY" ] || fail 'tagged copy preview or save started a resource'
 
 run demo large > "$TMP_DIR/large.out"
 grep -Fxq 'output=8192' "$TMP_DIR/large.out" || fail 'configured output cap not sent to Claude'

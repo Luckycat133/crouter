@@ -74,6 +74,26 @@ DeepSeek request handling preserves the requested thinking/effort fields and rep
 
 The exact Ollama IDs `qwen3.8-abliterated:27b-dflash` (declared 262,144-token client window) and `qwen3.6-hauhau:35b-a3b-q4_k_p` (declared 262,144-token client window) are registered in `providers/ollama.sh` alongside the DFlash and `inkling` profiles; tiers pin to the selected ID through `MODEL_SELF_ROUTE_MODELS`, and native Ollama definitions keep sampler/cache/MTP defaults, so crouter injects no extra inference settings. Declared windows are scoped per exact ID in `MODEL_CONTEXT_OVERRIDES`; selections without a declared override keep the 65,536-token fallback.
 
+Qwen3.8 reference-price naming is opt-in through
+`OLLAMA_QWEN38_PRICING_ALIASES=1` in the local `config.sh`; the default keeps
+legacy IDs unchanged. With the flag enabled, `MODEL_ID_ALIASES` resolves
+`qwen3.8-abliterated:27b-dflash` to `abliterated-dflash/qwen3.8-27b` and
+`qwen3.8:27b-dflash` to `dflash/qwen3.8-27b`. The two explicit new
+namespace aliases normalize `:latest` to the untagged form even without the
+opt-in, so choosing a native catalog entry preserves the same plan. Other
+tags remain distinct. These are native Ollama copies
+of the respective manifests, retaining their parameters and model identity.
+Both aliases declare a 262,144-token window, self-route every tier and use
+11435, never the bare `qwen3.8-27b` MLX route. The abliterated copy keeps
+medium effort; the standard copy joins the relay's exact DFlash allowlist
+and retains xhigh. The DFlash capability marker is
+`qwen38-dflash-named-effort-v2`, so a running relay that cannot handle the
+new standard alias is rejected for reuse without stopping its current work.
+Vibe's current provider-prefix matcher associates the untagged alias names
+with the standard `qwen3.8-27b` reference price. No Vibe CLI patch, raw
+transcript rewrite or historical upload migration is involved. Native copy
+creation and CLI `--plan` / `--apply-only` do not load models.
+
 ## Bonsai transport
 
 `crouter bonsai` exposes local Ternary Bonsai MLX models (27B, 2-bit) to Claude Code through the session-owned Anthropic-compatible adapter. The default `ternary-bonsai-2-27b` profile (alias `bonsai`) uses adapter port 11438 → native port 8000 against the legacy PrismML MLX runtime, which crouter keeps but neither starts nor stops; its declared client window is 262,144 tokens. `ternary-bonsai-2.5-27b` uses a separate adapter port 11439 → native port 8081 and declares a 262,144-token client window (native `MAX_OUTPUT_TOKENS` is not explicitly set by crouter). It resolves the native pack under `$BONSAI_DEMO_DIR/models/Ternary-Bonsai-2.5-27B-mlx-2bit` (default the `Bonsai-demo` sibling of this repository). Before the adapter starts, port 8081 `/health` and `/v1/models` must both identify that pack by realpath. If no native listener is verifiable, crouter starts the existing native launcher with family `bonsai25`, size `27B` and port `8081` only; an already compatible listener is reused and never replaced or owned, and `bonsai_stop` stops only PIDs started by this session. The adapter runs with `MLX_INHERIT_DEFAULTS=1`, so it inherits the native sampler, cache and MTP defaults and keeps the selected local model ID (a wrong model is rejected). Tiers pin to the selected model and no extra crouter inference settings are added. Launch with `crouter bonsai --model ternary-bonsai-2.5-27b`; these are direct provider launches only, and `crouter all` does not yet perform per-model local service startup.

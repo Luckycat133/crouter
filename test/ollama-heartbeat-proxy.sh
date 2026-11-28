@@ -92,7 +92,7 @@ assert.equal(health.heartbeat_ms, 40);
 assert.equal(health.effort_rewrite, 'deepseek-anthropic-pass-through-v2');
 assert.equal(health.effort_clamp, 'ollama-effort-clamp-v1');
 assert.equal(health.effort_cap, 'medium');
-assert.equal(health.dflash_effort_rewrite, 'qwen38-dflash-named-effort-v1');
+assert.equal(health.dflash_effort_rewrite, 'qwen38-dflash-named-effort-v2');
 assert.equal(health.image_fallback, 'deepseek-text-image-v1');
 
 async function send(body, chunked = false, port = proxyPort) {
@@ -217,41 +217,47 @@ const uncappedBody = JSON.stringify({
 await send(uncappedBody, false, uncapped.port);
 assert.equal(receivedBodies.at(-1), uncappedBody);
 
-// Only the exact official DFlash2 profile uses current model-defined efforts.
+// Only the exact official DFlash2 profile and its installed copy use named efforts.
 // Cover both an old capped relay and an uncapped one: its own named contract
 // must not inherit another model's medium cap or rewrite neighboring IDs.
 for (const port of [proxyPort, uncapped.port]) {
-  for (const [effort, expected] of [['max', 'xhigh'], ['high', 'xhigh'], ['xhigh', 'xhigh'], ['medium', 'medium'], ['low', 'low']]) {
-    await send(JSON.stringify({
-      model: 'qwen3.8:27b-dflash', stream: false,
-      output_config: { effort, format: 'json' },
-      thinking: { type: 'enabled', budget_tokens: 16000, display: 'omitted' },
-      max_tokens: 32000,
-      messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', data: 'keep-dflash-image' } }] }],
-    }), false, port);
-    const forwarded = JSON.parse(receivedBodies.at(-1));
-    assert.deepEqual(forwarded.output_config, { effort: expected, format: 'json' });
-    assert.deepEqual(forwarded.thinking, { type: 'adaptive', display: 'omitted' }, 'enabled must not mask named effort');
-    assert.equal(forwarded.max_tokens, 32000, 'output limit is independent of reasoning effort');
-    assert.equal(forwarded.messages[0].content[0].source.data, 'keep-dflash-image');
+  for (const model of ['qwen3.8:27b-dflash', 'dflash/qwen3.8-27b']) {
+    for (const [effort, expected] of [['max', 'xhigh'], ['high', 'xhigh'], ['xhigh', 'xhigh'], ['medium', 'medium'], ['low', 'low']]) {
+      await send(JSON.stringify({
+        model, stream: false,
+        output_config: { effort, format: 'json' },
+        thinking: { type: 'enabled', budget_tokens: 16000, display: 'omitted' },
+        max_tokens: 32000,
+        messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', data: 'keep-dflash-image' } }] }],
+      }), false, port);
+      const forwarded = JSON.parse(receivedBodies.at(-1));
+      assert.equal(forwarded.model, model);
+      assert.deepEqual(forwarded.output_config, { effort: expected, format: 'json' });
+      assert.deepEqual(forwarded.thinking, { type: 'adaptive', display: 'omitted' }, 'enabled must not mask named effort');
+      assert.equal(forwarded.max_tokens, 32000, 'output limit is independent of reasoning effort');
+      assert.equal(forwarded.messages[0].content[0].source.data, 'keep-dflash-image');
+    }
   }
 }
-for (const thinking of [undefined, { type: 'adaptive' }]) {
-  const body = JSON.stringify({ model: 'qwen3.8:27b-dflash', stream: false, thinking, output_config: { effort: 'xhigh' }, messages: [] });
-  await send(body);
-  assert.equal(receivedBodies.at(-1), body, 'supported named requests pass through byte-identically');
+for (const model of ['qwen3.8:27b-dflash', 'dflash/qwen3.8-27b']) {
+  for (const thinking of [undefined, { type: 'adaptive' }]) {
+    const body = JSON.stringify({ model, stream: false, thinking, output_config: { effort: 'xhigh' }, messages: [] });
+    await send(body);
+    assert.equal(receivedBodies.at(-1), body, 'supported named requests pass through byte-identically');
+  }
+  await send(JSON.stringify({ model, stream: false, messages: [] }));
+  assert.equal(JSON.parse(receivedBodies.at(-1)).output_config.effort, 'xhigh', 'omitted effort uses the profile maximum');
+  const dflashDisabled = JSON.stringify({ model, stream: false, thinking: { type: 'disabled' }, output_config: { effort: 'max' }, messages: [] });
+  await send(dflashDisabled);
+  assert.equal(receivedBodies.at(-1), dflashDisabled, 'explicit thinking off must remain authoritative');
 }
-await send(JSON.stringify({ model: 'qwen3.8:27b-dflash', stream: false, messages: [] }));
-assert.equal(JSON.parse(receivedBodies.at(-1)).output_config.effort, 'xhigh', 'omitted effort uses the profile maximum');
-const dflashDisabled = JSON.stringify({ model: 'qwen3.8:27b-dflash', stream: false, thinking: { type: 'disabled' }, output_config: { effort: 'max' }, messages: [] });
-await send(dflashDisabled);
-assert.equal(receivedBodies.at(-1), dflashDisabled, 'explicit thinking off must remain authoritative');
-for (const model of ['qwen3.8:27b-dflash-other', 'qwen3.8:27b-dflash-fast', 'qwen3.8:27b-q4_K_M']) {
+for (const model of ['qwen3.8:27b-dflash-other', 'qwen3.8:27b-dflash-fast', 'qwen3.8:27b-q4_K_M', 'dflash/qwen3.8-27b-other', 'abliterated-dflash/qwen3.8-27b']) {
   const body = JSON.stringify({ model, stream: false, thinking: { type: 'enabled', budget_tokens: 1024 }, output_config: { effort: 'max' }, messages: [] });
   await send(body, false, uncapped.port);
   assert.equal(receivedBodies.at(-1), body, 'new effort behavior must not leak to neighboring model IDs');
 }
-assert.match(childOutput(), /"version":"qwen38-dflash-named-effort-v1".*"requested_effort":"max","effective_effort":"xhigh","rewritten":true/);
+assert.match(childOutput(), /"version":"qwen38-dflash-named-effort-v2".*"requested_effort":"max","effective_effort":"xhigh","rewritten":true/);
+assert.match(childOutput(), /"version":"qwen38-dflash-named-effort-v2","model":"dflash\/qwen3\.8-27b".*"effective_effort":"xhigh"/);
 
 const imageBody = JSON.stringify({
   model: 'deepseek-v4-flash:q8', stream: false,
@@ -359,6 +365,18 @@ assert.deepEqual(folded.system, [
   { type: 'text', text: '# Environment' },
 ]);
 assert.deepEqual(folded.messages, [{ role: 'user', content: [{ type: 'text', text: 'hello' }] }]);
+
+// A model copy used for price matching retains the old abliterated transport:
+// the same effort clamp and system folding, with its model ID left intact.
+for (const model of ['qwen3.8-abliterated:27b-dflash', 'abliterated-dflash/qwen3.8-27b']) {
+  const body = { ...JSON.parse(foldBody), model, output_config: { effort: 'max' } };
+  await send(JSON.stringify(body));
+  const forwarded = JSON.parse(receivedBodies.at(-1));
+  assert.equal(forwarded.model, model);
+  assert.equal(forwarded.output_config.effort, 'medium');
+  assert.deepEqual(forwarded.system, folded.system);
+  assert.deepEqual(forwarded.messages, folded.messages);
+}
 
 // A request without a system turn stays byte-identical for other models.
 const noFoldBody = JSON.stringify({

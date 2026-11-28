@@ -6,8 +6,9 @@ fail() { printf 'FAIL %s\n' "$*" >&2; exit 1; }
 die() { fail "$*"; }
 . "$ROOT_DIR/lib/provider.sh"
 load_last_selected_model() { :; }
+OLLAMA_QWEN38_PRICING_ALIASES=0
 . "$ROOT_DIR/providers/ollama.sh"
-for pair in qwen3.6-hauhau:35b-a3b-q4_k_p=262144 qwen3.8-abliterated:27b-dflash=262144 inkling-2-mini:latest=1048576; do
+for pair in qwen3.6-hauhau:35b-a3b-q4_k_p=262144 qwen3.8:27b-dflash=262144 dflash/qwen3.8-27b=262144 qwen3.8-abliterated:27b-dflash=262144 abliterated-dflash/qwen3.8-27b=262144 inkling-2-mini:latest=1048576; do
   id=${pair%=*}; CONTEXT_TOKENS=
   apply_model_context_override "$id"
   [ "$CONTEXT_TOKENS" = "${pair#*=}" ] || fail "$id context"
@@ -17,6 +18,21 @@ for pair in qwen3.6-hauhau:35b-a3b-q4_k_p=262144 qwen3.8-abliterated:27b-dflash=
   done
   case " $MODEL_ALIASES " in *" $id "*) : ;; *) fail "$id static catalog" ;; esac
 done
+[ "$(resolve_model_id qwen3.8-abliterated:27b-dflash)" = qwen3.8-abliterated:27b-dflash ] || fail 'default abliterated ID changed without opt-in'
+[ "$(resolve_model_id qwen3.8:27b-dflash)" = qwen3.8:27b-dflash ] || fail 'default DFlash ID changed without opt-in'
+assert_pricing_copy_tags() {
+  for copy in abliterated-dflash/qwen3.8-27b dflash/qwen3.8-27b; do
+    [ "$(resolve_model_id "$copy:latest")" = "$copy" ] || fail 'catalog latest tag was not normalized'
+    [ "$(resolve_model_id "$copy:other")" = "$copy:other" ] || fail 'an unrelated tag was normalized'
+  done
+}
+assert_pricing_copy_tags
+OLLAMA_QWEN38_PRICING_ALIASES=1
+. "$ROOT_DIR/providers/ollama.sh"
+assert_pricing_copy_tags
+[ "$(resolve_model_id qwen3.8-abliterated:27b-dflash)" = abliterated-dflash/qwen3.8-27b ] || fail 'abliterated compatibility alias'
+[ "$(resolve_model_id qwen3.8:27b-dflash)" = dflash/qwen3.8-27b ] || fail 'DFlash compatibility alias'
+[ "$(resolve_model_id qwen3.8-27b)" = qwen3.8-27b ] || fail 'exact MLX model ID changed'
 . "$ROOT_DIR/providers/bonsai.sh"
 apply_model_context_override ternary-bonsai-2.5-27b
 apply_model_self_route ternary-bonsai-2.5-27b

@@ -26,6 +26,10 @@
 #MLX_UPSTREAM_HOST=127.0.0.1
 #MLX_UPSTREAM_PORT=18080
 
+# Optional Qwen3.8 Vibe reference-price aliases. Default: 0 (off).
+# Create the native Ollama aliases documented in README before enabling.
+#OLLAMA_QWEN38_PRICING_ALIASES=1
+
 # Provider-owned MCPs and skills are activated only for the current crouter
 # session; crouter never edits ~/.claude.json or globally installs a plugin.
 # Disable all managed assets with 0. Default: 1.
