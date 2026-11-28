@@ -25,7 +25,7 @@ crouter launches Anthropic Claude Code and native coding agents against audited 
 ## Supported Provider Ecosystem (36 Audited Providers)
 - **Domestic Chinese Providers**: DeepSeek, MiniMax, Moonshot (Kimi), DashScope (Qwen), DashScope Coding, Baidu Qianfan, Qianfan Team, Qianfan Coding, Tencent Cloud (TokenHub), Tencent Coding, Z.AI (GLM), StepFun, Huawei Cloud ModelArts MaaS, Xiaomi MiMo, Qiniu AI, PPIO, InfiniAI, LongCat.
 - **Global Gateways & Aggregators**: Anthropic Console API, OpenRouter, Fireworks AI, Requesty AI, Vercel AI Gateway, 302.AI, AIHubMix, NagaAI.
-- **Local Inference & Reverse Proxies**: Ollama (DFlash2 / DeepSeek), Bonsai 2 (MLX Hadamard), Antigravity (Gemini 3.8/Claude), Antigravity Claude, Codex Proxy (`icebear0828/codex-proxy`).
+- **Local Inference & Reverse Proxies**: Ollama (DFlash2 / DeepSeek), MLX-VLM (Inkling 2 Mini), Bonsai 2 (MLX Hadamard), Antigravity (Gemini 3.8/Claude), Antigravity Claude, Codex Proxy (`icebear0828/codex-proxy`).
 - **Native Cloud Providers**: Amazon Bedrock, Google Vertex AI, Microsoft Foundry.
 
 ## Core CLI Usage

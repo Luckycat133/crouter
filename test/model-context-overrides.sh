@@ -30,6 +30,7 @@ check dflash/qwen3.8-27b 262144
 check dflash/qwen3.8-27b-custom 65536
 check dflash/qwen3.8-27b:other 65536
 check abliterated-dflash/qwen3.8-27b:other 65536
+load_provider mlx-vlm
 check inkling-2-mini:latest 1048576
 check inkling-2-mini 1048576
 check inkling-2-mini-unbound:latest 65536

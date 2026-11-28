@@ -8,7 +8,7 @@ die() { fail "$*"; }
 load_last_selected_model() { :; }
 OLLAMA_QWEN38_PRICING_ALIASES=0
 . "$ROOT_DIR/providers/ollama.sh"
-for pair in qwen3.6-hauhau:35b-a3b-q4_k_p=262144 qwen3.8:27b-dflash=262144 dflash/qwen3.8-27b=262144 qwen3.8-abliterated:27b-dflash=262144 abliterated-dflash/qwen3.8-27b=262144 inkling-2-mini:latest=1048576; do
+for pair in qwen3.6-hauhau:35b-a3b-q4_k_p=262144 qwen3.8:27b-dflash=262144 dflash/qwen3.8-27b=262144 qwen3.8-abliterated:27b-dflash=262144 abliterated-dflash/qwen3.8-27b=262144; do
   id=${pair%=*}; CONTEXT_TOKENS=
   apply_model_context_override "$id"
   [ "$CONTEXT_TOKENS" = "${pair#*=}" ] || fail "$id context"
@@ -33,6 +33,15 @@ assert_pricing_copy_tags
 [ "$(resolve_model_id qwen3.8-abliterated:27b-dflash)" = abliterated-dflash/qwen3.8-27b ] || fail 'abliterated compatibility alias'
 [ "$(resolve_model_id qwen3.8:27b-dflash)" = dflash/qwen3.8-27b ] || fail 'DFlash compatibility alias'
 [ "$(resolve_model_id qwen3.8-27b)" = qwen3.8-27b ] || fail 'exact MLX model ID changed'
+. "$ROOT_DIR/providers/mlx-vlm.sh"
+for id in inkling-2-mini inkling-2-mini:latest; do
+  apply_model_context_override "$id"
+  apply_model_self_route "$id"
+  [ "$CONTEXT_TOKENS" = 1048576 ] || fail 'native MLX-VLM Inkling context'
+  for tier in "$MODEL_OPUS" "$MODEL_SONNET" "$MODEL_HAIKU" "$MODEL_SUBAGENT"; do
+    [ "$tier" = "$id" ] || fail 'native MLX-VLM Inkling self route'
+  done
+done
 . "$ROOT_DIR/providers/bonsai.sh"
 apply_model_context_override ternary-bonsai-2.5-27b
 apply_model_self_route ternary-bonsai-2.5-27b

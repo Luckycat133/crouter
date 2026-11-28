@@ -105,6 +105,7 @@ $$\text{cooldownMs} = \max\left(\text{CROUTER\_CANDIDATE\_COOLDOWN\_MS},\, \text
 | `antigravity-claude` | Local Proxy | Static | `claude-opus-4-6-thinking`| 200,000 | `Bearer` | Local Proxy |
 | `bedrock` | Native Cloud | Native AWS | `sonnet` | Model-specific | AWS SDK Signer | `AWS_PROFILE` / AWS SDK |
 | `bonsai` | Local Inference | None (Local) | `ternary-bonsai-2-27b` | 262,144 | None | Local Port 11438 |
+| `mlx-vlm` | Local Inference | None (Local) | `inkling-2-mini:latest` | 1,048,576 | Dummy / Token | Local Port 11440 → native 8082 |
 | `codex` | Subscription Proxy | None (Local) | `gpt-5.6-sol` | 1,050,000 | Dummy / Proxy | Local Port 19000 |
 | `dashscope` | Domestic Cloud | Surfaces (Plan/API)| `qwen3.8-max` | 983,616 | `Bearer` | `DASHSCOPE_TOKEN_PLAN_KEY` |
 | `dashscope-coding` | Domestic Cloud | Surfaces (Plan) | `qwen3.7-plus` | 983,616 | `Bearer` | `DASHSCOPE_CODING_PLAN_KEY`|
@@ -320,6 +321,13 @@ $$\text{cooldownMs} = \max\left(\text{CROUTER\_CANDIDATE\_COOLDOWN\_MS},\, \text
 - **Base Endpoint**: `http://127.0.0.1:11438`
 - **Engine**: 27B MLX 2-bit Hadamard quantized model running locally.
 - **Model**: `ternary-bonsai-2-27b` (262,144 context). Effort = `max`.
+
+#### MLX-VLM Local Inference (`mlx-vlm`)
+- **Launch**: `crouter mlx-vlm`; default `inkling-2-mini:latest`, also accepts `inkling-2-mini`.
+- **Transport**: Anthropic adapter 11440 → native service 8082; static catalog, no Ollama dependency.
+- **Context**: 1,048,576 tokens; all tiers use the selected model.
+- **Runtime**: Existing Bonsai-demo `.venv-vlm`, upgraded in place to official 0.8.1. Native APC/DSpark/sampling defaults apply; Inkling KV stays BF16 because Q8 is incompatible.
+- **Verification**: Offline configuration/transport only; real inference and cache speedup remain unverified.
 
 #### 34-36. Native Cloud SDK Integrations (`bedrock`, `vertex`, `foundry`)
 - **No Local Proxy**: Directly drives Claude Code's native AWS, Google Cloud, and Azure SDK integrations.

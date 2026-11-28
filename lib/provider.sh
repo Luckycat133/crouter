@@ -52,7 +52,7 @@ load_provider() {
   CONTEXT_TOKENS= MAX_OUTPUT_TOKENS= AUTO_COMPACT_TOKENS= MODEL_CONTEXT_OVERRIDES= MODEL_SELF_ROUTE_MODELS=
   MODELS_DISCOVERY= MODELS_API_URL= MODELS_API_AUTH= MODELS_API_SURFACE=
   MODELS_ACCOUNT_LIVE=
-  PLAN_MODELS= API_MODELS= MODEL_ID_ALIASES= MODEL_LABEL_ALIASES= MODEL_BLOCKED_IDS= MODEL_EFFORT_OVERRIDES=
+  PLAN_MODELS= API_MODELS= MODEL_ID_ALIASES= MODEL_LABEL_ALIASES= MODEL_BLOCKED_IDS= MODEL_BLOCKED_MESSAGE= MODEL_EFFORT_OVERRIDES=
   AUTH_MODE=none AUTH_REFERENCE= AUTH_KEYCHAIN_FALLBACK= _AUTH_SCHEME=
   EXTRA_ENV= PRE_START= POST_STOP= HEALTH_CHECK_URL= EFFORT= MODEL_SETUP= MODEL_SERVICE=
   AUTH_KEYS= PLUS_URL= PLUS_KEYS=
@@ -113,7 +113,7 @@ EOF
   case $_rmi_model in ''|*[!A-Za-z0-9._:/@_\[\]-]*) die 'invalid model ID' ;; esac
   [ "${#_rmi_model}" -le 512 ] || die 'invalid model ID'
   for _rmi_blocked in ${MODEL_BLOCKED_IDS:-}; do
-    [ "$_rmi_model" != "$_rmi_blocked" ] || die 'retired model ID; select a current model explicitly'
+    [ "$_rmi_model" != "$_rmi_blocked" ] || die "${MODEL_BLOCKED_MESSAGE:-retired model ID; select a current model explicitly}"
   done
   printf '%s' "$_rmi_model"
 }

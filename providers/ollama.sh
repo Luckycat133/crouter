@@ -10,9 +10,11 @@ MODEL="qwen3.8:27b-dflash"
 CONTEXT_TOKENS="65536"
 # Keep context windows scoped to the selected model; both native Qwen routes
 # and the DFlash profile retain their 262K window.
-MODEL_CONTEXT_OVERRIDES="deepseek-v4-flash:q8=373760 deepseek-v4-flash=373760 qwen3.8-27b=262144 qwen3.8-27b-heretic:q4=262144 qwen3.8-27b-heretic:q4-dflash=262144 qwen3.8-27b-heretic=262144 qwen3.8:27b-dflash=262144 dflash/qwen3.8-27b=262144 inkling-2-mini=1048576 inkling-2-mini:latest=1048576 qwen3.6-hauhau:35b-a3b-q4_k_p=262144 qwen3.8-abliterated:27b-dflash=262144 abliterated-dflash/qwen3.8-27b=262144"
-MODEL_SELF_ROUTE_MODELS="deepseek-v4-flash:q8 deepseek-v4-flash qwen3.8-27b qwen3.8-27b-heretic:q4 qwen3.8-27b-heretic:q4-dflash qwen3.8-27b-heretic qwen3.8:27b-dflash dflash/qwen3.8-27b qwen3.8-abliterated:27b-dflash abliterated-dflash/qwen3.8-27b qwen3.6-hauhau:35b-a3b-q4_k_p inkling-2-mini inkling-2-mini:latest"
-MODEL_ALIASES="qwen3.8:27b-dflash dflash/qwen3.8-27b qwen3.8-abliterated:27b-dflash abliterated-dflash/qwen3.8-27b qwen3.6-hauhau:35b-a3b-q4_k_p inkling-2-mini:latest"
+MODEL_CONTEXT_OVERRIDES="deepseek-v4-flash:q8=373760 deepseek-v4-flash=373760 qwen3.8-27b=262144 qwen3.8-27b-heretic:q4=262144 qwen3.8-27b-heretic:q4-dflash=262144 qwen3.8-27b-heretic=262144 qwen3.8:27b-dflash=262144 dflash/qwen3.8-27b=262144 qwen3.6-hauhau:35b-a3b-q4_k_p=262144 qwen3.8-abliterated:27b-dflash=262144 abliterated-dflash/qwen3.8-27b=262144"
+MODEL_SELF_ROUTE_MODELS="deepseek-v4-flash:q8 deepseek-v4-flash qwen3.8-27b qwen3.8-27b-heretic:q4 qwen3.8-27b-heretic:q4-dflash qwen3.8-27b-heretic qwen3.8:27b-dflash dflash/qwen3.8-27b qwen3.8-abliterated:27b-dflash abliterated-dflash/qwen3.8-27b qwen3.6-hauhau:35b-a3b-q4_k_p"
+MODEL_ALIASES="qwen3.8:27b-dflash dflash/qwen3.8-27b qwen3.8-abliterated:27b-dflash abliterated-dflash/qwen3.8-27b qwen3.6-hauhau:35b-a3b-q4_k_p"
+MODEL_BLOCKED_IDS="inkling-2-mini inkling-2-mini:latest"
+MODEL_BLOCKED_MESSAGE="Inkling 2 Mini uses the independent MLX-VLM provider; run: crouter mlx-vlm --model inkling-2-mini:latest"
 # Ollama's catalog appends :latest to these exact copies; keep their standard
 # basenames in the selected ID without stripping tags from other models.
 MODEL_ID_ALIASES="abliterated-dflash/qwen3.8-27b:latest=abliterated-dflash/qwen3.8-27b dflash/qwen3.8-27b:latest=dflash/qwen3.8-27b"
@@ -43,7 +45,6 @@ API_TIMEOUT_MS=1800000
 CLAUDE_STREAM_IDLE_TIMEOUT_MS=1800000
 CLAUDE_BYTE_STREAM_IDLE_TIMEOUT_MS=1800000"
 
-. "$ROOT_DIR/lib/inkling-runtime.sh"
 MODEL_SETUP=ollama_model_plan
 ollama_model_plan() {
   _ollama_effort_cap=
@@ -52,9 +53,6 @@ ollama_model_plan() {
   BASE_URL=http://127.0.0.1:11435
   EFFORT=max
   case $1 in
-    inkling-2-mini|inkling-2-mini:latest)
-      if [ "${OLLAMA_INKLING_MLX_VLM:-0}" = 1 ]; then inkling_model_plan "$1"; fi
-      ;;
     qwen3.8-27b)
       MODEL_SERVICE=mlx-anthropic-adapter
       BASE_URL=http://127.0.0.1:11436
@@ -81,9 +79,7 @@ PRE_START='
 _OLLAMA_HEARTBEAT_PROXY_PID=
 _MLX_PROXY_PID=
 _local_selected_model=${_main_model:-$MODEL}
-if [ "$MODEL_SERVICE" = inkling-mlx-vlm ]; then
-  inkling_start
-elif [ "$MODEL_SERVICE" = mlx-anthropic-adapter ]; then
+if [ "$MODEL_SERVICE" = mlx-anthropic-adapter ]; then
   _mlx_upstream_url="http://$_mlx_upstream_host:$_mlx_upstream_port"
   _mlx_expected_upstream="\"upstream\":\"$_mlx_upstream_host:$_mlx_upstream_port\""
   curl -fsS --max-time 3 "$_mlx_upstream_url/v1/models" >/dev/null 2>&1 || die "MLX-VLM not reachable at $_mlx_upstream_url"
@@ -162,5 +158,5 @@ fi
 unset _local_selected_model _ollama_effort_cap _ollama_dflash_versions _ollama_system_order_models _ollama_template_info _ollama_template_mode _ollama_health _mlx_upstream_host _mlx_upstream_port _mlx_upstream_url _mlx_expected_upstream _mlx_health
 '
 
-POST_STOP='inkling_stop; if [ -n "${_OLLAMA_HEARTBEAT_PROXY_PID:-}" ]; then kill "$_OLLAMA_HEARTBEAT_PROXY_PID" 2>/dev/null || true; wait "$_OLLAMA_HEARTBEAT_PROXY_PID" 2>/dev/null || true; _OLLAMA_HEARTBEAT_PROXY_PID=; fi; if [ -n "${_MLX_PROXY_PID:-}" ]; then kill "$_MLX_PROXY_PID" 2>/dev/null || true; wait "$_MLX_PROXY_PID" 2>/dev/null || true; _MLX_PROXY_PID=; fi'
+POST_STOP='if [ -n "${_OLLAMA_HEARTBEAT_PROXY_PID:-}" ]; then kill "$_OLLAMA_HEARTBEAT_PROXY_PID" 2>/dev/null || true; wait "$_OLLAMA_HEARTBEAT_PROXY_PID" 2>/dev/null || true; _OLLAMA_HEARTBEAT_PROXY_PID=; fi; if [ -n "${_MLX_PROXY_PID:-}" ]; then kill "$_MLX_PROXY_PID" 2>/dev/null || true; wait "$_MLX_PROXY_PID" 2>/dev/null || true; _MLX_PROXY_PID=; fi'
 HEALTH_CHECK_URL="http://127.0.0.1:11435/health"

@@ -17,13 +17,14 @@ mkdir -p "$REPO/bin" "$REPO/lib" "$REPO/providers" "$TMP_DIR/home" "$TMP_DIR/bin
 ln -s "$TMP_DIR/actual model" "$RUNTIME/model"
 printf '#!/bin/sh\nexit 99\n' > "$RUNTIME/start-server.sh"
 chmod +x "$RUNTIME/start-server.sh"
-cp "$ROOT_DIR/bin/crouter" "$REPO/bin/"
+cp "$ROOT_DIR/bin/crouter" "$ROOT_DIR/bin/crouter-models" "$REPO/bin/"
 cp "$ROOT_DIR/VERSION" "$REPO/"
 cp "$ROOT_DIR"/lib/*.sh "$ROOT_DIR"/lib/*.js "$ROOT_DIR"/lib/*.mjs "$REPO/lib/"
-cp "$ROOT_DIR/providers/ollama.sh" "$REPO/providers/"
+cp "$ROOT_DIR/providers/ollama.sh" "$ROOT_DIR/providers/mlx-vlm.sh" "$REPO/providers/"
 cat > "$REPO/lib/auth.sh" <<'AUTH'
 is_dual_source() { return 1; }
 resolve_auth() { AUTH_TOKEN=; }
+check_auth() { return 0; }
 AUTH
 : > "$REPO/lib/key-mgmt.sh"
 cat > "$REPO/lib/assets.sh" <<'ASSETS'
@@ -97,38 +98,71 @@ printf 'private=%s\n' "${FIXTURE_DIR-clean}"
 CLAUDE
 chmod +x "$TMP_DIR/bin/"* "$TMP_DIR/claude"
 unset MLX_TEMPERATURE MLX_TOP_P MLX_TOP_K MLX_MIN_P MLX_MAX_OUTPUT_TOKENS MLX_REASONING_EFFORT APC_ENABLED APC_MEMORY_MAX_GB
-run() {
+invoke() {
   HOME="$TMP_DIR/home" XDG_STATE_HOME="$TMP_DIR/state" USER=crouter-fixture \
     FIXTURE_DIR="$TMP_DIR" FIXTURE_MODEL="${fixture_model:-inkling-2-mini:latest}" \
     FIXTURE_NATIVE_STATE="${native_state:-compatible}" FIXTURE_ADAPTER_STATE="${adapter_state:-absent}" \
     INKLING_MLX_RUNTIME_DIR="$RUNTIME" CLAUDE_BIN="$TMP_DIR/claude" PATH="$TMP_DIR/bin:$PATH" \
-    "${TEST_SHELL:-sh}" "$REPO/bin/crouter" ollama "$@"
+    "${TEST_SHELL:-sh}" "$REPO/bin/crouter" "$@"
 }
-for flag in 0 1; do
-  printf 'OLLAMA_INKLING_MLX_VLM=%s\n' "$flag" > "$REPO/config.sh"
-  for fixture_model in inkling-2-mini inkling-2-mini:latest; do
-    run --model "$fixture_model" --plan > "$TMP_DIR/fresh.json"
-    run --model "$fixture_model" --apply-only > "$TMP_DIR/saved"
-    run --plan > "$TMP_DIR/remembered.json"
-    node - "$TMP_DIR/fresh.json" "$TMP_DIR/remembered.json" "$fixture_model" "$flag" <<'NODE'
+run() { invoke mlx-vlm "$@"; }
+invoke list > "$TMP_DIR/providers"
+grep -Eq '^mlx-vlm[[:space:]]' "$TMP_DIR/providers" || fail 'independent provider was not discovered'
+invoke models mlx-vlm --list > "$TMP_DIR/catalog"
+grep -Fq inkling-2-mini:latest "$TMP_DIR/catalog" || fail 'default Inkling missing from static catalog'
+run --plan > "$TMP_DIR/default.json"
+node - "$TMP_DIR/default.json" <<'NODE'
 const assert = require('node:assert/strict');
-const [fresh, saved, model, flag] = process.argv.slice(2);
+const plan = require(process.argv[2]);
+assert.equal(plan.model, 'inkling-2-mini:latest');
+assert.equal(plan.source.provider, 'mlx-vlm');
+NODE
+for fixture_model in inkling-2-mini inkling-2-mini:latest; do
+  run --model "$fixture_model" --plan > "$TMP_DIR/fresh.json"
+  run --model "$fixture_model" --apply-only > "$TMP_DIR/saved"
+  run --plan > "$TMP_DIR/remembered.json"
+  node - "$TMP_DIR/fresh.json" "$TMP_DIR/remembered.json" "$fixture_model" <<'NODE'
+const assert = require('node:assert/strict');
+const [fresh, saved, model] = process.argv.slice(2);
 for (const file of [fresh, saved]) {
   const plan = require(file);
+  assert.equal(plan.source.provider, 'mlx-vlm');
   assert.equal(plan.model, model);
   assert.equal(plan.contextTokens, 1048576);
   assert.equal(plan.maxOutputTokens, null);
   assert.deepEqual(Object.values(plan.tiers), Array(4).fill(model));
-  assert.equal(plan.source.origin, flag === '1' ? 'http://127.0.0.1:11440' : 'http://127.0.0.1:11435');
-  assert.deepEqual(plan.services, [flag === '1' ? 'inkling-mlx-vlm' : 'ollama-heartbeat']);
+  assert.equal(plan.source.origin, 'http://127.0.0.1:11440');
+  assert.deepEqual(plan.services, ['inkling-mlx-vlm']);
 }
 NODE
+  [ "$(cat "$TMP_DIR/state/crouter/last-model-mlx-vlm")" = "$fixture_model" ] || fail 'selection was saved under another provider'
+done
+for old_flag in 0 1; do
+  printf 'OLLAMA_INKLING_MLX_VLM=%s\n' "$old_flag" > "$REPO/config.sh"
+  for fixture_model in inkling-2-mini inkling-2-mini:latest; do
+    for action in --plan --apply-only --once; do
+      if invoke ollama --model "$fixture_model" "$action" > "$TMP_DIR/legacy-output" 2> "$TMP_DIR/legacy-error"; then
+        fail 'Ollama still accepted an Inkling model'
+      fi
+      grep -Fq 'crouter mlx-vlm' "$TMP_DIR/legacy-error" || fail 'legacy rejection omitted the new command'
+    done
   done
 done
+[ ! -e "$TMP_DIR/state/crouter/last-model-ollama" ] || fail 'rejected legacy selection changed Ollama state'
+if run --model another-model --plan > "$TMP_DIR/unknown-output" 2> "$TMP_DIR/unknown-error"; then fail 'native provider accepted another model'; fi
+(
+  ROOT_DIR=$REPO PROVIDERS_DIR=$REPO/providers STATE_DIR=$TMP_DIR/empty-state
+  die() { printf '%s\n' "$*" >&2; exit 1; }
+  . "$REPO/lib/provider.sh"
+  load_provider ollama
+  [ -n "$MODEL_BLOCKED_MESSAGE" ] || exit 1
+  load_provider mlx-vlm
+  [ -z "$MODEL_BLOCKED_MESSAGE$MODEL_BLOCKED_IDS" ] || exit 1
+) || fail 'blocked-model policy leaked between providers'
 [ ! -e "$TMP_DIR/network" ] || fail 'preview/save contacted a service'
 [ ! -e "$TMP_DIR/adapter-pid" ] || fail 'preview/save started an adapter'
 [ ! -e "$TMP_DIR/native-pid" ] || fail 'preview/save started native service'
-printf 'ok    Inkling opt-in plans and saves preserve 1M, exact IDs, tiers and zero startup\n'
+printf 'ok    independent MLX-VLM discovery, catalog, 1M plans, saved IDs and legacy rejection stay offline\n'
 
 for fixture_model in inkling-2-mini inkling-2-mini:latest; do
   for native_state in compatible absent; do
@@ -169,3 +203,37 @@ for adapter_state in wrong-model wrong-path wrong-defaults; do
   [ ! -e "$TMP_DIR/native-pid" ] || fail 'native started for an incompatible adapter'
 done
 printf 'ok    Inkling native identity, compatible reuse, rejection, defaults and owned cleanup\n'
+
+# The same blocked-model declaration filters stale/static catalog entries and
+# the unified route snapshot, including names obtained from `ollama list`.
+HOME="$TMP_DIR/home" XDG_STATE_HOME="$TMP_DIR/routes-state" \
+  CR_PROVIDER=ollama CR_PREFIX=ollama CR_MODELS_DISCOVERY=static \
+  CR_AUTH_MODE=none CR_API_URL=http://127.0.0.1:11435 CR_DEFAULT_URL=http://127.0.0.1:11435 \
+  CR_MODELS='inkling-2-mini inkling-2-mini:latest qwen3.8:27b-dflash' \
+  CR_MODEL_BLOCKED='inkling-2-mini inkling-2-mini:latest' \
+  node "$REPO/lib/route-build.js" candidates > "$TMP_DIR/ollama-route.json"
+HOME="$TMP_DIR/home" XDG_STATE_HOME="$TMP_DIR/routes-state" \
+  CR_PROVIDER=mlx-vlm CR_PREFIX=mlx-vlm CR_MODELS_DISCOVERY=static \
+  CR_AUTH_MODE=none CR_API_URL=http://127.0.0.1:11440 CR_DEFAULT_URL=http://127.0.0.1:11440 \
+  CR_MODELS='inkling-2-mini inkling-2-mini:latest' CR_MODEL_BLOCKED= \
+  node "$REPO/lib/route-build.js" candidates > "$TMP_DIR/mlx-route.json"
+node - "$TMP_DIR/ollama-route.json" "$TMP_DIR/mlx-route.json" <<'NODE'
+const assert = require('node:assert/strict');
+const ollama = require(process.argv[2]);
+const mlx = require(process.argv[3]);
+assert.deepEqual(ollama.models, ['qwen3.8:27b-dflash']);
+assert.deepEqual(ollama.blockedModels, ['inkling-2-mini', 'inkling-2-mini:latest']);
+assert.deepEqual(mlx.models, ['inkling-2-mini', 'inkling-2-mini:latest']);
+assert.equal(mlx.prefix, 'mlx-vlm');
+assert.equal(mlx.blockedModels, undefined);
+NODE
+HOME="$TMP_DIR/home" XDG_STATE_HOME="$TMP_DIR/routes-state" \
+  CR_MODELS_DISCOVERY=static CR_STATIC_MODELS='inkling-2-mini inkling-2-mini:latest qwen3.8:27b-dflash' \
+  CR_MODEL_BLOCKED='inkling-2-mini inkling-2-mini:latest' \
+  node "$REPO/bin/crouter-models" --provider ollama --list > "$TMP_DIR/filtered-catalog"
+! grep -Fq inkling "$TMP_DIR/filtered-catalog" || fail 'Ollama catalog still advertised Inkling'
+grep -Fq qwen3.8:27b-dflash "$TMP_DIR/filtered-catalog" || fail 'catalog filtering removed another model'
+native_state=compatible adapter_state=compatible
+if NODE_BIN=/definitely/missing/node invoke doctor mlx-vlm > "$TMP_DIR/doctor" 2> "$TMP_DIR/doctor-error"; then fail 'MLX-VLM doctor accepted a missing Node runtime'; fi
+grep -Fq 'node unavailable' "$TMP_DIR/doctor" || fail 'MLX-VLM doctor omitted its Node requirement'
+printf 'ok    Inkling leaves Ollama catalogs and routes; independent provider checks Node\n'

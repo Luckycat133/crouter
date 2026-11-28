@@ -1,7 +1,7 @@
 # crouter
 
 [![CI](https://github.com/Luckycat133/crouter/actions/workflows/ci.yml/badge.svg)](https://github.com/Luckycat133/crouter/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/version-0.7.9-blue)
+![Version](https://img.shields.io/badge/version-0.7.10-blue)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 `crouter` launches Claude Code against audited Anthropic-compatible providers
@@ -19,7 +19,7 @@ the full [docs index](docs/README.md) for the source matrix, architecture
 contracts, and decisions, plus [llms.txt](llms.txt) /
 [llms-full.txt](llms-full.txt) for machine-readable LLM indexes.
 
-`VERSION` is 0.7.9; release history and in-progress changes are recorded in
+`VERSION` is 0.7.10; release history and in-progress changes are recorded in
 [CHANGELOG.md](CHANGELOG.md). Offline checks run under both POSIX `sh` and `dash`;
 the `crouter-development` skill routing validator and its 24 isolated fixture
 checks pass under both `sh` and `dash` (package structure only; live-client and
@@ -316,6 +316,7 @@ limit; the selected vendor model or native backend remains authoritative.
 | `antigravity-claude` | local proxy | `claude-opus-5-5-medium` | 200,000 | — |
 | `bedrock` | native AWS credentials | `sonnet` alias | — | — |
 | `bonsai` | local MLX 2-bit | `ternary-bonsai-2-27b` | 262,144 | — |
+| `mlx-vlm` | local official MLX-VLM | `inkling-2-mini:latest` | 1,048,576 | native APC / DSpark defaults |
 | `codex` | local ChatGPT subscription proxy | `gpt-5.6-sol` | 1,050,000 | — |
 | `dashscope` | Token Plan + API | `qwen3.8-max` | 983,616 | Plan media skill + API WebSearch MCP |
 | `dashscope-coding` | Coding Plan | `qwen3.7-plus` | — | — |
@@ -679,23 +680,35 @@ Claude Code and Ollama retain their own output limits; crouter adds no
 per-response token cap. The reasoning effort remains `xhigh`. Configure the
 Ollama model with `num_ctx=262144` to match the advertised native window.
 
-`crouter ollama inkling-2-mini:latest` passes 1,048,576 client context.
-By default it uses the saved Ollama model. To use the official
-mlx-vlm Inkling backend, set `OLLAMA_INKLING_MLX_VLM=1` in the local
-`config.sh`. Both `inkling-2-mini` and `inkling-2-mini:latest` then use the
-Anthropic adapter on 11440 → native service on 8082. The native launcher is
+Inkling 2 Mini uses its own **`mlx-vlm` provider**, independent of Ollama:
+
+```sh
+crouter mlx-vlm
+# Or choose the exact model ID explicitly:
+crouter mlx-vlm --model inkling-2-mini:latest
+```
+
+The default is `inkling-2-mini:latest`; `inkling-2-mini` is also accepted.
+Both keep a 1,048,576-token client window and all tiers on the selected ID.
+The provider uses the Anthropic adapter on 11440 → native service on 8082,
+with a static model directory and no Ollama API dependency. The old
+`crouter ollama --model inkling-2-mini:latest` path is rejected with the new
+command. `OLLAMA_INKLING_MLX_VLM` is no longer used.
+
+The native launcher is
 `$HOME/.local/share/local-llm/inkling-mlx-vlm/start-server.sh`; override its
-directory with `INKLING_MLX_RUNTIME_DIR`. Its `model` link must identify the
+directory with `INKLING_MLX_RUNTIME_DIR`. Its `model` link identifies the
 original local Inkling checkpoint. The local launcher uses Bonsai-demo’s
-existing `.venv-vlm`, upgraded in place to official mlx-vlm 0.8.1; there is no separate Inkling venv.
-crouter does not download weights or install Python packages.
+existing `.venv-vlm`, upgraded in place to official mlx-vlm 0.8.1; there is
+no separate Inkling venv. crouter does not download weights or install Python
+packages.
 
 Sampling, cache and draft defaults belong to that native backend. The local
-setup pins official mlx-vlm 0.8.1, reuses the original weights and bundled
-DSpark (block 6: one anchor plus five proposals), and saves APC enabled with
-4 GiB memory, disk caching disabled and two exact checkpoints. Its model
-sampling defaults are temperature 1, top_p .95 and top_k 20. **Inkling Q8 KV
-is incompatible with this official version; this backend retains BF16 KV.**
+setup reuses the original weights and bundled DSpark (block 6: one anchor
+plus five proposals), and saves APC enabled with 4 GiB memory, disk caching
+disabled and two exact checkpoints. Its model sampling defaults are
+temperature 1, top_p .95 and top_k 20. **Inkling Q8 KV is incompatible with
+this official version; this backend retains BF16 KV.**
 `start-server.sh --check` inspects native defaults without loading a model.
 Selecting, planning or saving the crouter profile also starts no services;
 a normal direct launch starts the native backend only when needed and stops

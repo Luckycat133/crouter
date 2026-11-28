@@ -91,7 +91,7 @@ status_one() (
     keypool) _doctor_key_count=$(set -- ${AUTH_KEYS:-}; printf '%s' "$#"); if [ "$_doctor_key_count" -ne 1 ] || [ -n "${PLUS_KEYS:-}" ]; then _needs_node=1; fi ;;
   esac
   if [ "${CROUTER_PROVIDER_ASSETS:-1}" != 0 ] && [ -n "${ASSET_PROFILE:-}" ]; then _needs_node=1; fi
-  case $PROVIDER_NAME in ollama|bonsai|antigravity|antigravity-claude) _needs_node=1 ;; esac
+  case $PROVIDER_NAME in ollama|bonsai|mlx-vlm|antigravity|antigravity-claude) _needs_node=1 ;; esac
   if [ "${2:-0}" -eq 1 ] && [ "$_needs_node" -eq 1 ]; then
     _doctor_node=$(command -v "$NODE_BIN" 2>/dev/null || true)
     if [ -z "$_doctor_node" ] || [ ! -f "$_doctor_node" ] || [ ! -x "$_doctor_node" ]; then

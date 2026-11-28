@@ -31,7 +31,7 @@
 //       { "url": "...", "auth": {"type":"x-api-key","token":"<key>"},
 //         "model_map": {"logical model":"surface model"} }
 //     ],
-//     "models": ["claude-sonnet-4", ...] }
+//     "models": ["claude-sonnet-4", ...], "blockedModels": ["retired-model"] }
 
 'use strict';
 const http = require('http');
@@ -83,6 +83,11 @@ function rejectUnauthorized(res) {
 
 // Pre-parse each candidate's target.
 for (const r of ROUTES) {
+  if (r.blockedModels !== undefined &&
+      (!Array.isArray(r.blockedModels) || !r.blockedModels.every((model) => typeof model === 'string'))) {
+    fail('route ' + r.prefix + ' has invalid blockedModels');
+  }
+  r._blockedModels = new Set(r.blockedModels || []);
   if (!Array.isArray(r.candidates) || r.candidates.length === 0) {
     fail('route ' + r.prefix + ' has no candidates');
   }
@@ -145,6 +150,7 @@ function handleModels(clientRes) {
     const catalogModels = new Set(r.catalogModels || []);
     const metadata = r.modelMetadata || {};
     for (const m of r.models) {
+      if (r._blockedModels.has(m)) continue;
       const row = { id: r.prefix + '/' + m, type: 'model', object: 'model' };
       const meta = metadata[m];
       if (meta && typeof meta === 'object') {
@@ -240,6 +246,13 @@ function handleMessage(clientReq, clientRes) {
       clientRes.end(
         JSON.stringify({ error: { type: 'unknown_provider', message: 'no such provider prefix: ' + prefix } })
       );
+      return;
+    }
+    if (route._blockedModels.has(realModel)) {
+      clientRes.writeHead(400, { 'content-type': 'application/json' });
+      clientRes.end(JSON.stringify({ error: {
+        type: 'unknown_model', message: 'model "' + model + '" is unavailable for this provider',
+      } }));
       return;
     }
     // Try candidates in order; fail over on auth/quota errors or upstream error.

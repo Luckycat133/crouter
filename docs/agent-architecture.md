@@ -96,9 +96,20 @@ creation and CLI `--plan` / `--apply-only` do not load models.
 
 ## Inkling native transport
 
-`OLLAMA_INKLING_MLX_VLM=1` switches the exact `inkling-2-mini` and
-`inkling-2-mini:latest` plans to `lib/inkling-runtime.sh`, adapter 11440 and
-native 8082. The flag defaults off; other Ollama models remain unchanged.
+`providers/mlx-vlm.sh` declares the independent `mlx-vlm` provider, default
+`inkling-2-mini:latest`, with `inkling-2-mini` also accepted. It uses static
+model discovery and `lib/inkling-runtime.sh`, adapter 11440 and native 8082;
+no Ollama discovery, readiness or inference endpoint is involved. The old
+Ollama Inkling route and `OLLAMA_INKLING_MLX_VLM` opt-in are removed; an
+explicit old command is rejected and directs the caller to `crouter mlx-vlm`.
+Other Ollama models retain their current behavior.
+`MODEL_BLOCKED_IDS` excludes the old IDs from catalogs and compiled unified
+routes. Route `blockedModels` also rejects an explicitly typed
+`ollama/inkling-2-mini` or `ollama/inkling-2-mini:latest` request before any
+upstream call. Other unlisted model requests keep existing gateway behavior.
+`MODEL_BLOCKED_MESSAGE` is reset on provider load; providers without a custom
+message retain the existing retired-model error.
+
 The native directory is `INKLING_MLX_RUNTIME_DIR` or
 `$HOME/.local/share/local-llm/inkling-mlx-vlm`. crouter invokes its existing
 `start-server.sh` without inference arguments. Native sampling/APC/DSpark
@@ -119,7 +130,7 @@ place to official mlx-vlm 0.8.1; it has no separate Inkling venv. It uses
 original weights and bundled DSpark, and retains BF16 KV because the
 Inkling-specific Q8 path is incompatible. Offline fixtures verify transport
 and lifecycle, not actual model inference or cache hit performance. This
-startup path applies only to direct `crouter ollama` launches; `crouter all`
+startup path applies only to direct `crouter mlx-vlm` launches; `crouter all`
 does not implement per-model native startup.
 
 ## Bonsai transport

@@ -1,6 +1,10 @@
 #!/bin/sh
 # The native Inkling launcher owns sampling, cache and speculative defaults.
 inkling_model_plan() {
+  case $1 in
+    inkling-2-mini|inkling-2-mini:latest) ;;
+    *) die 'mlx-vlm currently supports Inkling 2 Mini; run: crouter mlx-vlm --model inkling-2-mini:latest' ;;
+  esac
   _inkling_selected_model=$1
   _inkling_runtime_dir=${INKLING_MLX_RUNTIME_DIR:-$HOME/.local/share/local-llm/inkling-mlx-vlm}
   MODEL_SERVICE=inkling-mlx-vlm

@@ -7,7 +7,7 @@ trap 'rm -rf "$TMP_DIR"' EXIT INT TERM
 REPO="$TMP_DIR/repo with spaces"
 mkdir -p "$REPO/bin" "$REPO/lib" "$REPO/providers" "$TMP_DIR/home"
 cp "$ROOT_DIR/bin/crouter" "$ROOT_DIR/bin/crouter-models" "$REPO/bin/"
-cp "$ROOT_DIR/lib/provider.sh" "$ROOT_DIR/lib/catalog.sh" "$ROOT_DIR/lib/commands.sh" "$ROOT_DIR/lib/unified.sh" "$ROOT_DIR/lib/inkling-runtime.sh" "$REPO/lib/"
+cp "$ROOT_DIR/lib/provider.sh" "$ROOT_DIR/lib/catalog.sh" "$ROOT_DIR/lib/commands.sh" "$ROOT_DIR/lib/unified.sh" "$REPO/lib/"
 cp "$ROOT_DIR/lib/catalog.js" "$ROOT_DIR/lib/model-state.js" "$ROOT_DIR/lib/account-live-catalog.js" "$REPO/lib/"
 printf 'test\n' > "$REPO/VERSION"
 : > "$REPO/lib/key-mgmt.sh"

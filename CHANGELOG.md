@@ -4,6 +4,22 @@ All notable changes to this local setup are documented in this file.
 
 ## [Unreleased]
 
+## [0.7.10] - 2026-11-28
+
+### Changed
+
+- Inkling 2 Mini moves to the independent `mlx-vlm` provider. `crouter mlx-vlm`
+  defaults to `inkling-2-mini:latest`, with the untagged ID also accepted,
+  a static model catalog, a 1M client window and all tiers on the selected ID.
+  Native service/adapter identity and session-owned cleanup are retained;
+  no Ollama API is required. Sampler/APC/DSpark defaults remain native.
+- Remove the Ollama Inkling opt-in route. Old explicit Ollama Inkling commands
+  fail before startup and point to `crouter mlx-vlm`. Catalogs and unified
+  routes exclude them; hand-typed old namespaced gateway requests are rejected
+  before reaching an upstream. Other Ollama profiles
+  and Bonsai retain their current behavior. The shared official mlx-vlm 0.8.1
+  environment is reused. No real model was loaded for this migration.
+
 ## [0.7.9] - 2026-11-28
 
 ### Added

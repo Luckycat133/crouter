@@ -30,9 +30,8 @@
 # Create the native Ollama aliases documented in README before enabling.
 #OLLAMA_QWEN38_PRICING_ALIASES=1
 
-# Optional official mlx-vlm Inkling backend. Default: 0 (Ollama).
-# Configure its native launcher/model link and shared environment; see README.
-#OLLAMA_INKLING_MLX_VLM=1
+# Independent mlx-vlm provider: native launcher/model link and shared env.
+# Default model: inkling-2-mini:latest; see README.
 #INKLING_MLX_RUNTIME_DIR="$HOME/.local/share/local-llm/inkling-mlx-vlm"
 
 # Provider-owned MCPs and skills are activated only for the current crouter
