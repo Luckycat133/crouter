@@ -94,6 +94,33 @@ with the standard `qwen3.8-27b` reference price. No Vibe CLI patch, raw
 transcript rewrite or historical upload migration is involved. Native copy
 creation and CLI `--plan` / `--apply-only` do not load models.
 
+## Inkling native transport
+
+`OLLAMA_INKLING_MLX_VLM=1` switches the exact `inkling-2-mini` and
+`inkling-2-mini:latest` plans to `lib/inkling-runtime.sh`, adapter 11440 and
+native 8082. The flag defaults off; other Ollama models remain unchanged.
+The native directory is `INKLING_MLX_RUNTIME_DIR` or
+`$HOME/.local/share/local-llm/inkling-mlx-vlm`. crouter invokes its existing
+`start-server.sh` without inference arguments. Native sampling/APC/DSpark
+settings stay in the backend, and `MLX_INHERIT_DEFAULTS=1` prevents adapter
+sampler defaults from masking them while preserving explicit request fields.
+
+Before reuse or adapter startup, native `/health` must be healthy and not
+explicitly unready, and both `loaded_model` and a `/v1/models` ID must resolve
+to native `model` by realpath. Adapter health must match the exact selected
+ID, upstream, native model and inheritance mode. Conflicting or unverifiable
+listeners are rejected without replacement. Only PIDs created by this
+session are stopped; the native launcher's exec chain preserves that PID.
+Planning and save-only use pure model selection and never start a service.
+Both IDs keep the 1,048,576 client window and all tiers on the same ID.
+
+The separately installed local backend pins official mlx-vlm 0.8.1, uses
+original weights and bundled DSpark, and retains BF16 KV because the
+Inkling-specific Q8 path is incompatible. Offline fixtures verify transport
+and lifecycle, not actual model inference or cache hit performance. This
+startup path applies only to direct `crouter ollama` launches; `crouter all`
+does not implement per-model native startup.
+
 ## Bonsai transport
 
 `crouter bonsai` exposes local Ternary Bonsai MLX models (27B, 2-bit) to Claude Code through the session-owned Anthropic-compatible adapter. The default `ternary-bonsai-2-27b` profile (alias `bonsai`) uses adapter port 11438 → native port 8000 against the legacy PrismML MLX runtime, which crouter keeps but neither starts nor stops; its declared client window is 262,144 tokens. `ternary-bonsai-2.5-27b` uses a separate adapter port 11439 → native port 8081 and declares a 262,144-token client window (native `MAX_OUTPUT_TOKENS` is not explicitly set by crouter). It resolves the native pack under `$BONSAI_DEMO_DIR/models/Ternary-Bonsai-2.5-27B-mlx-2bit` (default the `Bonsai-demo` sibling of this repository). Before the adapter starts, port 8081 `/health` and `/v1/models` must both identify that pack by realpath. If no native listener is verifiable, crouter starts the existing native launcher with family `bonsai25`, size `27B` and port `8081` only; an already compatible listener is reused and never replaced or owned, and `bonsai_stop` stops only PIDs started by this session. The adapter runs with `MLX_INHERIT_DEFAULTS=1`, so it inherits the native sampler, cache and MTP defaults and keeps the selected local model ID (a wrong model is rejected). Tiers pin to the selected model and no extra crouter inference settings are added. Launch with `crouter bonsai --model ternary-bonsai-2.5-27b`; these are direct provider launches only, and `crouter all` does not yet perform per-model local service startup.

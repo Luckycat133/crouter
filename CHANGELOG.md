@@ -4,6 +4,29 @@ All notable changes to this local setup are documented in this file.
 
 ## [Unreleased]
 
+## [0.7.9] - 2026-11-28
+
+### Added
+
+- Opt-in official mlx-vlm transport for both Inkling 2 Mini IDs through
+  `OLLAMA_INKLING_MLX_VLM=1`: adapter 11440 → dedicated native backend 8082,
+  retaining the selected ID, 1M client window and self-routed tiers. The
+  separately installed native launcher owns sampling, APC and DSpark defaults;
+  crouter passes no inference settings. Existing Ollama behavior remains the
+  default for other installations.
+- Native and adapter identity checks reject conflicting listeners, reuse
+  compatible services without owning them and clean up only session-owned
+  PIDs. Planning/save-only paths never start services. Focused offline
+  fixtures cover lifecycle, native-default inheritance, tools and streaming.
+
+### Notes
+
+- The dedicated local backend uses unmodified official mlx-vlm 0.8.1 and the
+  existing original checkpoint. Inkling Q8 KV is incompatible with this
+  version and remains BF16; no real model inference was run for this change.
+  This integration is for direct provider launches, not per-model startup
+  through `crouter all`.
+
 ## [0.7.8] - 2026-11-28
 
 ### Added
